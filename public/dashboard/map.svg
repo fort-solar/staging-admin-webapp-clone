@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320">
+  <rect width="640" height="320" rx="26" fill="#eef1eb"/>
+  <path d="M0 72h640M0 142h640M0 216h640" stroke="#dfe4dc"/>
+  <path d="M60 0v320M158 0v320M252 0v320M344 0v320M440 0v320M534 0v320" stroke="#dfe4dc"/>
+  <path d="M0 292l640-228" stroke="#e5d3ba" stroke-width="8"/>
+  <path d="M0 184l640-102" stroke="#d0d7cc" stroke-width="6"/>
+  <path d="M226 18l154 284" stroke="#d0d7cc" stroke-width="6"/>
+  <rect x="252" y="106" width="150" height="76" rx="18" fill="rgba(91,100,110,.18)"/>
+  <text x="327" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#5b646e">Map View</text>
+  <path d="M470 120c0 32-42 70-42 70s-42-38-42-70a42 42 0 1 1 84 0z" fill="#059212" opacity=".9"/>
+  <circle cx="428" cy="120" r="14" fill="#fff"/>
+</svg>

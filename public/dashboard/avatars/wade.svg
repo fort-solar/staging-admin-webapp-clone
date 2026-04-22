@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="bg-wade" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe2a4"/>
+      <stop offset="100%" stop-color="#f7b1ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="36" fill="url(#bg-wade)"/>
+  <circle cx="80" cy="60" r="34" fill="#cd8e5d"/>
+  <path d="M40 52c10-18 22-26 40-26s30 8 40 26v18c-12-7-24-10-40-10s-28 3-40 10z" fill="#24173d"/>
+  <path d="M46 129c8-20 20-31 34-31s26 11 34 31z" fill="#4a1969"/>
+  <circle cx="67" cy="61" r="4" fill="#1f2630"/>
+  <circle cx="93" cy="61" r="4" fill="#1f2630"/>
+  <path d="M70 77c4 3 16 3 20 0" fill="none" stroke="#6d3428" stroke-width="4" stroke-linecap="round"/>
+</svg>
