@@ -158,23 +158,23 @@ export type ChartPeriod = "all" | "yearly" | "monthly" | "weekly";
 export const metricPeriodOptions: MetricPeriod[] = ["daily", "weekly", "monthly", "quarterly", "yearly"];
 
 export const avatarAssets = {
-  sarah: "/dashboard/avatars/sarah.svg",
-  john: "/dashboard/avatars/john.svg",
-  nessie: "/dashboard/avatars/nessie.svg",
-  charles: "/dashboard/avatars/charles.svg",
-  james: "/dashboard/avatars/james.svg",
-  emily: "/dashboard/avatars/emily.svg",
-  michael: "/dashboard/avatars/michael.svg",
-  wade: "/dashboard/avatars/wade.svg",
+  sarah: "avatar-sarah",
+  john: "avatar-john",
+  nessie: "avatar-nessie",
+  charles: "avatar-charles",
+  james: "avatar-james",
+  emily: "avatar-emily",
+  michael: "avatar-michael",
+  wade: "avatar-wade",
 } as const;
 
 export const productAssets = {
-  panel: "/dashboard/products/solar-panel.svg",
-  battery: "/dashboard/products/battery.svg",
-  inverter: "/dashboard/products/inverter.svg",
-  fan: "/dashboard/products/fan.svg",
-  furniture: "/dashboard/products/furniture.svg",
-  bundle: "/dashboard/products/bundle.svg",
+  panel: "product-panel",
+  battery: "product-battery",
+  inverter: "product-inverter",
+  fan: "product-fan",
+  furniture: "product-furniture",
+  bundle: "product-bundle",
 } as const;
 
 export const mapPreview = "/dashboard/map.svg";

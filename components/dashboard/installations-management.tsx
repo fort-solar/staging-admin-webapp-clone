@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { installationMetrics, installations } from "@/lib/operations-data";
@@ -9,7 +8,6 @@ import { FormField, UploadField } from "@/components/dashboard/modals";
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
 import { ActionLink, AttachmentItem, DetailPanel, TagList } from "@/components/dashboard/management-primitives";
 import { CalendarIcon, PlusIcon } from "@/components/dashboard/icons";
-import { productAssets } from "@/lib/dashboard-data";
 
 const installationFormId = "installation-form";
 
@@ -42,7 +40,7 @@ export function InstallationsManagementScreen() {
         <div className="installation-grid">
           {installations.concat(installations).map((installation, index) => (
             <article key={`${installation.id}-${index}`} className="installation-card">
-              <Image src={installation.image} alt={installation.title} fill sizes="(max-width: 768px) 100vw, 420px" />
+              <span className="product-placeholder" aria-hidden="true" />
               <div className="installation-card__shade" />
               <div className="installation-card__top">
                 <span>
@@ -102,7 +100,7 @@ export function InstallationFormScreen() {
           <div className="product-form-shell__header">
             <div>
               <h2 className="section-title">Add A New Installation</h2>
-              <p className="section-description">Create installation case studies pending public API integration.</p>
+              <p className="section-description">Create installation case studies for the public gallery.</p>
             </div>
             <FormSubmitter formId={installationFormId} cancelLabel="Cancel" onCancel={() => router.push("/installations")} primaryLabel="Finish" />
           </div>
@@ -168,9 +166,9 @@ export function InstallationFormScreen() {
                   <p>Upload product images or videos (JPG, PNG, MP4) to display on the installation page.</p>
                 </div>
                 <div className="thumbnail-strip">
-                  {[productAssets.panel, productAssets.inverter, productAssets.battery, productAssets.bundle].map((asset, index) => (
-                    <span key={`${asset}-${index}`} className="thumbnail-strip__item">
-                      <Image src={asset} alt={`Installation media ${index + 1}`} fill sizes="78px" />
+                  {[0, 1, 2, 3].map((item) => (
+                    <span key={item} className="thumbnail-strip__item" aria-hidden="true">
+                      <span className="product-placeholder" />
                     </span>
                   ))}
                 </div>

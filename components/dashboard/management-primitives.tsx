@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button, SearchField, cx } from "@/components/dashboard/ui";
@@ -75,7 +74,6 @@ export function DirectoryToolbar({
 
 export function CatalogCard({
   href,
-  image,
   title,
   eyebrow,
   price,
@@ -98,8 +96,8 @@ export function CatalogCard({
     <article className="catalog-card">
       <div className="catalog-card__header">
         <Link href={href} className="catalog-card__hero" aria-label={`Open ${title}`}>
-          <span className="catalog-card__media">
-            <Image src={image} alt={title} fill sizes="96px" />
+          <span className="catalog-card__media" aria-hidden="true">
+            <span className="product-placeholder" />
           </span>
           <div className="catalog-card__copy">
             <div className="catalog-card__title-row">
@@ -188,8 +186,6 @@ export function KeyValueList({
 }
 
 export function MediaShowcase({
-  title,
-  image,
   gallery,
 }: {
   title: string;
@@ -199,12 +195,12 @@ export function MediaShowcase({
   return (
     <div className="media-showcase">
       <div className="media-showcase__main">
-        <Image src={image} alt={title} fill sizes="(max-width: 768px) 100vw, 480px" />
+        <span className="product-placeholder" aria-hidden="true" />
       </div>
       <div className="media-showcase__thumbs">
         {gallery.map((asset, index) => (
-          <span key={`${asset}-${index}`} className="media-showcase__thumb">
-            <Image src={asset} alt={`${title} preview ${index + 1}`} fill sizes="90px" />
+          <span key={`${asset}-${index}`} className="media-showcase__thumb" aria-hidden="true">
+            <span className="product-placeholder" />
           </span>
         ))}
       </div>

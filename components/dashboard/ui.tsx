@@ -373,10 +373,13 @@ export function StatusPill({
   return <span className={cx("status-pill", classForTone(tone), solid ? "is-solid" : "is-soft", className)}>{label}</span>;
 }
 
-export function Avatar({ src, alt, size = "md", initials, className }: AvatarProps) {
+export function Avatar({ alt, size = "md", className }: AvatarProps) {
   return (
-    <span className={cx("avatar", `is-${size}`, className)}>
-      {src ? <Image src={src} alt={alt} fill sizes="80px" /> : <span>{initials ?? alt.slice(0, 2)}</span>}
+    <span className={cx("avatar", `is-${size}`, className)} role="img" aria-label={alt}>
+      <span className="avatar__person" aria-hidden="true">
+        <span className="avatar__head" />
+        <span className="avatar__body" />
+      </span>
     </span>
   );
 }
@@ -839,9 +842,9 @@ export function ReviewCard({
       <p className="review-card__body">{review.body}</p>
       {review.media?.length ? (
         <div className="review-card__media">
-          {review.media.map((asset) => (
-            <span key={asset} className="review-card__media-item">
-             <div className="aspect-4/3 w-30 bg-zinc-200 rounded-2xl" />
+          {review.media.map((asset, index) => (
+            <span key={`${asset}-${index}`} className="review-card__media-item" aria-hidden="true">
+              <span className="product-placeholder" />
             </span>
           ))}
         </div>

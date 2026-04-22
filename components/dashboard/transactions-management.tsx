@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useDeferredValue, useMemo, useState } from "react";
 import { payoutRecords, transactionMetrics, transactionRecords, type PayoutRecord, type TransactionRecord } from "@/lib/operations-data";
 import {
@@ -107,9 +106,7 @@ export function TransactionsManagementScreen() {
                       <td>{transaction.buyer}</td>
                       <td>
                         <div className="product-cell">
-                          <span className="product-thumb">
-                            <Image src={transaction.image} alt={transaction.product} fill sizes="42px" />
-                          </span>
+                          <span className="product-thumb" aria-hidden="true" />
                           <span>{transaction.product}</span>
                         </div>
                       </td>
@@ -242,8 +239,8 @@ export function TransactionsManagementScreen() {
                   {activeTransaction.items.map((item) => (
                     <div key={item.label} className={cx("summary-item", !item.image && "is-discount")}>
                       {item.image ? (
-                        <span className="summary-item__thumb">
-                          <Image src={item.image} alt={item.label} fill sizes="32px" />
+                        <span className="summary-item__thumb" aria-hidden="true">
+                          <span className="product-placeholder" />
                         </span>
                       ) : null}
                       <span>{item.label}</span>
@@ -258,8 +255,8 @@ export function TransactionsManagementScreen() {
               </div>
             </section>
 
-            <TagList items={["API ready", "Receipt pending", "Admin review"]} />
-            <AttachmentItem label={`${activeTransaction.id}-receipt.pdf`} helper="Generated receipt placeholder" />
+            <TagList items={["Receipt", "Payment confirmed", "Admin review"]} />
+            <AttachmentItem label={`${activeTransaction.id}-receipt.pdf`} helper="Receipt document" />
           </div>
         ) : null}
       </Modal>

@@ -1,12 +1,12 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { type FormEvent, useDeferredValue, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { jobApplicants, jobMetrics, jobs, type JobRecord } from "@/lib/operations-data";
 import {
   Button,
+  Avatar,
   MetricCardSecondary,
   Pagination,
   Panel,
@@ -194,7 +194,7 @@ export function JobDetailScreen({ job }: { job: JobRecord }) {
                 <tr key={applicant.id}>
                   <td>
                     <div className="person-cell">
-                      <Image src={applicant.avatar} alt={applicant.name} width={42} height={42} className="avatar is-sm" />
+                      <Avatar src={applicant.avatar} alt={applicant.name} size="sm" />
                       <div className="person-cell__text">
                         <strong>{applicant.name}</strong>
                         <span>{applicant.phone}</span>

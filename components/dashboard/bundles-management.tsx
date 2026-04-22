@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { type FormEvent, useDeferredValue, useMemo, useState, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { bundleMetrics, bundleRecords, type BundleRecord } from "@/lib/management-data";
@@ -18,7 +17,7 @@ import { FormField, UploadField } from "@/components/dashboard/modals";
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
 import { ActionLink, AttachmentItem, CatalogCard, DetailPanel, DirectoryToolbar, InlineCallout, KeyValueList, ManagementBackLink, MediaShowcase, TagList } from "@/components/dashboard/management-primitives";
 import { FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
-import { productAssets, toneFromStatus } from "@/lib/dashboard-data";
+import { toneFromStatus } from "@/lib/dashboard-data";
 
 const bundleCreateFormId = "bundle-create-form";
 
@@ -47,7 +46,7 @@ export function BundlesManagementScreen() {
     [deferredQuery, rows],
   );
 
-  const notice = searchParams.get("created") ? "Bundle draft has been staged in the UI. Connect the bundle API to persist the final payload." : searchParams.get("draft") ? "Bundle draft saved locally." : null;
+  const notice = searchParams.get("created") ? "Bundle saved successfully." : searchParams.get("draft") ? "Bundle draft saved." : null;
 
   return (
     <div className="dashboard-stack">
@@ -122,7 +121,6 @@ export function BundleDetailScreen({ bundle }: { bundle: BundleRecord }) {
   return (
     <div className="dashboard-stack">
       <BundleMetricsStrip />
-      <InlineCallout>Bundle data is fully mapped in the UI. Publishing and edit persistence remain pending API integration.</InlineCallout>
       <Panel className="product-detail-shell">
         <div className="product-detail-shell__header">
           <ManagementBackLink href="/bundles" label={bundle.name} meta={bundle.submittedAt} />
@@ -188,7 +186,7 @@ export function BundleDetailScreen({ bundle }: { bundle: BundleRecord }) {
               <div>
                 <p className="section-description">Bundle Thumbnail</p>
                 <div className="media-card">
-                  <Image src={bundle.image} alt={bundle.name} fill sizes="420px" />
+                  <span className="product-placeholder" aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -247,13 +245,12 @@ export function BundleFormScreen() {
   return (
     <div className="dashboard-stack">
       <BundleMetricsStrip />
-      <InlineCallout>Every field below is ready for API wiring. This view already behaves like a production form minus persistence.</InlineCallout>
       <Panel className="product-form-shell">
         <form id={bundleCreateFormId} onSubmit={handleSubmit}>
           <div className="product-form-shell__header">
             <div>
               <h2 className="section-title">Add A New Bundle</h2>
-              <p className="section-description">Use the shared catalog patterns so bundle create and detail states remain visually consistent.</p>
+              <p className="section-description">Create a bundle with included products, pricing, financing, and media.</p>
             </div>
             <FormSubmitter
               formId={bundleCreateFormId}
@@ -269,7 +266,7 @@ export function BundleFormScreen() {
           </div>
 
           <div className="product-form-grid">
-          <DetailPanel title="Bundle Information" description="Keep the left column clean because this structure is already used by the product form.">
+          <DetailPanel title="Bundle Information" description="Set the bundle name, overview, type, price, and finance availability.">
             <div className="detail-panel__stack">
               <FormField label="Bundle">
                 <TextField value={name} onChange={(event) => setName(event.target.value)} placeholder="Bundle Name" />
@@ -300,7 +297,7 @@ export function BundleFormScreen() {
             </div>
           </DetailPanel>
 
-          <DetailPanel title="What This Bundle Includes" description="Use repeatable rows so the final payload can be serialized cleanly for the backend.">
+          <DetailPanel title="What This Bundle Includes" description="Select the products and quantities included in this bundle.">
             <div className="detail-panel__stack">
               {bundleItems.map((row, index) => (
                 <div key={`${row.label}-${index}`} className="form-repeat-row">
@@ -327,8 +324,6 @@ export function BundleFormScreen() {
               <Button variant="secondary" size="sm" onClick={() => setBundleItems((current) => [...current, { label: "Product", qty: "x1" }])}>
                 Add product
               </Button>
-
-              <InlineCallout>This calculates based on the products and its quantities.</InlineCallout>
 
               <div>
                 <p className="section-description">System Details</p>
@@ -389,9 +384,9 @@ export function BundleFormScreen() {
                 <p>Upload bundle image (JPG, PNG) to display on the bundle page.</p>
               </div>
               <div className="thumbnail-strip">
-                {[productAssets.bundle, productAssets.battery].map((asset, index) => (
-                  <span key={`${asset}-${index}`} className="thumbnail-strip__item">
-                    <Image src={asset} alt={`Bundle media ${index + 1}`} fill sizes="78px" />
+                {[0, 1].map((item) => (
+                  <span key={item} className="thumbnail-strip__item" aria-hidden="true">
+                    <span className="product-placeholder" />
                   </span>
                 ))}
               </div>

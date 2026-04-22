@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { type FormEvent, useDeferredValue, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -24,7 +23,7 @@ import {
 } from "@/components/dashboard/ui";
 import { FormField, Modal, UploadField } from "@/components/dashboard/modals";
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
-import { ActionLink, DirectoryToolbar, InlineCallout, TagList } from "@/components/dashboard/management-primitives";
+import { ActionLink, DirectoryToolbar, TagList } from "@/components/dashboard/management-primitives";
 import { CopyIcon, EyeIcon, FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
 
 const statusTabs = ["All", "Published", "Draft"] as const;
@@ -116,8 +115,8 @@ export function BlogManagementScreen() {
             {filteredRows.map((post) => (
               <article key={post.id} className="content-row blog-grid">
                 <div className="content-title-cell">
-                  <span className="content-thumb">
-                    <Image src={post.image} alt={post.title} fill sizes="84px" />
+                  <span className="content-thumb" aria-hidden="true">
+                    <span className="product-placeholder" />
                   </span>
                   <strong>{post.title}</strong>
                 </div>
@@ -156,7 +155,7 @@ export function BlogManagementScreen() {
         {preview ? (
           <div className="content-preview">
             <div className="content-preview__media">
-              <Image src={preview.image} alt={preview.title} fill sizes="720px" />
+              <span className="product-placeholder" aria-hidden="true" />
             </div>
             <TagList items={[preview.category, preview.status, preview.readTime]} />
             <h2>{preview.title}</h2>
@@ -200,7 +199,7 @@ export function BlogFormScreen({ post }: { post?: BlogPostRecord | null }) {
           <div className="product-form-shell__header">
             <div>
               <h2 className="section-title">{post ? "Edit post" : "Create new post"}</h2>
-              <p className="section-description">Content is local for now and ready to serialize into the CMS API payload.</p>
+              <p className="section-description">Prepare the article, cover media, SEO details, and publishing status.</p>
             </div>
             <FormSubmitter
               formId={blogFormId}
@@ -239,7 +238,7 @@ export function BlogFormScreen({ post }: { post?: BlogPostRecord | null }) {
             <section className="detail-panel">
               <div className="detail-panel__header">
                 <h3>Post Content / Body</h3>
-                <p>Placeholder editor controls until the rich text editor is integrated.</p>
+                <p>Compose and format the article body.</p>
               </div>
               <div className="rich-editor-shell">
                 <div className="rich-editor-toolbar">
@@ -268,7 +267,6 @@ export function BlogFormScreen({ post }: { post?: BlogPostRecord | null }) {
                 <FormField label="Meta Description">
                   <TextAreaField value={seoDescription} onChange={setSeoDescription} placeholder="Meta description" rows={5} />
                 </FormField>
-                <InlineCallout>API payload includes title, summary, category, cover image, body, SEO title, and meta description.</InlineCallout>
               </div>
             </section>
           </div>
@@ -441,7 +439,7 @@ export function SitePageFormScreen({ page }: { page?: SitePageRecord | null }) {
             <section className="detail-panel">
               <div className="detail-panel__header">
                 <h3>Page Sections</h3>
-                <p>Structured sections pending final page-builder integration.</p>
+                <p>Organize the page content into reusable sections.</p>
               </div>
               <TextAreaField value={body} onChange={setBody} rows={12} />
             </section>

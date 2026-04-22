@@ -6,26 +6,32 @@ export default function LoginPage() {
       <div className="auth-card-shell mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[1080px] overflow-hidden rounded-[32px] border border-[var(--border)] shadow-[var(--shadow)]">
         <section className="auth-card-hero hidden flex-1 px-12 py-14 text-white lg:flex lg:flex-col lg:justify-between">
           <div>
-            <p className="m-0 text-[15px] font-semibold uppercase tracking-[0.24em] text-white/72">Fortsolar Admin</p>
-            <h1 className="m-0 pt-5 text-[52px] font-extrabold leading-[1.02] tracking-[-0.06em]">
-              Cleaner admin flows
+            <p className="m-0 text-sm font-semibold uppercase sm:text-[15px] text-white/72">Fortsolar Admin</p>
+
+
+            <h1 className="m-0 pt-5 text-4xl font-extrabold leading-[1.02] sm:text-[42px] lg:text-[52px]">
+              Powering solar
               <br />
-              for every team.
+              operations at scale.
             </h1>
             <p className="m-0 max-w-[420px] pt-5 text-base text-white/82">
-              The dashboard shell, tables, cards, and interactions are now aligned so future screens can extend from one design system.
+              Oversee customer requests, product inventory, bundle sales, payments, and installer delivery from a secure Fortsolar workspace.
             </p>
           </div>
           <div className="auth-card-hero-note rounded-[24px] border p-6 text-sm text-white/82">
-            Search, menus, tabs, status updates, modals, queue approvals, and sidebar collapse are wired and ready to continue.
+            Track daily operations, approve requests, and keep the Fortsolar catalogue organized.
           </div>
         </section>
 
         <section className="auth-card-form flex w-full flex-col justify-center px-6 py-10 sm:px-10 lg:w-[440px]">
           <div className="mb-8">
-            <p className="m-0 text-[15px] font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">Welcome back</p>
-            <h2 className="m-0 pt-3 text-[36px] font-extrabold tracking-[-0.05em]">Sign in to the admin panel</h2>
-            <p className="m-0 pt-3 text-sm text-[var(--text-soft)]">Use this temporary auth screen to enter the redesigned dashboard.</p>
+            <p className="brand-mark">
+              <span>Fort</span>
+              <strong>solar</strong>
+            </p>
+            <p className="m-0 text-sm font-semibold uppercase sm:text-[15px] text-[var(--brand)]">Welcome back</p>
+            <h2 className="m-0 pt-3 text-3xl font-extrabold sm:text-[36px]">Sign in to the admin panel</h2>
+            <p className="m-0 pt-3 text-sm text-[var(--text-soft)]">Enter your admin credentials to continue.</p>
           </div>
 
           <form className="flex flex-col gap-4">

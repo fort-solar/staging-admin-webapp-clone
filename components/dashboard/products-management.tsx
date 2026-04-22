@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { type FormEvent, useDeferredValue, useMemo, useState, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -27,7 +26,7 @@ import { FormField, Modal, ModalTextInput, UploadField } from "@/components/dash
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
 import { ActionLink, AttachmentItem, CatalogCard, DetailPanel, DirectoryToolbar, InlineCallout, KeyValueList, ManagementBackLink, MediaShowcase } from "@/components/dashboard/management-primitives";
 import { FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
-import { productAssets, toneFromStatus } from "@/lib/dashboard-data";
+import { toneFromStatus } from "@/lib/dashboard-data";
 
 const productViewTabs = ["Products", "Categories"] as const;
 const productStatusTabs = ["All", "Active", "Inactive", "Pending"] as const;
@@ -80,7 +79,7 @@ export function ProductsManagementScreen() {
     [categories, deferredQuery],
   );
 
-  const notice = searchParams.get("created") ? "Product form submitted. Connect the API to persist this into the live catalogue." : searchParams.get("draft") ? "Draft saved locally. Hook the endpoint next." : null;
+  const notice = searchParams.get("created") ? "Product saved successfully." : searchParams.get("draft") ? "Product draft saved." : null;
 
   return (
     <>
@@ -258,7 +257,6 @@ export function ProductDetailScreen({ product }: { product: ProductRecord }) {
   return (
     <div className="dashboard-stack">
       <ProductMetricsStrip />
-      <InlineCallout>Preview data is wired end-to-end in the UI. Persisting edits is the remaining API task.</InlineCallout>
       <Panel className="product-detail-shell">
         <div className="product-detail-shell__header">
           <ManagementBackLink href="/products" label={product.name} meta={product.submittedAt} />
@@ -299,7 +297,7 @@ export function ProductDetailScreen({ product }: { product: ProductRecord }) {
               <div>
                 <p className="section-description">Product Media</p>
                 <div className="media-card">
-                  <Image src={product.image} alt={product.name} fill sizes="420px" />
+                  <span className="product-placeholder" aria-hidden="true" />
                 </div>
               </div>
               <AttachmentItem label={product.datasheet} helper="Datasheet" />
@@ -354,13 +352,12 @@ export function ProductFormScreen() {
   return (
     <div className="dashboard-stack">
       <ProductMetricsStrip />
-      <InlineCallout>All controls below are functional in the UI. The remaining work is wiring these payloads to the product API.</InlineCallout>
       <Panel className="product-form-shell">
         <form id={productCreateFormId} onSubmit={handleSubmit}>
           <div className="product-form-shell__header">
             <div>
               <h2 className="section-title">Add A New Product</h2>
-              <p className="section-description">Use existing admin primitives and keep the final payload ready for API integration.</p>
+              <p className="section-description">Add product details, pricing, inventory, and supporting media.</p>
             </div>
             <FormSubmitter
               formId={productCreateFormId}
@@ -376,7 +373,7 @@ export function ProductFormScreen() {
           </div>
 
           <div className="product-form-grid">
-          <DetailPanel title="Basic Information" description="Capture the core product metadata that will eventually be submitted to the API.">
+          <DetailPanel title="Basic Information" description="Capture the core product details shown in the catalogue.">
             <div className="detail-panel__stack">
               <FormField label="Product">
                 <TextField value={name} onChange={(event) => setName(event.target.value)} placeholder="Product Name" />
@@ -449,12 +446,12 @@ export function ProductFormScreen() {
                 <FormField label="Product Media">
                   <div className="upload-preview-card">
                     <div className="upload-preview-card__canvas">
-                      <Image src={productAssets.panel} alt="Product media preview" fill sizes="320px" />
+                      <span className="product-placeholder" aria-hidden="true" />
                     </div>
                     <div className="thumbnail-strip">
-                      {[productAssets.panel, productAssets.inverter, productAssets.battery].map((asset, index) => (
-                        <span key={`${asset}-${index}`} className="thumbnail-strip__item">
-                          <Image src={asset} alt={`Media ${index + 1}`} fill sizes="78px" />
+                      {[0, 1, 2].map((item) => (
+                        <span key={item} className="thumbnail-strip__item" aria-hidden="true">
+                          <span className="product-placeholder" />
                         </span>
                       ))}
                     </div>
