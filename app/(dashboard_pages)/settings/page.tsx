@@ -139,6 +139,7 @@ export default function SettingsPage() {
     timezone: "UTC (Coordinated Universal Time)",
     dateFormat: "MM/DD/YYYY",
   });
+  const [profilePhotoName, setProfilePhotoName] = useState("");
   const [appearance, setAppearance] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") {
       return "light";
@@ -173,14 +174,22 @@ export default function SettingsPage() {
           <aside className="settings-summary">
             <div className="settings-summary__avatar-wrap">
               <Avatar src={currentAdminUser.avatar} alt={currentAdminUser.name} size="xl" className="settings-summary__avatar" />
-              <button type="button" className="settings-summary__camera" aria-label="Update profile photo">
+              <input
+                id="settings-profile-photo"
+                className="settings-summary__photo-input"
+                type="file"
+                accept="image/*"
+                onChange={(event) => setProfilePhotoName(event.target.files?.[0]?.name ?? "")}
+              />
+              <label className="settings-summary__camera" htmlFor="settings-profile-photo" aria-label="Update profile photo">
                 <CameraIcon className="menu-icon" />
-              </button>
+              </label>
             </div>
 
             <div className="settings-summary__identity">
               <h2>{currentAdminUser.name}</h2>
               <StatusPill label={currentAdminUser.role} tone="success" solid={false} />
+              {profilePhotoName ? <span className="settings-summary__photo-name">{profilePhotoName}</span> : null}
             </div>
 
             <div className="settings-summary__meta">

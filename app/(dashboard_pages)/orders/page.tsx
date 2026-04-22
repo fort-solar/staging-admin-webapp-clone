@@ -63,9 +63,7 @@ export default function OrdersPage() {
                   <td>{order.id}</td>
                   <td>
                     <div className="product-cell flex">
-                      <span className="product-thumb">
-                       <div className="aspect-4/3 w-16 bg-zinc-200 rounded-sm" />
-                      </span>
+                      <span className="product-thumb" aria-hidden="true" />
                       <div className="product-cell__text flex-col flex">
                         <strong>{order.product}</strong>
                         <span>{order.extraItems}</span>

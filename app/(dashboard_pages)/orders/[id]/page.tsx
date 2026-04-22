@@ -2,7 +2,6 @@
 
 import { use, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { getOrder, orderSummaryItems, orderTimeline, toneFromOrderStatus, mapPreview } from "@/lib/dashboard-data";
 import { MapCard, MetricCardSecondary, Panel, SelectField, StatusPill, TimelineStep } from "@/components/dashboard/ui";
 import { ChevronLeftIcon } from "@/components/dashboard/icons";
@@ -30,7 +29,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             <Link href="/orders" className="icon-button" aria-label="Back to orders">
               <ChevronLeftIcon className="menu-icon" />
             </Link>
-            <h2 className="m-0 text-[20px] font-extrabold tracking-[-0.04em]">#{order.id}</h2>
+            <h2 className="m-0 text-lg font-extrabold sm:text-[20px]">#{order.id}</h2>
           </div>
           <div className="inline-actions">
             <StatusPill label={status} tone={toneFromOrderStatus(status)} />
@@ -41,7 +40,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         <Panel className="mx-6 mb-6 border border-[var(--border)] shadow-none">
           <div className="grid gap-0 xl:grid-cols-3">
             <div className="border-b border-[var(--border)] p-6 xl:border-b-0 xl:border-r">
-              <h3 className="m-0 text-[15px] font-bold">Order Information</h3>
+              <h3 className="m-0 text-sm font-bold sm:text-[15px]">Order Information</h3>
               <div className="mt-4 flex flex-col gap-3 text-sm">
                 <div className="flex justify-between gap-4"><span className="text-[var(--text-soft)]">Order Id:</span><strong>{order.id}</strong></div>
                 <div className="flex justify-between gap-4"><span className="text-[var(--text-soft)]">Order Date:</span><strong>Apr 9, 2023</strong></div>
@@ -50,7 +49,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <div className="flex justify-between gap-4"><span className="text-[var(--text-soft)]">Estimated Delivery:</span><strong>Apr 12, 2023</strong></div>
               </div>
               <div className="mt-6 border-t border-[var(--border)] pt-6">
-                <h4 className="m-0 text-[15px] font-bold">Shipping Address</h4>
+                <h4 className="m-0 text-sm font-bold sm:text-[15px]">Shipping Address</h4>
                 <div className="mt-4 flex flex-col gap-3 text-sm text-[var(--text-soft)]">
                   <div className="flex justify-between gap-4"><span>Name:</span><strong className="text-[var(--text)]">Nessie Smith</strong></div>
                   <div className="flex justify-between gap-4"><span>Address:</span><strong className="max-w-[170px] text-right text-[var(--text)]">123 Main Street Apt 4B New York, NY 10001 United States</strong></div>
@@ -63,7 +62,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             </div>
 
             <div className="border-b border-[var(--border)] p-6 xl:border-b-0 xl:border-r">
-              <h3 className="m-0 text-[15px] font-bold">Tracking Timeline</h3>
+              <h3 className="m-0 text-sm font-bold sm:text-[15px]">Tracking Timeline</h3>
               <div className="mt-5 flex flex-col">
                 {orderTimeline.map((step, index) => (
                   <TimelineStep key={step.id} index={index} title={step.title} date={step.date} description={step.description} completed={currentIndex >= index && status !== "Cancelled"} />
@@ -72,18 +71,16 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             </div>
 
             <div className="p-6">
-              <h3 className="m-0 text-[15px] font-bold">Order Summary</h3>
+              <h3 className="m-0 text-sm font-bold sm:text-[15px]">Order Summary</h3>
               <div className="mt-5 flex items-center justify-between">
-                <strong className="text-[15px]">3 Items</strong>
+                <strong className="text-sm sm:text-[15px]">3 Items</strong>
                 <span className="text-[var(--text-soft)]">₦320,000.00</span>
               </div>
               <div className="mt-4 flex flex-col gap-4">
                 {orderSummaryItems.map((item) => (
                   <div key={item.title} className="product-cell justify-between">
                     <div className="product-cell">
-                      <span className="product-thumb">
-                        <Image src={item.image} alt={item.title} fill sizes="40px" />
-                      </span>
+                      <span className="product-thumb" aria-hidden="true" />
                       <div className="product-cell__text">
                         <strong>{item.title}</strong>
                       </div>
@@ -97,8 +94,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <div className="flex justify-between"><span>Shipping Fee</span><strong>₦3,860.00</strong></div>
               </div>
               <div className="mt-6 flex items-center justify-between border-t border-[var(--border)] pt-6">
-                <strong className="text-[18px]">Total</strong>
-                <strong className="text-[20px]">₦320,000.00</strong>
+                <strong className="text-base sm:text-[18px]">Total</strong>
+                <strong className="text-lg sm:text-[20px]">₦320,000.00</strong>
               </div>
             </div>
           </div>

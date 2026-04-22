@@ -143,7 +143,7 @@ export default function DashboardPage() {
               <div key={item.id} className="flex items-center gap-3 border-b border-[var(--border)] py-4 last:border-b-0">
                 <Avatar src={item.avatar} alt={item.name} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-bold">{item.name}</p>
+                  <p className="truncate text-sm font-bold sm:text-[15px]">{item.name}</p>
                   <p className="truncate text-sm text-[var(--text-soft)]">{item.email}</p>
                 </div>
                 <IconButton
@@ -168,7 +168,7 @@ export default function DashboardPage() {
         </Panel>
       </section>
 
-      <section className="dashboard-split" style={{ gridTemplateColumns: "minmax(280px,0.9fr) minmax(0,1.55fr)" }}>
+      <section className="dashboard-split dashboard-split--activity-orders">
         <Panel className="overflow-hidden">
           <PanelHeader
             title="Recent Activity"
@@ -182,9 +182,9 @@ export default function DashboardPage() {
                     <FilterIcon className="activity-item__icon" />
                   </span>
                   <div className="flex-1">
-                    <h3 className="m-0 text-[15px] font-bold">{activity.title}</h3>
+                    <h3 className="m-0 text-sm font-bold sm:text-[15px]">{activity.title}</h3>
                     <p className="m-0 pt-1 text-sm text-[var(--text-soft)]">{activity.description}</p>
-                    <small className="text-[12px] text-[var(--text-faint)]">{activity.meta}</small>
+                    <small className="text-[11px] text-[var(--text-faint)] sm:text-[12px]">{activity.meta}</small>
                   </div>
                 </div>
               </article>

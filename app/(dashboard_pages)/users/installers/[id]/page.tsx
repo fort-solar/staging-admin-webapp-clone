@@ -61,7 +61,7 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
 
       <div className="detail-layout px-6 py-6">
         <Panel className="border border-[var(--border)] p-6 shadow-none">
-          <h3 className="m-0 text-[15px] font-bold">Vendor Information</h3>
+          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Vendor Information</h3>
           <div className="mt-3">
             <InfoRow icon={InfoIcons.phone} label="Phone Number" value={installer.phone} />
             <InfoRow icon={InfoIcons.mail} label="Email" value={installer.email} />
@@ -70,7 +70,7 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
           </div>
 
           <div className="mt-8">
-            <h3 className="m-0 text-[15px] font-bold">Wallet Information</h3>
+            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Wallet Information</h3>
             <div className="installer-wallet-card">
               <div className="installer-wallet-card__row">
                 <span className="installer-wallet-card__icon">
@@ -96,9 +96,9 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
           </div>
 
           <div className="mt-8">
-            <h3 className="m-0 text-[15px] font-bold">Ratings</h3>
+            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Ratings</h3>
             <div className="mt-4 flex items-center gap-4">
-              <strong className="text-[40px] font-extrabold tracking-[-0.04em]">3.0</strong>
+              <strong className="text-3xl font-extrabold sm:text-[40px]">3.0</strong>
               <div>
                 <RatingStars rating={3} />
                 <p className="m-0 pt-1 text-sm text-[var(--text-soft)]">4,807 reviews</p>

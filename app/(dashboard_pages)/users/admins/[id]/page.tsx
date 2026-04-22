@@ -102,14 +102,14 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
         </Panel>
 
         <Panel className="border border-[var(--border)] p-6 shadow-none">
-          <h3 className="m-0 text-[15px] font-bold">Admin Information</h3>
+          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Admin Information</h3>
           <div className="mt-3">
             <InfoRow icon={InfoIcons.phone} label="Phone Number" value={admin.phone} />
             <InfoRow icon={InfoIcons.mail} label="Email" value={admin.email} />
           </div>
 
           <div className="mt-8">
-            <h3 className="m-0 text-[15px] font-bold">Account Statistics</h3>
+            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Account Statistics</h3>
             <div className="mt-4 flex flex-col gap-4">
               <InfoStat label="Account Age" value="449 days" progress={88} />
               <InfoStat label="Activity Level" value="High" progress={100} />

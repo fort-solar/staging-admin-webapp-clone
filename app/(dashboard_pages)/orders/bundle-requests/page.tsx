@@ -246,12 +246,11 @@ export default function BundleRequestPage() {
         }
       >
 
-        {/* Let us work on more pages... we still follow the same pattern, responsive, ready just pending api integration and we use our exisitng reuseable components or create new reuseable components.. we should have a general form submitter if we dont have one already that we can use to submit all our forms... */}
         {activeRequest ? (
           <div className="flex flex-col gap-6">
             <div className="rounded-[20px] bg-(--surface-soft) p-5">
               <p className="m-0 text-sm font-semibold text-(--brand)">Bundle Request</p>
-              <h3 className="m-0 pt-2 text-[28px] font-extrabold tracking-[-0.04em]">{activeRequest.bundle}</h3>
+              <h3 className="m-0 pt-2 text-2xl font-extrabold sm:text-[28px]">{activeRequest.bundle}</h3>
               <p className="m-0 pt-2 text-sm text-(--text-soft)">Affordable and efficient solutions tailored to the customer’s needs.</p>
             </div>
             <div className="grid gap-4 md:grid-cols-3">

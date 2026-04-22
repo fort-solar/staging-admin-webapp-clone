@@ -2,7 +2,6 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   customerActivityFeed,
   customerPurchases,
@@ -99,10 +98,8 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
                       <div className="purchase-history-card__content">
                         <StatusPill label={purchase.id} tone="neutral" solid={false} />
                         <div className="product-cell mt-4">
-                          <span className="product-thumb">
-                            <Image src={purchase.image} alt={purchase.product} fill sizes="40px" />
-                          </span>
-                          <div className="flex gap-2"><div className="aspect-4/3 w-30 bg-zinc-200 rounded-2xl" /> <div className="product-cell__text">
+                          <span className="product-thumb" aria-hidden="true" />
+                          <div className="product-cell__text">
 
                             <strong>{purchase.product} <span>{purchase.extraItems}</span></strong>
                             
@@ -110,7 +107,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
                             <strong>
                               {purchase.amount} <span >•  {purchase.payment}</span>
                             </strong>
-                          </div></div>
+                          </div>
 
                         </div>
                         <div className="purchase-history-card__footer">
@@ -149,9 +146,9 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
                 {customerWishlist.map((item) => (
                   <article key={item.id} className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4">
                     <div className="relative overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--surface-soft)]">
-                      <Image src={item.image} alt={item.title} fill sizes="320px" className="object-cover" />
+                      <span className="product-placeholder is-static" aria-hidden="true" />
                     </div>
-                    <h3 className="mb-0 mt-4 text-[16px] font-bold">{item.title}</h3>
+                    <h3 className="mb-0 mt-4 text-sm font-bold sm:text-base">{item.title}</h3>
                     <p className="mb-0 mt-1 text-sm text-[var(--text-soft)]">{item.subtitle}</p>
                     <div className="mt-4 flex items-center justify-between">
                       <strong>{item.price}</strong>
@@ -168,7 +165,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
               <div className="mt-6 flex flex-col gap-8">
                 <div className="grid gap-8 border-b border-[var(--border)] pb-6 lg:grid-cols-[240px_minmax(0,1fr)]">
                   <div className="flex flex-col gap-2">
-                    <strong className="text-[42px] font-extrabold tracking-[-0.04em]">4.8</strong>
+                    <strong className="text-3xl font-extrabold sm:text-[42px]">4.8</strong>
                     <RatingStars rating={4} />
                     <span className="text-sm text-[var(--text-soft)]">92 reviews</span>
                   </div>
@@ -193,14 +190,14 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
         </Panel>
 
         <Panel className="border border-[var(--border)] p-6 shadow-none">
-          <h3 className="m-0 text-[15px] font-bold">Customer Information</h3>
+          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Customer Information</h3>
           <div className="mt-3">
             <InfoRow icon={InfoIcons.phone} label="Phone Number" value={customer.phone} />
             <InfoRow icon={InfoIcons.mail} label="Email" value={customer.email} />
           </div>
 
           <div className="mt-6">
-            <h3 className="m-0 text-[15px] font-bold">Shipping Address</h3>
+            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Shipping Address</h3>
             <div className="mt-4">
               <MapCard
                 title="Rivers State"
@@ -212,9 +209,9 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
 
           {tab === "Activity" ? (
             <div className="mt-8">
-              <h3 className="m-0 text-[15px] font-bold">Wallet Information</h3>
+              <h3 className="m-0 text-sm font-bold sm:text-[15px]">Wallet Information</h3>
               <div className="mt-4 rounded-[20px] bg-[var(--brand)] px-4 py-5 text-white">
-                <p className="m-0 text-[32px] font-extrabold tracking-[-0.04em]">₦7,500.00</p>
+                <p className="m-0 text-2xl font-extrabold sm:text-[32px]">₦7,500.00</p>
                 <span className="text-sm text-white/78">Wallet balance</span>
               </div>
             </div>
