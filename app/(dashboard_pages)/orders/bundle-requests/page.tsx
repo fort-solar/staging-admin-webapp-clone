@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { bundleRequestRows, toneFromStatus } from "@/lib/dashboard-data";
 import {
   Button,
@@ -27,6 +28,7 @@ import { EyeIcon, FilterIcon, PlusIcon } from "@/components/dashboard/icons";
 const customBundleRequestFormId = "custom-bundle-request-form";
 
 export default function BundleRequestPage() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState(bundleRequestRows);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
@@ -34,6 +36,8 @@ export default function BundleRequestPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const deferredQuery = useDeferredValue(query);
+  const canCreateOrders = can("orders", "create");
+  const canUpdateOrders = can("orders", "update");
 
   const [form, setForm] = useState({
     name: "",
@@ -72,9 +76,11 @@ export default function BundleRequestPage() {
           <PanelHeader
             title="Request List"
             action={
-              <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setModalOpen(true)}>
-                Custom Request
-              </Button>
+              canCreateOrders ? (
+                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setModalOpen(true)}>
+                  Custom Request
+                </Button>
+              ) : undefined
             }
           />
           <div className="dashboard-table-toolbar">
@@ -130,36 +136,40 @@ export default function BundleRequestPage() {
                         </Button>
                         <TableActionsMenu
                           items={[
-                            {
-                              label: "Mark as Processing",
-                              onSelect: () =>
-                                setRows((current) =>
-                                  current.map((item) =>
-                                    item.id === row.id
-                                      ? {
-                                          ...item,
-                                          status: "Processing",
-                                          statusTone: toneFromStatus("Processing"),
-                                        }
-                                      : item,
-                                  ),
-                                ),
-                            },
-                            {
-                              label: "Mark as Installed",
-                              onSelect: () =>
-                                setRows((current) =>
-                                  current.map((item) =>
-                                    item.id === row.id
-                                      ? {
-                                          ...item,
-                                          status: "System Installed",
-                                          statusTone: toneFromStatus("Approved"),
-                                        }
-                                      : item,
-                                  ),
-                                ),
-                            },
+                            ...(canUpdateOrders
+                              ? [
+                                  {
+                                    label: "Mark as Processing",
+                                    onSelect: () =>
+                                      setRows((current) =>
+                                        current.map((item) =>
+                                          item.id === row.id
+                                            ? {
+                                                ...item,
+                                                status: "Processing",
+                                                statusTone: toneFromStatus("Processing"),
+                                              }
+                                            : item,
+                                        ),
+                                      ),
+                                  },
+                                  {
+                                    label: "Mark as Installed",
+                                    onSelect: () =>
+                                      setRows((current) =>
+                                        current.map((item) =>
+                                          item.id === row.id
+                                            ? {
+                                                ...item,
+                                                status: "System Installed",
+                                                statusTone: toneFromStatus("Approved"),
+                                              }
+                                            : item,
+                                        ),
+                                      ),
+                                  },
+                                ]
+                              : []),
                           ]}
                         />
                       </div>
@@ -239,9 +249,11 @@ export default function BundleRequestPage() {
             <Button variant="secondary" onClick={() => setDetailId(null)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={() => setDetailId(null)}>
-              Update
-            </Button>
+            {canUpdateOrders ? (
+              <Button variant="primary" onClick={() => setDetailId(null)}>
+                Update
+              </Button>
+            ) : null}
           </>
         }
       >
@@ -277,19 +289,21 @@ export default function BundleRequestPage() {
                 <strong>{activeRequest.email}</strong>
               </div>
             </div>
-            <FormField label="Status">
-              <SelectField
-                value={activeRequest.status}
-                onChange={(value) =>
-                  setRows((current) =>
-                    current.map((row) =>
-                      row.id === activeRequest.id ? { ...row, status: value, statusTone: toneFromStatus(value) } : row,
-                    ),
-                  )
-                }
-                options={["Processing", "System Installed", "Installer in-transit", "Closed", "Packed"]}
-              />
-            </FormField>
+            {canUpdateOrders ? (
+              <FormField label="Status">
+                <SelectField
+                  value={activeRequest.status}
+                  onChange={(value) =>
+                    setRows((current) =>
+                      current.map((row) =>
+                        row.id === activeRequest.id ? { ...row, status: value, statusTone: toneFromStatus(value) } : row,
+                      ),
+                    )
+                  }
+                  options={["Processing", "System Installed", "Installer in-transit", "Closed", "Packed"]}
+                />
+              </FormField>
+            ) : null}
           </div>
         ) : null}
       </Modal>
