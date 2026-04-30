@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { toneFromStatus, verificationRows } from "@/lib/dashboard-data";
 import {
   Avatar,
@@ -29,6 +30,7 @@ type ApprovalState = {
 };
 
 export default function VerificationQueuePage() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState(verificationRows);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
@@ -39,6 +41,7 @@ export default function VerificationQueuePage() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const deferredQuery = useDeferredValue(query);
+  const canUpdateVerificationQueue = can("verification_queue", "update");
 
   const filteredRows = useMemo(
     () =>
@@ -97,13 +100,15 @@ export default function VerificationQueuePage() {
         <PanelHeader
           title="Installer Verification Queue"
           action={
-            <Button
-              variant="primary"
-              onClick={() => openApproveDialog(pendingBulkIds, pendingBulkIds.length === 1 ? pendingBulkIds[0] : undefined)}
-              disabled={pendingBulkIds.length === 0}
-            >
-              {approveActionLabel}
-            </Button>
+            canUpdateVerificationQueue ? (
+              <Button
+                variant="primary"
+                onClick={() => openApproveDialog(pendingBulkIds, pendingBulkIds.length === 1 ? pendingBulkIds[0] : undefined)}
+                disabled={pendingBulkIds.length === 0}
+              >
+                {approveActionLabel}
+              </Button>
+            ) : undefined
           }
         />
 
@@ -119,10 +124,12 @@ export default function VerificationQueuePage() {
             <thead>
               <tr>
                 <th className="table-checkbox-cell">
-                  <Checkbox
-                    checked={allSelected}
-                    onChange={(checked) => setSelected(checked ? filteredRows.map((row) => row.id) : [])}
-                  />
+                  {canUpdateVerificationQueue ? (
+                    <Checkbox
+                      checked={allSelected}
+                      onChange={(checked) => setSelected(checked ? filteredRows.map((row) => row.id) : [])}
+                    />
+                  ) : null}
                 </th>
                 <th>Installer</th>
                 <th>Documents</th>
@@ -135,14 +142,16 @@ export default function VerificationQueuePage() {
               {filteredRows.map((item) => (
                 <tr key={item.id}>
                   <td className="table-checkbox-cell">
-                    <Checkbox
-                      checked={selected.includes(item.id)}
-                      onChange={(checked) =>
-                        setSelected((current) =>
-                          checked ? [...current, item.id] : current.filter((entry) => entry !== item.id),
-                        )
-                      }
-                    />
+                    {canUpdateVerificationQueue ? (
+                      <Checkbox
+                        checked={selected.includes(item.id)}
+                        onChange={(checked) =>
+                          setSelected((current) =>
+                            checked ? [...current, item.id] : current.filter((entry) => entry !== item.id),
+                          )
+                        }
+                      />
+                    ) : null}
                   </td>
                   <td>
                     <div className="person-cell">
@@ -176,24 +185,26 @@ export default function VerificationQueuePage() {
                       >
                         View
                       </Button>
-                      <TableActionsMenu
-                        items={[
-                          {
-                            label: "Approve",
-                            icon: <CheckCircleIcon className="menu-icon" />,
-                            onSelect: () => openApproveDialog([item.id], item.id),
-                          },
-                          {
-                            label: "Reject",
-                            tone: "danger",
-                            icon: <XCircleIcon className="menu-icon" />,
-                            onSelect: () => {
-                              setRejectId(item.id);
-                              setRejectNote(item.adminNote ?? "");
+                      {canUpdateVerificationQueue ? (
+                        <TableActionsMenu
+                          items={[
+                            {
+                              label: "Approve",
+                              icon: <CheckCircleIcon className="menu-icon" />,
+                              onSelect: () => openApproveDialog([item.id], item.id),
                             },
-                          },
-                        ]}
-                      />
+                            {
+                              label: "Reject",
+                              tone: "danger",
+                              icon: <XCircleIcon className="menu-icon" />,
+                              onSelect: () => {
+                                setRejectId(item.id);
+                                setRejectNote(item.adminNote ?? "");
+                              },
+                            },
+                          ]}
+                        />
+                      ) : null}
                     </div>
                   </td>
                 </tr>

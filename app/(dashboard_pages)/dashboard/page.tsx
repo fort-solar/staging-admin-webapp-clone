@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import {
   dashboardPrimaryMetrics,
   dashboardRecentActivities,
@@ -29,6 +30,7 @@ type RecentOrderStatus = (typeof recentOrderStatusOptions)[number];
 type RecentOrderFilter = "all" | RecentOrderStatus;
 
 export default function DashboardPage() {
+  const { can } = useAccessControl();
   const [period, setPeriod] = useState<ChartPeriod>("all");
   const [search, setSearch] = useState("");
   const [queue, setQueue] = useState(verificationRows);
@@ -61,6 +63,9 @@ export default function DashboardPage() {
 
   const activeDocumentsSubmission = queue.find((item) => item.id === documentsId) ?? null;
   const activeApprovalSubmission = queue.find((item) => item.id === approveId) ?? null;
+  const canReadVerificationQueue = can("verification_queue", "read");
+  const canUpdateVerificationQueue = can("verification_queue", "update");
+  const canReadOrders = can("orders", "read");
 
   const chart = revenueSeries[period];
 
@@ -125,47 +130,49 @@ export default function DashboardPage() {
           </div>
         </Panel>
 
-        <Panel className="overflow-hidden">
-          <PanelHeader
-            title="Installer Verification Queue"
-            description="8 installers awaiting verification"
-            action={
-              <Link href="/dashboard/verification-queue" className="text-sm font-semibold text-[var(--text-soft)] underline-offset-4 hover:underline">
-                See All
-              </Link>
-            }
-          />
-          <div className="px-6 pt-4">
-            <SearchField value={search} onChange={setSearch} placeholder="Search vendors..." />
-          </div>
-          <div className="px-6 pb-4 pt-2">
-            {filteredQueue.slice(0, 4).map((item) => (
-              <div key={item.id} className="flex items-center gap-3 border-b border-[var(--border)] py-4 last:border-b-0">
-                <Avatar src={item.avatar} alt={item.name} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold sm:text-[15px]">{item.name}</p>
-                  <p className="truncate text-sm text-[var(--text-soft)]">{item.email}</p>
+        {canReadVerificationQueue ? (
+          <Panel className="overflow-hidden">
+            <PanelHeader
+              title="Installer Verification Queue"
+              description="8 installers awaiting verification"
+              action={
+                <Link href="/dashboard/verification-queue" className="text-sm font-semibold text-[var(--text-soft)] underline-offset-4 hover:underline">
+                  See All
+                </Link>
+              }
+            />
+            <div className="px-6 pt-4">
+              <SearchField value={search} onChange={setSearch} placeholder="Search vendors..." />
+            </div>
+            <div className="px-6 pb-4 pt-2">
+              {filteredQueue.slice(0, 4).map((item) => (
+                <div key={item.id} className="flex items-center gap-3 border-b border-[var(--border)] py-4 last:border-b-0">
+                  <Avatar src={item.avatar} alt={item.name} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold sm:text-[15px]">{item.name}</p>
+                    <p className="truncate text-sm text-[var(--text-soft)]">{item.email}</p>
+                  </div>
+                  <IconButton
+                    label={`View ${item.name}`}
+                    icon={<EyeIcon className="menu-icon" />}
+                    onClick={() => setDocumentsId(item.id)}
+                  />
+                  {item.status === "Pending" && canUpdateVerificationQueue ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setApproveId(item.id)}
+                    >
+                      Approve
+                    </Button>
+                  ) : (
+                    <StatusPill label={item.status} tone={item.tone} />
+                  )}
                 </div>
-                <IconButton
-                  label={`View ${item.name}`}
-                  icon={<EyeIcon className="menu-icon" />}
-                  onClick={() => setDocumentsId(item.id)}
-                />
-                {item.status === "Pending" ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setApproveId(item.id)}
-                  >
-                    Approve
-                  </Button>
-                ) : (
-                  <StatusPill label={item.status} tone={item.tone} />
-                )}
-              </div>
-            ))}
-          </div>
-        </Panel>
+              ))}
+            </div>
+          </Panel>
+        ) : null}
       </section>
 
       <section className="dashboard-split dashboard-split--activity-orders">
@@ -192,7 +199,8 @@ export default function DashboardPage() {
           </div>
         </Panel>
 
-        <Panel className="overflow-hidden">
+        {canReadOrders ? (
+          <Panel className="overflow-hidden">
           <PanelHeader
             title="Recent Orders"
             action={
@@ -262,7 +270,7 @@ export default function DashboardPage() {
                       <td>
                         <StatusPill label={order.status} tone={order.statusTone} />
                       </td>
-                      <td>{order.amount.replace("₦", "$")}</td>
+                      <td>{order.amount.replace("₦", "₦")}</td>
                     </tr>
                   ))
                 ) : (
@@ -275,7 +283,8 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
-        </Panel>
+          </Panel>
+        ) : null}
       </section>
       </div>
       <VerificationDocumentsDialog
