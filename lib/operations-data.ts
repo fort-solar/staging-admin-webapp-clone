@@ -205,7 +205,7 @@ export const transactionRecords: TransactionRecord[] = [
     items: [
       { label: "Solar Panel", amount: "₦50.00", image: productAssets.panel },
       { label: "Discount", amount: "-₦4.20" },
-    ],
+    ],  
   },
 ];
 
