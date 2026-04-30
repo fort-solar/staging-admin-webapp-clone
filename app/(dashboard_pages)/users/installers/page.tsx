@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useDeferredValue, useMemo, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { avatarAssets, installerDirectory, installerSkills, toneFromStatus } from "@/lib/dashboard-data";
 import {
   Avatar,
@@ -22,12 +23,16 @@ import { BanIcon, EyeIcon, PlusIcon, ShieldOffIcon, TrashIcon } from "@/componen
 const installerFormId = "installer-create-form";
 
 export default function InstallersPage() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState(installerDirectory);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
   const [openModal, setOpenModal] = useState(false);
   const deferredQuery = useDeferredValue(query);
+  const canCreateInstallers = can("installers", "create");
+  const canUpdateInstallers = can("installers", "update");
+  const canDeleteInstallers = can("installers", "delete");
 
   const [form, setForm] = useState({
     name: "Wade Warren",
@@ -63,9 +68,11 @@ export default function InstallersPage() {
           <PanelHeader
             title="Installer Directory"
             action={
-              <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setOpenModal(true)}>
-                Add Installer
-              </Button>
+              canCreateInstallers ? (
+                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setOpenModal(true)}>
+                  Add Installer
+                </Button>
+              ) : undefined
             }
           />
           <div className="dashboard-table-toolbar">
@@ -125,44 +132,52 @@ export default function InstallersPage() {
                           panelClassName="is-installer-menu"
                           items={[
                             { label: "View Profile", href: `/users/installers/${installer.id}`, icon: <EyeIcon className="menu-icon" /> },
-                            {
-                              label: "Revoke Verification",
-                              icon: <ShieldOffIcon className="menu-icon" />,
-                              onSelect: () =>
-                                setRows((current) =>
-                                  current.map((row) =>
-                                    row.id === installer.id
-                                      ? {
-                                          ...row,
-                                          verification: "Revoked",
-                                          verificationTone: "neutral",
-                                        }
-                                      : row,
-                                  ),
-                                ),
-                            },
-                            {
-                              label: "Blacklist Installer",
-                              icon: <BanIcon className="menu-icon" />,
-                              onSelect: () =>
-                                setRows((current) =>
-                                  current.map((row) =>
-                                    row.id === installer.id
-                                      ? {
-                                          ...row,
-                                          status: "Flagged",
-                                          statusTone: toneFromStatus("Flagged"),
-                                        }
-                                      : row,
-                                  ),
-                                ),
-                            },
-                            {
-                              label: "Delete Installer",
-                              tone: "danger",
-                              icon: <TrashIcon className="menu-icon" />,
-                              onSelect: () => setRows((current) => current.filter((row) => row.id !== installer.id)),
-                            },
+                            ...(canUpdateInstallers
+                              ? [
+                                  {
+                                    label: "Revoke Verification",
+                                    icon: <ShieldOffIcon className="menu-icon" />,
+                                    onSelect: () =>
+                                      setRows((current) =>
+                                        current.map((row) =>
+                                          row.id === installer.id
+                                            ? {
+                                                ...row,
+                                                verification: "Revoked",
+                                                verificationTone: "neutral",
+                                              }
+                                            : row,
+                                        ),
+                                      ),
+                                  },
+                                  {
+                                    label: "Blacklist Installer",
+                                    icon: <BanIcon className="menu-icon" />,
+                                    onSelect: () =>
+                                      setRows((current) =>
+                                        current.map((row) =>
+                                          row.id === installer.id
+                                            ? {
+                                                ...row,
+                                                status: "Flagged",
+                                                statusTone: toneFromStatus("Flagged"),
+                                              }
+                                            : row,
+                                        ),
+                                      ),
+                                  },
+                                ]
+                              : []),
+                            ...(canDeleteInstallers
+                              ? [
+                                  {
+                                    label: "Delete Installer",
+                                    tone: "danger" as const,
+                                    icon: <TrashIcon className="menu-icon" />,
+                                    onSelect: () => setRows((current) => current.filter((row) => row.id !== installer.id)),
+                                  },
+                                ]
+                              : []),
                           ]}
                         />
                       </div>

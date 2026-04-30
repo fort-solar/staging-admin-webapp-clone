@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useDeferredValue, useMemo, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { adminDirectory, adminPermissionOptions, avatarAssets, toneFromStatus } from "@/lib/dashboard-data";
 import {
   Avatar,
@@ -22,12 +23,16 @@ import { EyeIcon, PlusIcon, ShieldOffIcon, TrashIcon } from "@/components/dashbo
 const adminFormId = "admin-create-form";
 
 export default function AdminsPage() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState(adminDirectory);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
   const [openModal, setOpenModal] = useState(false);
   const deferredQuery = useDeferredValue(query);
+  const canCreateAdmins = can("admins", "create");
+  const canUpdateAdmins = can("admins", "update");
+  const canDeleteAdmins = can("admins", "delete");
 
   const [form, setForm] = useState({
     name: "",
@@ -59,9 +64,11 @@ export default function AdminsPage() {
           <PanelHeader
             title="Admin Directory"
             action={
-              <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setOpenModal(true)}>
-                Add Admin
-              </Button>
+              canCreateAdmins ? (
+                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setOpenModal(true)}>
+                  Add Admin
+                </Button>
+              ) : undefined
             }
           />
           <div className="dashboard-table-toolbar">
@@ -119,24 +126,32 @@ export default function AdminsPage() {
                           panelClassName="is-admin-menu"
                           items={[
                             { label: "View Details", href: `/users/admins/${admin.id}`, icon: <EyeIcon className="menu-icon" /> },
-                            {
-                              label: "Suspend Admin",
-                              icon: <ShieldOffIcon className="menu-icon" />,
-                              onSelect: () =>
-                                setRows((current) =>
-                                  current.map((row) =>
-                                    row.id === admin.id
-                                      ? { ...row, status: "Suspended", statusTone: toneFromStatus("Suspended") }
-                                      : row,
-                                  ),
-                                ),
-                            },
-                            {
-                              label: "Delete Admin",
-                              tone: "danger",
-                              icon: <TrashIcon className="menu-icon" />,
-                              onSelect: () => setRows((current) => current.filter((row) => row.id !== admin.id)),
-                            },
+                            ...(canUpdateAdmins
+                              ? [
+                                  {
+                                    label: "Suspend Admin",
+                                    icon: <ShieldOffIcon className="menu-icon" />,
+                                    onSelect: () =>
+                                      setRows((current) =>
+                                        current.map((row) =>
+                                          row.id === admin.id
+                                            ? { ...row, status: "Suspended", statusTone: toneFromStatus("Suspended") }
+                                            : row,
+                                        ),
+                                      ),
+                                  },
+                                ]
+                              : []),
+                            ...(canDeleteAdmins
+                              ? [
+                                  {
+                                    label: "Delete Admin",
+                                    tone: "danger" as const,
+                                    icon: <TrashIcon className="menu-icon" />,
+                                    onSelect: () => setRows((current) => current.filter((row) => row.id !== admin.id)),
+                                  },
+                                ]
+                              : []),
                           ]}
                         />
                       </div>

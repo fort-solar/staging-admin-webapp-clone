@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { useDeferredValue, useMemo, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { customerDirectory } from "@/lib/dashboard-data";
 import { Checkbox, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, Avatar } from "@/components/dashboard/ui";
 import { EyeIcon, MessageIcon } from "@/components/dashboard/icons";
 
 export default function CustomersPage() {
+  const { can } = useAccessControl();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
   const deferredQuery = useDeferredValue(query);
+  const canUpdateCustomers = can("customers", "update");
 
   const rows = useMemo(
     () =>
@@ -91,7 +94,7 @@ export default function CustomersPage() {
                         panelClassName="is-customer-actions-menu"
                         items={[
                           { label: "View Details", href: `/users/customers/${customer.id}`, icon: <EyeIcon className="menu-icon" /> },
-                          { label: "Contact Buyer", icon: <MessageIcon className="menu-icon" /> },
+                          ...(canUpdateCustomers ? [{ label: "Contact Buyer", icon: <MessageIcon className="menu-icon" /> }] : []),
                         ]}
                       />
                     </div>
