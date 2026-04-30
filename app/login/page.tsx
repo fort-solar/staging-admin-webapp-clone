@@ -1,6 +1,16 @@
-import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { LoginForm } from "@/components/auth/login-form";
+import { getDefaultDashboardPath, normalizeAdminRole } from "@/lib/auth/access-control";
+import { getSessionSnapshotFromCookieStore, isAdminSnapshot } from "@/lib/auth/session";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const snapshot = await getSessionSnapshotFromCookieStore(await cookies());
+
+  if (snapshot && isAdminSnapshot(snapshot)) {
+    redirect(getDefaultDashboardPath(normalizeAdminRole(snapshot.session.adminRole), snapshot.permissions));
+  }
+
   return (
     <main className="auth-page px-4 py-10">
       <div className="auth-card-shell mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[1080px] overflow-hidden rounded-[32px] border border-[var(--border)] shadow-[var(--shadow)]">
@@ -34,19 +44,7 @@ export default function LoginPage() {
             <p className="m-0 pt-3 text-sm text-[var(--text-soft)]">Enter your admin credentials to continue.</p>
           </div>
 
-          <form className="flex flex-col gap-4">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-[var(--text)]">Email address</label>
-              <input className="dashboard-input" defaultValue="admin@fortsolar.com" placeholder="Email address" type="email" />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-[var(--text)]">Password</label>
-              <input className="dashboard-input" defaultValue="fortsolar-admin" placeholder="Password" type="password" />
-            </div>
-            <Link href="/dashboard" className="action-button is-primary is-md mt-2 w-full">
-              <span>Sign In</span>
-            </Link>
-          </form>
+          <LoginForm />
         </section>
       </div>
     </main>
