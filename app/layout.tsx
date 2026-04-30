@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Lato } from "next/font/google";
 import type { ReactNode } from "react";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 const lato = Lato({
@@ -23,7 +24,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" data-dashboard-appearance="light" suppressHydrationWarning>
-      <body className={`${lato.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <body className={`${lato.variable} ${geistMono.variable} antialiased`}>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }
