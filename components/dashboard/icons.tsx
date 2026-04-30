@@ -129,9 +129,9 @@ export function NotificationIcon(props: IconProps) {
 export function ProductsIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="m12 3 7 4-7 4-7-4 7-4Z" />
-      <path d="m5 7 7 4 7-4" />
-      <path d="M5 11v6l7 4 7-4v-6" />
+      <path d="M10 4.5h6.7l2.8 2.8V14L12 20.5l-7.5-7.5V7.3Z" />
+      <circle cx="14.5" cy="9.4" r="1" fill="currentColor" stroke="none" />
+      <path d="m9 12 2.3 2.3 4.2-4.2" />
     </Svg>
   );
 }
@@ -160,15 +160,12 @@ export function TransactionsIcon(props: IconProps) {
 export function SettingsIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 3.5v2" />
-      <path d="M12 18.5v2" />
-      <path d="m5.8 5.8 1.4 1.4" />
-      <path d="m16.8 16.8 1.4 1.4" />
-      <path d="M3.5 12h2" />
-      <path d="M18.5 12h2" />
-      <path d="m5.8 18.2 1.4-1.4" />
-      <path d="m16.8 7.2 1.4-1.4" />
+      <path d="M4 7h16" />
+      <circle cx="9" cy="7" r="2" />
+      <path d="M4 12h16" />
+      <circle cx="15" cy="12" r="2" />
+      <path d="M4 17h16" />
+      <circle cx="11" cy="17" r="2" />
     </Svg>
   );
 }
@@ -377,6 +374,39 @@ export function PackageIcon(props: IconProps) {
       <path d="m12 3.5 7 4v9l-7 4-7-4v-9l7-4Z" />
       <path d="m5 7.5 7 4 7-4" />
       <path d="M12 11.5v9" />
+    </Svg>
+  );
+}
+
+export function PagesIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5.5" y="4.5" width="10.5" height="13" rx="1.8" />
+      <path d="M9 8h4.5" />
+      <path d="M9 11h4.5" />
+      <path d="M9 14h3" />
+      <path d="M16 7.5h2A1.5 1.5 0 0 1 19.5 9v8A1.5 1.5 0 0 1 18 18.5H10" />
+    </Svg>
+  );
+}
+
+export function EnergyAuditIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="4.5" width="14" height="15" rx="2" />
+      <path d="M8.5 8.5h7" />
+      <path d="M8.5 12h3" />
+      <path d="m13 11 3 1.5-2 1.1.4 2.4-2.1-1.4-1.8 1.8.4-2.6-2.4-.9 2.3-1.2-.1-2.3 1.7 1.6Z" />
+    </Svg>
+  );
+}
+
+export function BriefcaseIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="7.5" width="16" height="11" rx="2" />
+      <path d="M9 7.5V6A1.5 1.5 0 0 1 10.5 4.5h3A1.5 1.5 0 0 1 15 6v1.5" />
+      <path d="M4 12h16" />
     </Svg>
   );
 }

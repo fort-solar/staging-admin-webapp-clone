@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { installationMetrics, installations } from "@/lib/operations-data";
 import { Button, MetricCardSecondary, Panel, SelectField, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { FormField, UploadField } from "@/components/dashboard/modals";
@@ -22,7 +23,9 @@ function InstallationMetricsStrip() {
 }
 
 export function InstallationsManagementScreen() {
+  const { can } = useAccessControl();
   const [page, setPage] = useState(1);
+  const canCreateInstallations = can("installations", "create");
 
   return (
     <div className="dashboard-stack">
@@ -33,9 +36,11 @@ export function InstallationsManagementScreen() {
             <h2 className="section-title">Installations</h2>
             <p className="section-description">Publish visual case studies for completed Fortsolar installations.</p>
           </div>
-          <ActionLink href="/installations/new" leadingIcon={<PlusIcon className="mini-icon" />}>
-            Add New Installation
-          </ActionLink>
+          {canCreateInstallations ? (
+            <ActionLink href="/installations/new" leadingIcon={<PlusIcon className="mini-icon" />}>
+              Add New Installation
+            </ActionLink>
+          ) : null}
         </div>
         <div className="installation-grid">
           {installations.concat(installations).map((installation, index) => (

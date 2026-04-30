@@ -481,6 +481,10 @@ export function TableActionsMenu({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
+  if (!items.length) {
+    return null;
+  }
+
   return (
     <div className={cx("menu-anchor", className)} ref={ref}>
       <IconButton label="More actions" icon={<DotsIcon className="menu-icon" />} onClick={() => setOpen((value) => !value)} />
@@ -627,10 +631,19 @@ export function MapCard({
   addressLines: string[];
   image: string;
 }) {
+  const [mapVisible, setMapVisible] = useState(false);
+
   return (
     <div className="map-card">
       <div className="map-card__frame">
-        <Image src={image} alt={title} fill sizes="420px" />
+        {mapVisible ? (
+          <Image src={image} alt={title} fill sizes="420px" />
+        ) : (
+          <button type="button" className="map-card__loader" onClick={() => setMapVisible(true)}>
+            <strong>Load map preview</strong>
+            <span>Reveal this location only when you need it.</span>
+          </button>
+        )}
       </div>
       <div className="map-card__body">
         <h4>{title}</h4>

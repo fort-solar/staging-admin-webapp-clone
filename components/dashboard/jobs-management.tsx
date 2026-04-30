@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useDeferredValue, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { jobApplicants, jobMetrics, jobs, type JobRecord } from "@/lib/operations-data";
 import {
   Button,
@@ -44,11 +45,14 @@ function jobMatchesQuery(job: JobRecord, query: string) {
 }
 
 export function JobsManagementScreen() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState(jobs);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<JobStatusFilter>("All");
   const [page, setPage] = useState(1);
   const deferredQuery = useDeferredValue(query);
+  const canCreateJobs = can("jobs", "create");
+  const canDeleteJobs = can("jobs", "delete");
 
   const filteredRows = useMemo(
     () =>
@@ -69,9 +73,11 @@ export function JobsManagementScreen() {
               <h2 className="section-title">All Jobs</h2>
               <p className="section-description">Manage posted installation jobs and installer applications.</p>
             </div>
-            <ActionLink href="/jobs/new" leadingIcon={<PlusIcon className="mini-icon" />}>
-              Add Job
-            </ActionLink>
+            {canCreateJobs ? (
+              <ActionLink href="/jobs/new" leadingIcon={<PlusIcon className="mini-icon" />}>
+                Add Job
+              </ActionLink>
+            ) : null}
           </div>
           <DirectoryToolbar
             searchValue={query}
@@ -95,12 +101,16 @@ export function JobsManagementScreen() {
                 <TableActionsMenu
                   items={[
                     { label: "View Job", href: `/jobs/${job.slug}`, icon: <EyeIcon className="menu-icon" /> },
-                    {
-                      label: "Delete Job",
-                      tone: "danger",
-                      icon: <TrashIcon className="menu-icon" />,
-                      onSelect: () => setRows((current) => current.filter((item) => item.id !== job.id)),
-                    },
+                    ...(canDeleteJobs
+                      ? [
+                          {
+                            label: "Delete Job",
+                            tone: "danger" as const,
+                            icon: <TrashIcon className="menu-icon" />,
+                            onSelect: () => setRows((current) => current.filter((item) => item.id !== job.id)),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>
@@ -124,8 +134,11 @@ export function JobsManagementScreen() {
 }
 
 export function JobDetailScreen({ job }: { job: JobRecord }) {
+  const { can } = useAccessControl();
   const [applicants, setApplicants] = useState(jobApplicants);
   const [page, setPage] = useState(1);
+  const canUpdateJobs = can("jobs", "update");
+  const canReadInstallers = can("installers", "read");
 
   return (
     <div className="dashboard-stack">
@@ -216,8 +229,10 @@ export function JobDetailScreen({ job }: { job: JobRecord }) {
                   <td>
                     <TableActionsMenu
                       items={[
-                        { label: "Assign Installer", onSelect: () => setApplicants((current) => current.filter((item) => item.id !== applicant.id)) },
-                        { label: "View Profile", href: `/users/installers/${applicant.id}` },
+                        ...(canUpdateJobs
+                          ? [{ label: "Assign Installer", onSelect: () => setApplicants((current) => current.filter((item) => item.id !== applicant.id)) }]
+                          : []),
+                        ...(canReadInstallers ? [{ label: "View Profile", href: `/users/installers/${applicant.id}` }] : []),
                       ]}
                     />
                   </td>

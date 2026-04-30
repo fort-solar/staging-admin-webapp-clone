@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { payoutRecords, transactionMetrics, transactionRecords, type PayoutRecord, type TransactionRecord } from "@/lib/operations-data";
 import {
   Button,
@@ -42,6 +43,7 @@ function payoutMatchesQuery(record: PayoutRecord, query: string) {
 }
 
 export function TransactionsManagementScreen() {
+  const { can } = useAccessControl();
   const [activeTab, setActiveTab] = useState<TransactionTab>("Transactions");
   const [transactions] = useState(transactionRecords);
   const [payouts, setPayouts] = useState(payoutRecords);
@@ -50,6 +52,7 @@ export function TransactionsManagementScreen() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
   const activeTransaction = transactions.find((transaction) => transaction.id === detailId) ?? null;
+  const canUpdateTransactions = can("transactions", "update");
 
   const filteredTransactions = useMemo(
     () => transactions.filter((transaction) => transactionMatchesQuery(transaction, deferredQuery)),
@@ -167,21 +170,23 @@ export function TransactionsManagementScreen() {
                         </div>
                       </td>
                       <td className="text-right">
-                        <Button
-                          variant={payout.status === "Sent" ? "primary" : "secondary"}
-                          size="sm"
-                          onClick={() =>
-                            setPayouts((current) =>
-                              current.map((item) =>
-                                item.id === payout.id
-                                  ? { ...item, status: "Sent", statusTone: toneFromStatus("Sent") }
-                                  : item,
-                              ),
-                            )
-                          }
-                        >
-                          {payout.status === "Sent" ? "Sent" : "Update"}
-                        </Button>
+                        {canUpdateTransactions ? (
+                          <Button
+                            variant={payout.status === "Sent" ? "primary" : "secondary"}
+                            size="sm"
+                            onClick={() =>
+                              setPayouts((current) =>
+                                current.map((item) =>
+                                  item.id === payout.id
+                                    ? { ...item, status: "Sent", statusTone: toneFromStatus("Sent") }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            {payout.status === "Sent" ? "Sent" : "Update"}
+                          </Button>
+                        ) : null}
                       </td>
                     </tr>
                   ))}

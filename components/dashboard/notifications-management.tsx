@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useDeferredValue, useMemo, useState } from "react";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import {
   formatNotificationSchedule,
   notificationDrafts,
@@ -77,6 +78,7 @@ function notificationToneForStatus(status: string) {
 }
 
 export function NotificationsManagementScreen() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState<NotificationManagementRecord[]>([...notificationRecords, ...notificationDrafts]);
   const [activeTab, setActiveTab] = useState<NotificationManagementTab>("Scheduled");
   const [query, setQuery] = useState("");
@@ -87,6 +89,9 @@ export function NotificationsManagementScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ComposerFormState>(defaultComposerState);
   const deferredQuery = useDeferredValue(query);
+  const canCreateNotifications = can("notifications", "create");
+  const canUpdateNotifications = can("notifications", "update");
+  const canDeleteNotifications = can("notifications", "delete");
 
   const filteredRows = useMemo(
     () =>
@@ -193,9 +198,11 @@ export function NotificationsManagementScreen() {
                 </Button>
               }
               action={
-                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={openCreate}>
-                  Create Notification
-                </Button>
+                canCreateNotifications ? (
+                  <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={openCreate}>
+                    Create Notification
+                  </Button>
+                ) : undefined
               }
             />
           </div>
@@ -248,12 +255,16 @@ export function NotificationsManagementScreen() {
                               icon: <EyeIcon className="menu-icon" />,
                               onSelect: () => setDetailId(record.id),
                             },
-                            {
-                              label: activeTab === "Draft" ? "Edit Draft" : "Edit Notification",
-                              icon: <BellIcon className="menu-icon" />,
-                              onSelect: () => openEdit(record),
-                            },
-                            ...(activeTab !== "Draft"
+                            ...(canUpdateNotifications
+                              ? [
+                                  {
+                                    label: activeTab === "Draft" ? "Edit Draft" : "Edit Notification",
+                                    icon: <BellIcon className="menu-icon" />,
+                                    onSelect: () => openEdit(record),
+                                  },
+                                ]
+                              : []),
+                            ...(activeTab !== "Draft" && canUpdateNotifications
                               ? [
                                   {
                                     label: record.status === "Paused" ? "Resume Notification" : "Pause Notification",
@@ -274,12 +285,16 @@ export function NotificationsManagementScreen() {
                                   },
                                 ]
                               : []),
-                            {
-                              label: activeTab === "Draft" ? "Delete Draft" : "Delete Notification",
-                              tone: "danger",
-                              icon: <TrashIcon className="menu-icon" />,
-                              onSelect: () => setRows((current) => current.filter((item) => item.id !== record.id)),
-                            },
+                            ...(canDeleteNotifications
+                              ? [
+                                  {
+                                    label: activeTab === "Draft" ? "Delete Draft" : "Delete Notification",
+                                    tone: "danger" as const,
+                                    icon: <TrashIcon className="menu-icon" />,
+                                    onSelect: () => setRows((current) => current.filter((item) => item.id !== record.id)),
+                                  },
+                                ]
+                              : []),
                           ]}
                         />
                       </td>

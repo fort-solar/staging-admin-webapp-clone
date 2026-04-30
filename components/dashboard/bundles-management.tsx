@@ -2,6 +2,7 @@
 
 import { type FormEvent, useDeferredValue, useMemo, useState, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { bundleMetrics, bundleRecords, type BundleRecord } from "@/lib/management-data";
 import {
   Button,
@@ -32,11 +33,14 @@ function BundleMetricsStrip() {
 }
 
 export function BundlesManagementScreen() {
+  const { can } = useAccessControl();
   const searchParams = useSearchParams();
   const [rows, setRows] = useState(bundleRecords);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const deferredQuery = useDeferredValue(query);
+  const canCreateBundles = can("bundles", "create");
+  const canDeleteBundles = can("bundles", "delete");
 
   const filteredRows = useMemo(
     () =>
@@ -63,7 +67,7 @@ export function BundlesManagementScreen() {
                 Filter
               </Button>
             }
-            action={<ActionLink href="/bundles/new" leadingIcon={<PlusIcon className="mini-icon" />}>Add New Bundle</ActionLink>}
+            action={canCreateBundles ? <ActionLink href="/bundles/new" leadingIcon={<PlusIcon className="mini-icon" />}>Add New Bundle</ActionLink> : undefined}
           />
         </div>
         <div className="catalog-grid-wrap">
@@ -86,12 +90,16 @@ export function BundlesManagementScreen() {
                   <TableActionsMenu
                     items={[
                       { label: "View Bundle", href: `/bundles/${bundle.slug}` },
-                      {
-                        label: "Delete Bundle",
-                        tone: "danger",
-                        icon: <TrashIcon className="menu-icon" />,
-                        onSelect: () => setRows((current) => current.filter((item) => item.id !== bundle.id)),
-                      },
+                      ...(canDeleteBundles
+                        ? [
+                            {
+                              label: "Delete Bundle",
+                              tone: "danger" as const,
+                              icon: <TrashIcon className="menu-icon" />,
+                              onSelect: () => setRows((current) => current.filter((item) => item.id !== bundle.id)),
+                            },
+                          ]
+                        : []),
                     ]}
                   />
                 }
@@ -114,9 +122,12 @@ export function BundlesManagementScreen() {
 }
 
 export function BundleDetailScreen({ bundle }: { bundle: BundleRecord }) {
+  const { can } = useAccessControl();
   const [status, setStatus] = useState(bundle.status);
   const [statusTone, setStatusTone] = useState(bundle.statusTone);
   const [financeEnabled, setFinanceEnabled] = useState(bundle.financeEnabled);
+  const canUpdateBundles = can("bundles", "update");
+  const canDeleteBundles = can("bundles", "delete");
 
   return (
     <div className="dashboard-stack">
@@ -126,21 +137,25 @@ export function BundleDetailScreen({ bundle }: { bundle: BundleRecord }) {
           <ManagementBackLink href="/bundles" label={bundle.name} meta={bundle.submittedAt} />
           <TableActionsMenu
             items={[
-              {
-                label: "Publish Bundle",
-                onSelect: () => {
-                  setStatus("Published");
-                  setStatusTone(toneFromStatus("Published"));
-                },
-              },
-              {
-                label: "Move To Draft",
-                onSelect: () => {
-                  setStatus("Draft");
-                  setStatusTone(toneFromStatus("Draft"));
-                },
-              },
-              { label: "Delete Bundle", tone: "danger", icon: <TrashIcon className="menu-icon" /> },
+              ...(canUpdateBundles
+                ? [
+                    {
+                      label: "Publish Bundle",
+                      onSelect: () => {
+                        setStatus("Published");
+                        setStatusTone(toneFromStatus("Published"));
+                      },
+                    },
+                    {
+                      label: "Move To Draft",
+                      onSelect: () => {
+                        setStatus("Draft");
+                        setStatusTone(toneFromStatus("Draft"));
+                      },
+                    },
+                  ]
+                : []),
+              ...(canDeleteBundles ? [{ label: "Delete Bundle", tone: "danger" as const, icon: <TrashIcon className="menu-icon" /> }] : []),
             ]}
           />
         </div>
@@ -162,7 +177,12 @@ export function BundleDetailScreen({ bundle }: { bundle: BundleRecord }) {
                   <strong>Solar Finance</strong>
                   <p>{financeEnabled ? "Enabled for checkout." : "Disabled for checkout."}</p>
                 </div>
-                <button type="button" className={`settings-switch ${financeEnabled ? "is-active" : ""}`} onClick={() => setFinanceEnabled((value) => !value)}>
+                <button
+                  type="button"
+                  className={`settings-switch ${financeEnabled ? "is-active" : ""}`}
+                  onClick={() => setFinanceEnabled((value) => !value)}
+                  disabled={!canUpdateBundles}
+                >
                   <span className="settings-switch__thumb" />
                 </button>
               </div>

@@ -2,6 +2,7 @@
 
 import { type FormEvent, useDeferredValue, useMemo, useState, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import {
   productCategories,
   productCategoriesMetrics,
@@ -50,6 +51,7 @@ function ProductMetricsStrip({ categoryMode = false }: { categoryMode?: boolean 
 }
 
 export function ProductsManagementScreen() {
+  const { can } = useAccessControl();
   const searchParams = useSearchParams();
   const [view, setView] = useState<ProductView>("Products");
   const [rows, setRows] = useState(productRecords);
@@ -61,6 +63,9 @@ export function ProductsManagementScreen() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryTitle, setCategoryTitle] = useState("");
   const deferredQuery = useDeferredValue(query);
+  const canCreateProducts = can("products", "create");
+  const canUpdateProducts = can("products", "update");
+  const canDeleteProducts = can("products", "delete");
 
   const filteredProducts = useMemo(
     () =>
@@ -111,7 +116,7 @@ export function ProductsManagementScreen() {
                       />
                     </div>
                   }
-                  action={<ActionLink href="/products/new" leadingIcon={<PlusIcon className="mini-icon" />}>Add Product</ActionLink>}
+                  action={canCreateProducts ? <ActionLink href="/products/new" leadingIcon={<PlusIcon className="mini-icon" />}>Add Product</ActionLink> : undefined}
                 />
               </div>
               <div className="management-surface__filters">
@@ -137,7 +142,16 @@ export function ProductsManagementScreen() {
                         <TableActionsMenu
                           items={[
                             { label: "View Product", href: `/products/${product.slug}` },
-                            { label: "Delete Product", tone: "danger", icon: <TrashIcon className="menu-icon" />, onSelect: () => setRows((current) => current.filter((item) => item.id !== product.id)) },
+                            ...(canDeleteProducts
+                              ? [
+                                  {
+                                    label: "Delete Product",
+                                    tone: "danger" as const,
+                                    icon: <TrashIcon className="menu-icon" />,
+                                    onSelect: () => setRows((current) => current.filter((item) => item.id !== product.id)),
+                                  },
+                                ]
+                              : []),
                           ]}
                         />
                       }
@@ -168,9 +182,11 @@ export function ProductsManagementScreen() {
                     </Button>
                   }
                   action={
-                    <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setCategoryModalOpen(true)}>
-                      Add New Category
-                    </Button>
+                    canCreateProducts ? (
+                      <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setCategoryModalOpen(true)}>
+                        Add New Category
+                      </Button>
+                    ) : undefined
                   }
                 />
               </div>
@@ -183,19 +199,27 @@ export function ProductsManagementScreen() {
                     </div>
                     <TableActionsMenu
                       items={[
-                        {
-                          label: "Rename Category",
-                          onSelect: () => {
-                            setCategoryTitle(category.title);
-                            setCategoryModalOpen(true);
-                          },
-                        },
-                        {
-                          label: "Delete Category",
-                          tone: "danger",
-                          icon: <TrashIcon className="menu-icon" />,
-                          onSelect: () => setCategories((current) => current.filter((item) => item.id !== category.id)),
-                        },
+                        ...(canUpdateProducts
+                          ? [
+                              {
+                                label: "Rename Category",
+                                onSelect: () => {
+                                  setCategoryTitle(category.title);
+                                  setCategoryModalOpen(true);
+                                },
+                              },
+                            ]
+                          : []),
+                        ...(canDeleteProducts
+                          ? [
+                              {
+                                label: "Delete Category",
+                                tone: "danger" as const,
+                                icon: <TrashIcon className="menu-icon" />,
+                                onSelect: () => setCategories((current) => current.filter((item) => item.id !== category.id)),
+                              },
+                            ]
+                          : []),
                       ]}
                     />
                   </article>
@@ -251,8 +275,11 @@ export function ProductsManagementScreen() {
 }
 
 export function ProductDetailScreen({ product }: { product: ProductRecord }) {
+  const { can } = useAccessControl();
   const [status, setStatus] = useState(product.status);
   const [statusTone, setStatusTone] = useState(product.statusTone);
+  const canUpdateProducts = can("products", "update");
+  const canDeleteProducts = can("products", "delete");
 
   return (
     <div className="dashboard-stack">
@@ -262,21 +289,25 @@ export function ProductDetailScreen({ product }: { product: ProductRecord }) {
           <ManagementBackLink href="/products" label={product.name} meta={product.submittedAt} />
           <TableActionsMenu
             items={[
-              {
-                label: "Publish Product",
-                onSelect: () => {
-                  setStatus("Active");
-                  setStatusTone(toneFromStatus("Active"));
-                },
-              },
-              {
-                label: "Archive Product",
-                onSelect: () => {
-                  setStatus("Inactive");
-                  setStatusTone(toneFromStatus("Inactive"));
-                },
-              },
-              { label: "Delete Product", tone: "danger", icon: <TrashIcon className="menu-icon" /> },
+              ...(canUpdateProducts
+                ? [
+                    {
+                      label: "Publish Product",
+                      onSelect: () => {
+                        setStatus("Active");
+                        setStatusTone(toneFromStatus("Active"));
+                      },
+                    },
+                    {
+                      label: "Archive Product",
+                      onSelect: () => {
+                        setStatus("Inactive");
+                        setStatusTone(toneFromStatus("Inactive"));
+                      },
+                    },
+                  ]
+                : []),
+              ...(canDeleteProducts ? [{ label: "Delete Product", tone: "danger" as const, icon: <TrashIcon className="menu-icon" /> }] : []),
             ]}
           />
         </div>

@@ -2,6 +2,7 @@
 
 import { type FormEvent, useDeferredValue, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import {
   blogPosts,
   contentMetrics,
@@ -57,12 +58,16 @@ function matchesStatus(status: ContentStatus, filter: StatusFilter) {
 }
 
 export function BlogManagementScreen() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState(blogPosts);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("All");
   const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<BlogPostRecord | null>(null);
   const deferredQuery = useDeferredValue(query);
+  const canCreateBlog = can("blog", "create");
+  const canUpdateBlog = can("blog", "update");
+  const canDeleteBlog = can("blog", "delete");
 
   const filteredRows = useMemo(
     () =>
@@ -84,9 +89,11 @@ export function BlogManagementScreen() {
                 <h2 className="section-title">Blog</h2>
                 <p className="section-description">Create, edit, preview, and publish SEO-ready blog posts.</p>
               </div>
-              <ActionLink href="/blog/new" leadingIcon={<PlusIcon className="mini-icon" />}>
-                Add Blog
-              </ActionLink>
+              {canCreateBlog ? (
+                <ActionLink href="/blog/new" leadingIcon={<PlusIcon className="mini-icon" />}>
+                  Add Blog
+                </ActionLink>
+              ) : null}
             </div>
             <DirectoryToolbar
               searchValue={query}
@@ -125,27 +132,33 @@ export function BlogManagementScreen() {
                 <span>{post.views}</span>
                 <span>{post.updatedAt}</span>
                 <StatusPill label={post.status} tone={post.statusTone} />
-                <div className="content-actions">
-                  <Button variant="secondary" size="sm" leadingIcon={<EyeIcon className="mini-icon" />} onClick={() => setPreview(post)}>
-                    Preview
-                  </Button>
+              <div className="content-actions">
+                <Button variant="secondary" size="sm" leadingIcon={<EyeIcon className="mini-icon" />} onClick={() => setPreview(post)}>
+                  Preview
+                </Button>
+                {canUpdateBlog ? (
                   <ActionLink href={`/blog/${post.slug}/edit`} variant="secondary" size="sm">
                     Edit
                   </ActionLink>
-                  <TableActionsMenu
-                    items={[
-                      { label: "Copy Public URL", icon: <CopyIcon className="menu-icon" /> },
-                      {
-                        label: "Delete Post",
-                        tone: "danger",
-                        icon: <TrashIcon className="menu-icon" />,
-                        onSelect: () => setRows((current) => current.filter((item) => item.id !== post.id)),
-                      },
-                    ]}
-                  />
-                </div>
-              </article>
-            ))}
+                ) : null}
+                <TableActionsMenu
+                  items={[
+                    { label: "Copy Public URL", icon: <CopyIcon className="menu-icon" /> },
+                    ...(canDeleteBlog
+                      ? [
+                          {
+                            label: "Delete Post",
+                            tone: "danger" as const,
+                            icon: <TrashIcon className="menu-icon" />,
+                            onSelect: () => setRows((current) => current.filter((item) => item.id !== post.id)),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              </div>
+            </article>
+          ))}
           </div>
           <Pagination page={page} totalPages={6} onChange={setPage} />
         </Panel>
@@ -164,9 +177,11 @@ export function BlogManagementScreen() {
               <Button variant="secondary" onClick={() => setPreview(null)}>
                 Close
               </Button>
-              <Button variant="primary" onClick={() => setPreview(null)}>
-                Publish Now
-              </Button>
+              {canUpdateBlog ? (
+                <Button variant="primary" onClick={() => setPreview(null)}>
+                  Publish Now
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -277,11 +292,15 @@ export function BlogFormScreen({ post }: { post?: BlogPostRecord | null }) {
 }
 
 export function SitePagesManagementScreen() {
+  const { can } = useAccessControl();
   const [rows, setRows] = useState(sitePages);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("All");
   const [page, setPage] = useState(1);
   const deferredQuery = useDeferredValue(query);
+  const canCreateSitePages = can("site_pages", "create");
+  const canUpdateSitePages = can("site_pages", "update");
+  const canDeleteSitePages = can("site_pages", "delete");
 
   const filteredRows = useMemo(
     () =>
@@ -302,9 +321,11 @@ export function SitePagesManagementScreen() {
               <h2 className="section-title">SEO Pages</h2>
               <p className="section-description">Manage main website pages, landing pages, metadata, and draft/publish state.</p>
             </div>
-            <ActionLink href="/site-pages/new" leadingIcon={<PlusIcon className="mini-icon" />}>
-              Add Page
-            </ActionLink>
+            {canCreateSitePages ? (
+              <ActionLink href="/site-pages/new" leadingIcon={<PlusIcon className="mini-icon" />}>
+                Add Page
+              </ActionLink>
+            ) : null}
           </div>
           <DirectoryToolbar
             searchValue={query}
@@ -342,18 +363,24 @@ export function SitePagesManagementScreen() {
               <span>{record.updatedAt}</span>
               <StatusPill label={record.status} tone={record.statusTone} />
               <div className="content-actions">
-                <ActionLink href={`/site-pages/${record.slug}/edit`} variant="secondary" size="sm">
-                  Edit
-                </ActionLink>
+                {canUpdateSitePages ? (
+                  <ActionLink href={`/site-pages/${record.slug}/edit`} variant="secondary" size="sm">
+                    Edit
+                  </ActionLink>
+                ) : null}
                 <TableActionsMenu
                   items={[
                     { label: "Copy Public URL", icon: <CopyIcon className="menu-icon" /> },
-                    {
-                      label: "Delete Page",
-                      tone: "danger",
-                      icon: <TrashIcon className="menu-icon" />,
-                      onSelect: () => setRows((current) => current.filter((item) => item.id !== record.id)),
-                    },
+                    ...(canDeleteSitePages
+                      ? [
+                          {
+                            label: "Delete Page",
+                            tone: "danger" as const,
+                            icon: <TrashIcon className="menu-icon" />,
+                            onSelect: () => setRows((current) => current.filter((item) => item.id !== record.id)),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>
