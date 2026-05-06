@@ -13,8 +13,8 @@ type LoginResponse = LoginApiResponse & {
 
 export function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@fortsolar.com");
-  const [password, setPassword] = useState("fortsolar-admin");
+  const [email, setEmail] = useState("admin@fortsolar.local");
+  const [password, setPassword] = useState("DevAdmin1!");
   const { isSubmitting, submit } = useFormSubmission<{ email: string; password: string }, LoginResponse>({
     endpoint: "/api/auth/login",
     successTitle: "Signed in",

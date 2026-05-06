@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, ReactNode } from "react";
 import { FormSubmitter } from "@/components/dashboard/form-submitter";
-import { SelectField, TextAreaField, TextField, cx } from "@/components/dashboard/ui";
+import { SelectField, TextAreaField, TextField, cx, type SelectOption } from "@/components/dashboard/ui";
 import { MessageIcon, PhoneIcon, ProductsIcon, SearchIcon } from "@/components/dashboard/icons";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
@@ -90,12 +90,18 @@ export function ModalSelect({
   value,
   onChange,
   options,
+  placeholder,
+  disabled,
+  required,
 }: {
   value: string;
   onChange: (value: string) => void;
-  options: string[];
+  options: SelectOption[];
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
 }) {
-  return <SelectField value={value} onChange={onChange} options={options} />;
+  return <SelectField value={value} onChange={onChange} options={options} placeholder={placeholder} disabled={disabled} required={required} />;
 }
 
 export function ChipPicker({
@@ -167,13 +173,15 @@ export function ModalFooterActions({
   submitLabel,
   onCancel,
   formId,
+  disabled,
 }: {
   cancelLabel: string;
   submitLabel: string;
   onCancel: () => void;
   formId: string;
+  disabled?: boolean;
 }) {
-  return <FormSubmitter formId={formId} cancelLabel={cancelLabel} onCancel={onCancel} primaryLabel={submitLabel} />;
+  return <FormSubmitter formId={formId} cancelLabel={cancelLabel} onCancel={onCancel} primaryLabel={submitLabel} disabled={disabled} />;
 }
 
 export const ModalIcons = {

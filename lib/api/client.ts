@@ -23,6 +23,8 @@ function toRequestPath(path: string) {
   return `/api/proxy${normalized}`;
 }
 
+export const DASHBOARD_SESSION_EXPIRED_EVENT = "fortsolar:session-expired";
+
 export class DashboardRequestError extends Error {
   status: number;
   payload: unknown;
@@ -33,6 +35,10 @@ export class DashboardRequestError extends Error {
     this.status = status;
     this.payload = payload;
   }
+}
+
+export function isDashboardSessionExpiredError(error: unknown) {
+  return error instanceof DashboardRequestError && error.status === 401;
 }
 
 async function parseResponseBody(response: Response) {
@@ -47,6 +53,7 @@ async function parseResponseBody(response: Response) {
 
 export async function dashboardRequest<TResponse>(path: string, options: DashboardRequestOptions = {}) {
   const headers = new Headers(options.headers);
+  const requestPath = toRequestPath(path);
   const requestInit: RequestInit = {
     method: options.method ?? "GET",
     headers,
@@ -62,11 +69,29 @@ export async function dashboardRequest<TResponse>(path: string, options: Dashboa
     requestInit.body = JSON.stringify(options.body);
   }
 
-  const response = await fetch(toRequestPath(path), requestInit);
+  const response = await fetch(requestPath, requestInit);
   const payload = await parseResponseBody(response);
 
   if (!response.ok || (payload && typeof payload === "object" && "success" in payload && payload.success === false)) {
-    throw new DashboardRequestError(extractApiMessage(payload), response.status, payload);
+    const message = extractApiMessage(payload);
+
+    if (
+      typeof window !== "undefined" &&
+      response.status === 401 &&
+      !requestPath.startsWith("/api/auth/")
+    ) {
+      window.dispatchEvent(
+        new CustomEvent(DASHBOARD_SESSION_EXPIRED_EVENT, {
+          detail: {
+            message,
+            path: requestPath,
+            status: response.status,
+          },
+        }),
+      );
+    }
+
+    throw new DashboardRequestError(message, response.status, payload);
   }
 
   return payload as TResponse;

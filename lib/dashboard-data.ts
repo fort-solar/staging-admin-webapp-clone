@@ -182,6 +182,10 @@ export const mapPreview = "/dashboard/map.svg";
 export function toneFromStatus(status: string): Tone {
   const normalized = status.toLowerCase();
 
+  if (normalized.includes("inactive")) {
+    return "neutral";
+  }
+
   if (
     normalized.includes("approved") ||
     normalized.includes("active") ||
@@ -195,7 +199,7 @@ export function toneFromStatus(status: string): Tone {
     return "success";
   }
 
-  if (normalized.includes("pending") || normalized.includes("processing") || normalized.includes("inactive") || normalized.includes("new")) {
+  if (normalized.includes("pending") || normalized.includes("processing") || normalized.includes("new")) {
     return "warning";
   }
 

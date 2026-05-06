@@ -86,6 +86,8 @@ type PaginationProps = {
   onChange: (page: number) => void;
 };
 
+export type SelectOption = string | { label: string; value: string };
+
 type AvatarProps = {
   src?: string;
   alt: string;
@@ -321,18 +323,31 @@ export function SelectField({
   onChange,
   options,
   className,
+  placeholder,
+  disabled,
+  required,
 }: {
   value: string;
   onChange: (value: string) => void;
-  options: string[];
+  options: SelectOption[];
   className?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
 }) {
+  const normalizedOptions = options.map((option) => (typeof option === "string" ? { label: option, value: option } : option));
+
   return (
     <label className={cx("select-field", className)}>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
+      <select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} required={required}>
+        {placeholder ? (
+          <option value="" disabled>
+            {placeholder}
+          </option>
+        ) : null}
+        {normalizedOptions.map((option) => (
+          <option key={`${option.value}-${option.label}`} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>
@@ -738,9 +753,23 @@ export function RevenueChart({ labels, values, tooltipIndex, tooltipLabel, toolt
   const width = 720;
   const height = 250;
   const padding = 28;
-  const max = Math.max(...values) * 1.1;
+  const maxValue = Math.max(...values, 0);
+  const max = maxValue > 0 ? maxValue * 1.1 : 1;
   const min = 0;
-  const stepX = (width - padding * 2) / (values.length - 1);
+  const stepX = values.length > 1 ? (width - padding * 2) / (values.length - 1) : 0;
+  const axisLabels = Array.from({ length: 6 }, (_, index) => {
+    const value = ((5 - index) / 5) * maxValue;
+
+    if (value >= 1_000_000) {
+      return `₦${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+    }
+
+    if (value >= 1_000) {
+      return `₦${Math.round(value / 1_000)}K`;
+    }
+
+    return `₦${Math.round(value)}`;
+  });
 
   const points = values.map((value, index) => {
     const x = padding + index * stepX;
@@ -755,7 +784,7 @@ export function RevenueChart({ labels, values, tooltipIndex, tooltipLabel, toolt
   return (
     <div className="revenue-chart">
       <div className="revenue-chart__axis">
-        {["50k", "40k", "30k", "20k", "10k", "0k"].map((label) => (
+        {axisLabels.map((label) => (
           <span key={label}>{label}</span>
         ))}
       </div>

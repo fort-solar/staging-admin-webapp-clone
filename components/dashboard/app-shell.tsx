@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ComponentType, type ReactNode, type SVGProps, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useNotifications } from "@/components/dashboard/notifications-provider";
 import {
   BellIcon,
   BriefcaseIcon,
@@ -29,7 +30,6 @@ import {
 import { Avatar, IconButton, SearchField, cx } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { formatAdminRole, getDefaultDashboardPath, getRouteTitle, getVisibleNavigation, normalizeAdminRole, type DashboardNavItem, type NavIconKey } from "@/lib/auth/access-control";
-import { headerNotifications } from "@/lib/dashboard-data";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -66,6 +66,7 @@ function ItemIcon({ icon, className }: { icon: NavIconKey; className: string }) 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { session, logout } = useAuth();
+  const { headerItems, unreadCount, markRead } = useNotifications();
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") {
@@ -167,9 +168,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className="dashboard-sidebar">
         <div className="dashboard-sidebar__brand">
           <Link href={homePath} className="brand-mark brand-mark--dashboard">
-            <span className="brand-mark__icon" aria-hidden="true">
-              <Image src="/favicon.ico" alt="" fill sizes="40px" />
-            </span>
+            {collapsed ? (
+              <span className="brand-mark__icon" aria-hidden="true">
+                <Image src="/favicon.ico" alt="" fill sizes="40px" />
+              </span>
+            ) : null}
             <span className="brand-mark__word">
               <span>Fort</span>
               <strong>solar</strong>
@@ -288,19 +291,49 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <div className="topbar-panel">
                     <div className="topbar-panel__header">
                       <strong>Notifications</strong>
-                      <span>{headerNotifications.length} new</span>
+                      <span>{unreadCount} new</span>
                     </div>
                     <div className="topbar-panel__body">
-                      {headerNotifications.map((item) => (
-                        <article key={item.id} className="topbar-notice">
-                          <span className={cx("topbar-notice__dot", `is-${item.tone}`)} />
-                          <div>
-                            <h4>{item.title}</h4>
-                            <p>{item.description}</p>
-                            <small>{item.time}</small>
-                          </div>
-                        </article>
-                      ))}
+                      {headerItems.length ? (
+                        headerItems.map((item) =>
+                          item.link ? (
+                            <Link
+                              key={item.id}
+                              href={item.link}
+                              className="topbar-notice"
+                              onClick={() => {
+                                setNotificationsOpen(false);
+                                void markRead(item.id, true);
+                              }}
+                            >
+                              <span className={cx("topbar-notice__dot", `is-${item.tone}`)} />
+                              <div>
+                                <h4>{item.title}</h4>
+                                <p>{item.description}</p>
+                                <small>{item.time}</small>
+                              </div>
+                            </Link>
+                          ) : (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className="topbar-notice"
+                              onClick={() => {
+                                void markRead(item.id, true);
+                              }}
+                            >
+                              <span className={cx("topbar-notice__dot", `is-${item.tone}`)} />
+                              <div>
+                                <h4>{item.title}</h4>
+                                <p>{item.description}</p>
+                                <small>{item.time}</small>
+                              </div>
+                            </button>
+                          ),
+                        )
+                      ) : (
+                        <p className="text-sm text-[var(--text-soft)]">No recent notifications.</p>
+                      )}
                     </div>
                   </div>
                 ) : null}

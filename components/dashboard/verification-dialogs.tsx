@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import type { VerificationDocument, VerificationRow } from "@/lib/dashboard-data";
+import { useEffect, useState } from "react";
 import { Button, TextAreaField, cx } from "@/components/dashboard/ui";
 import { CheckCircleIcon } from "@/components/dashboard/icons";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { VerificationDocumentRecord } from "@/types/api.types";
 
-function PreviewCanvas({ document }: { document: VerificationDocument }) {
+function PreviewCanvas({ document }: { document: VerificationDocumentRecord }) {
   return (
     <div className="verification-documents__canvas">
       <Skeleton className="verification-documents__page" />
@@ -27,31 +27,53 @@ function PreviewCanvas({ document }: { document: VerificationDocument }) {
 
 export function VerificationDocumentsDialog({
   open,
-  submission,
+  submissionName,
+  documents,
+  isLoading,
+  error,
   onClose,
 }: {
   open: boolean;
-  submission: VerificationRow | null;
+  submissionName?: string | null;
+  documents: VerificationDocumentRecord[];
+  isLoading?: boolean;
+  error?: string | null;
   onClose: () => void;
 }) {
-  if (!submission) {
-    return null;
-  }
-
-  return <VerificationDocumentsDialogContent key={submission.id} open={open} submission={submission} onClose={onClose} />;
+  return (
+    <VerificationDocumentsDialogContent
+      key={submissionName ?? "verification-documents"}
+      open={open}
+      submissionName={submissionName ?? "Installer"}
+      documents={documents}
+      isLoading={isLoading ?? false}
+      error={error ?? null}
+      onClose={onClose}
+    />
+  );
 }
 
 function VerificationDocumentsDialogContent({
   open,
-  submission,
+  submissionName,
+  documents,
+  isLoading,
+  error,
   onClose,
 }: {
   open: boolean;
-  submission: VerificationRow;
+  submissionName: string;
+  documents: VerificationDocumentRecord[];
+  isLoading: boolean;
+  error: string | null;
   onClose: () => void;
 }) {
-  const [selectedDocumentId, setSelectedDocumentId] = useState(submission.documents[0]?.id ?? "");
-  const selectedDocument = submission.documents.find((document) => document.id === selectedDocumentId) ?? submission.documents[0];
+  const [selectedDocumentId, setSelectedDocumentId] = useState(documents[0]?.id ?? "");
+  const selectedDocument = documents.find((document) => document.id === selectedDocumentId) ?? documents[0] ?? null;
+
+  useEffect(() => {
+    setSelectedDocumentId(documents[0]?.id ?? "");
+  }, [documents]);
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
@@ -64,35 +86,58 @@ function VerificationDocumentsDialogContent({
         </div>
         <div className="modal-card__body verification-documents__body">
           <div className="verification-documents__sidebar">
-            {submission.documents.map((document, index) => (
-              <button
-                key={document.id}
-                type="button"
-                className={cx("verification-documents__thumb", selectedDocument?.id === document.id && "is-active")}
-                onClick={() => setSelectedDocumentId(document.id)}
-              >
-                <Skeleton className="verification-documents__thumb-preview" />
-                <div className="verification-documents__thumb-copy">
-                  <strong>{document.label}</strong>
-                  <span>{document.category}</span>
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, index) => (
+                <div key={`loading-${index}`} className="verification-documents__thumb">
+                  <Skeleton className="verification-documents__thumb-preview" />
+                  <div className="verification-documents__thumb-copy">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                  <small>{index + 1}</small>
                 </div>
-                <small>{index + 1}</small>
-              </button>
-            ))}
+              ))
+            ) : documents.length ? (
+              documents.map((document, index) => (
+                <button
+                  key={document.id}
+                  type="button"
+                  className={cx("verification-documents__thumb", selectedDocument?.id === document.id && "is-active")}
+                  onClick={() => setSelectedDocumentId(document.id)}
+                >
+                  <Skeleton className="verification-documents__thumb-preview" />
+                  <div className="verification-documents__thumb-copy">
+                    <strong>{document.label}</strong>
+                    <span>{document.category}</span>
+                  </div>
+                  <small>{index + 1}</small>
+                </button>
+              ))
+            ) : (
+              <div className="text-sm text-[var(--text-soft)]">{error ?? "No verification documents were found for this submission."}</div>
+            )}
           </div>
           <div className="verification-documents__preview">
-            <div className="verification-documents__preview-header">
-              <div>
-                <strong>{selectedDocument.label}</strong>
-                <span>{selectedDocument.category}</span>
+            {selectedDocument ? (
+              <>
+                <div className="verification-documents__preview-header">
+                  <div>
+                    <strong>{selectedDocument.label}</strong>
+                    <span>{selectedDocument.category}</span>
+                  </div>
+                  <small>{selectedDocument.pages} page{selectedDocument.pages > 1 ? "s" : ""}</small>
+                </div>
+                <PreviewCanvas document={selectedDocument} />
+                <div className="verification-documents__preview-footer">
+                  <span>{submissionName}</span>
+                  <span>{selectedDocument.upload.original_filename}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full min-h-[260px] items-center justify-center text-sm text-[var(--text-soft)]">
+                {isLoading ? "Loading documents..." : error ?? "Select a document to preview."}
               </div>
-              <small>{selectedDocument.pages} page{selectedDocument.pages > 1 ? "s" : ""}</small>
-            </div>
-            <PreviewCanvas document={selectedDocument} />
-            <div className="verification-documents__preview-footer">
-              <span>{submission.name}</span>
-              <span>100%</span>
-            </div>
+            )}
           </div>
         </div>
         <div className="modal-card__footer">
@@ -110,7 +155,7 @@ function VerificationDocumentsDialogContent({
 
 export function ApproveVerificationDialog({
   open,
-  submission,
+  canViewDocuments,
   title,
   description,
   onClose,
@@ -118,7 +163,7 @@ export function ApproveVerificationDialog({
   onConfirm,
 }: {
   open: boolean;
-  submission: VerificationRow | null;
+  canViewDocuments?: boolean;
   title: string;
   description: string;
   onClose: () => void;
@@ -140,7 +185,7 @@ export function ApproveVerificationDialog({
           <DialogTitle className="verification-action-dialog__title">{title}</DialogTitle>
           <DialogDescription className="verification-action-dialog__description">{description}</DialogDescription>
           <div className="verification-action-dialog__actions">
-            {submission && onViewDocuments ? (
+            {canViewDocuments && onViewDocuments ? (
               <Button variant="secondary" onClick={onViewDocuments}>
                 View Documents
               </Button>
@@ -157,20 +202,22 @@ export function ApproveVerificationDialog({
 
 export function RejectVerificationDialog({
   open,
-  submission,
+  submissionName,
+  submissionEmail,
   note,
   onNoteChange,
   onClose,
   onConfirm,
 }: {
   open: boolean;
-  submission: VerificationRow | null;
+  submissionName?: string | null;
+  submissionEmail?: string | null;
   note: string;
   onNoteChange: (value: string) => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
-  if (!submission) {
+  if (!submissionName && !submissionEmail) {
     return null;
   }
 
@@ -185,8 +232,8 @@ export function RejectVerificationDialog({
         </div>
         <div className="modal-card__body">
           <div className="verification-reject__intro">
-            <strong>{submission.name}</strong>
-            <span>{submission.email}</span>
+            <strong>{submissionName ?? "Installer"}</strong>
+            <span>{submissionEmail ?? "No email provided"}</span>
           </div>
           <label className="form-field">
             <span className="form-field__label">
