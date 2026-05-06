@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { AppShell } from "@/components/dashboard/app-shell";
+import { NotificationsProvider } from "@/components/dashboard/notifications-provider";
 import { getSessionSnapshotFromCookieStore, isAdminSnapshot } from "@/lib/auth/session";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -14,7 +15,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <AuthProvider initialSession={snapshot}>
-      <AppShell>{children}</AppShell>
+      <NotificationsProvider>
+        <AppShell>{children}</AppShell>
+      </NotificationsProvider>
     </AuthProvider>
   );
 }

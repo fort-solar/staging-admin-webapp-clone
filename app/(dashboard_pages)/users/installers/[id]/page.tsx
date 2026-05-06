@@ -1,32 +1,119 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import {
-  getInstaller,
-  installerRatingBreakdown,
-  installerReviews,
-  installerSkills,
-  mapPreview,
-} from "@/lib/dashboard-data";
-import {
-  Avatar,
-  Button,
-  InfoIcons,
-  InfoRow,
-  MapCard,
-  Panel,
-  RatingBreakdown,
-  RatingStars,
-  ReviewCard,
-  StatusPill,
-  TableActionsMenu,
-} from "@/components/dashboard/ui";
-import { BankIcon, ChevronLeftIcon, MessageIcon, WalletIcon } from "@/components/dashboard/icons";
+import { useAccessControl } from "@/components/auth/use-access-control";
+import { ErrorMessage } from "@/components/dashboard/error-message";
+import { ChevronLeftIcon } from "@/components/dashboard/icons";
+import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
+import { useToast } from "@/components/ui/toast";
+import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { formatEnumLabel, getInstaller, updateInstaller } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api/errors";
+import { toneFromStatus } from "@/lib/dashboard-data";
+import type { InstallerRecord } from "@/types/api.types";
+
+const statusOptions = ["active", "inactive", "suspended"];
 
 export default function InstallerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const installer = getInstaller(id);
+  const { can } = useAccessControl();
+  const { toast } = useToast();
+  const [installer, setInstaller] = useState<InstallerRecord | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    address: "",
+    status: "active",
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canUpdateInstaller = can("installers", "update");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setIsLoading(true);
+    setError(null);
+
+    getInstaller(id)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setInstaller(payload.data);
+        setForm({
+          name: payload.data.user.fullName || payload.data.user.name,
+          phone: payload.data.user.phone ?? "",
+          address: payload.data.user.address ?? "",
+          status: payload.data.user.status,
+        });
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(getErrorMessage(loadError, "Installer details could not be loaded."));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!installer) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await updateInstaller(installer.user.id, {
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        status: form.status,
+      });
+
+      const refreshed = await getInstaller(installer.user.id);
+      setInstaller(refreshed.data);
+      setForm({
+        name: refreshed.data.user.fullName || refreshed.data.user.name,
+        phone: refreshed.data.user.phone ?? "",
+        address: refreshed.data.user.address ?? "",
+        status: refreshed.data.user.status,
+      });
+
+      toast({
+        title: "Installer updated",
+        description: `${refreshed.data.user.fullName || refreshed.data.user.name} was updated successfully.`,
+        variant: "success",
+      });
+    } catch (saveError) {
+      if (isDashboardSessionExpiredError(saveError)) {
+        return;
+      }
+
+      toast({
+        title: "Update failed",
+        description: getErrorMessage(saveError, "The installer could not be updated."),
+        variant: "error",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <Panel className="overflow-hidden">
@@ -35,111 +122,79 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
           <Link href="/users/installers" className="icon-button" aria-label="Back to installers">
             <ChevronLeftIcon className="menu-icon" />
           </Link>
-          <Avatar src={installer.avatar} alt={installer.name} size="xl" />
+          <Avatar src={installer?.user.avatar_url ?? undefined} alt={installer?.user.fullName || installer?.user.name || "Installer"} size="xl" />
           <div className="detail-hero__meta">
             <div className="inline-actions">
-              <h2>{installer.name}</h2>
-              <StatusPill label={installer.status} tone={installer.statusTone} />
+              <h2>{installer?.user.fullName || installer?.user.name || (isLoading ? "Loading installer..." : "Installer")}</h2>
+              {installer ? <StatusPill label={formatEnumLabel(installer.user.status)} tone={toneFromStatus(installer.user.status)} /> : null}
             </div>
-            <p>
-              {installer.id} • Joined March 17 2024 • Last logged in Sept, 17 2024 at 1:27pm
-            </p>
-            <div className="stacked-actions">
-              {installerSkills.map((skill) => (
-                <StatusPill key={skill} label={skill} tone="neutral" solid={false} />
-              ))}
-            </div>
+            <p>{installer?.user.email || "Installer email will appear here once the record loads."}</p>
           </div>
-        </div>
-        <div className="detail-hero__actions">
-          <TableActionsMenu items={[{ label: "View documents" }, { label: "Flag installer", tone: "danger" }]} />
-          <Button variant="secondary" leadingIcon={<MessageIcon className="mini-icon" />}>
-            Contact Installer
-          </Button>
         </div>
       </div>
 
       <div className="detail-layout px-6 py-6">
         <Panel className="border border-[var(--border)] p-6 shadow-none">
-          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Vendor Information</h3>
-          <div className="mt-3">
-            <InfoRow icon={InfoIcons.phone} label="Phone Number" value={installer.phone} />
-            <InfoRow icon={InfoIcons.mail} label="Email" value={installer.email} />
-            <InfoRow icon={InfoIcons.filter} label="Address" value={installer.address} />
-            <InfoRow label="Documents" value={<a className="font-semibold text-[var(--brand)] underline-offset-4 hover:underline">View Documents</a>} />
-          </div>
-
-          <div className="mt-8">
-            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Wallet Information</h3>
-            <div className="installer-wallet-card">
-              <div className="installer-wallet-card__row">
-                <span className="installer-wallet-card__icon">
-                  <WalletIcon className="installer-wallet-card__icon-svg" />
-                </span>
-                <div className="installer-wallet-card__copy">
-                  <p className="installer-wallet-card__value">₦7,500.00</p>
-                  <span className="installer-wallet-card__label">Wallet balance</span>
-                </div>
-              </div>
-              <div className="installer-wallet-card__divider" />
-              <div className="installer-wallet-card__row">
-                <span className="installer-wallet-card__icon">
-                  <BankIcon className="installer-wallet-card__icon-svg" />
-                </span>
-                <div className="installer-wallet-card__copy">
-                  <p className="installer-wallet-card__account">23411609444</p>
-                  <span className="installer-wallet-card__label">Bank Name Here</span>
-                </div>
-                <span className="bank-pill installer-wallet-card__pill">Bank of Royale</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Ratings</h3>
-            <div className="mt-4 flex items-center gap-4">
-              <strong className="text-3xl font-extrabold sm:text-[40px]">3.0</strong>
-              <div>
-                <RatingStars rating={3} />
-                <p className="m-0 pt-1 text-sm text-[var(--text-soft)]">4,807 reviews</p>
-              </div>
-            </div>
-            <div className="mt-4">
-              <RatingBreakdown rows={installerRatingBreakdown} />
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <MapCard
-              title="Service Area"
-              subtitle="Primary dispatch point"
-              addressLines={["Rivers State", "123, Main Street Apt 4B", "New York, NY 10001"]}
-              image={mapPreview}
-            />
+          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Installer Information</h3>
+          <ErrorMessage title="Installer load failed" message={error} className="mt-4" />
+          <div className="mt-4">
+            <InfoRow icon={InfoIcons.mail} label="Email" value={installer?.user.email || "N/A"} />
+            <InfoRow icon={InfoIcons.phone} label="Phone Number" value={installer?.user.phone || "N/A"} />
+            <InfoRow icon={InfoIcons.filter} label="Address" value={installer?.user.address || "N/A"} />
+            <InfoRow label="Company Name" value={installer?.installerProfile.companyName || "N/A"} />
+            <InfoRow label="Availability" value={formatEnumLabel(installer?.installerProfile.availabilityStatus, "N/A")} />
+            <InfoRow label="Experience" value={`${installer?.installerProfile.experienceYears ?? 0} years`} />
+            <InfoRow label="Rating" value={installer?.installerProfile.rating ? `${installer.installerProfile.rating.toFixed(1)} / 5` : "N/A"} />
+            <InfoRow label="Jobs Completed" value={`${installer?.installerProfile.totalJobsCompleted ?? 0}`} />
+            <InfoRow label="Location" value={[installer?.installerProfile.city, installer?.installerProfile.state].filter(Boolean).join(", ") || "N/A"} />
           </div>
         </Panel>
 
         <Panel className="border border-[var(--border)] p-6 shadow-none">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="tabs-strip">
-              <button type="button" className="tabs-strip__button is-active">
-                Reviews (23)
-              </button>
-            </div>
-            <div className="inline-actions">
-              <Button variant="secondary" size="sm" leadingIcon={InfoIcons.filter}>
-                Filter
-              </Button>
-              <Button variant="secondary" size="sm" leadingIcon={InfoIcons.sort}>
-                Sort
-              </Button>
-            </div>
+          <div className="flex items-center justify-between gap-4">
+            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Update Installer</h3>
+            {installer ? <StatusPill label={formatEnumLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
           </div>
-          <div className="mt-6 flex max-h-[760px] flex-col overflow-auto pr-2">
-            {installerReviews.map((review) => (
-              <ReviewCard key={review.id} review={review} />
-            ))}
-          </div>
+
+          {!canUpdateInstaller ? (
+            <p className="mt-4 text-sm text-[var(--text-soft)]">You do not have permission to update installer records.</p>
+          ) : (
+            <form className="mt-4 flex flex-col gap-4" onSubmit={handleSave}>
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Full Name</span>
+                </span>
+                <TextField value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Installer name" />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Phone Number</span>
+                </span>
+                <TextField value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+2348000000000" />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Status</span>
+                </span>
+                <SelectField value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} options={statusOptions} />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Address</span>
+                </span>
+                <TextAreaField value={form.address} onChange={(value) => setForm((current) => ({ ...current, address: value }))} placeholder="Installer address" rows={5} />
+              </label>
+
+              <div className="inline-actions justify-end">
+                <Button type="submit" variant="primary" disabled={isLoading || isSaving || !installer}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          )}
         </Panel>
       </div>
     </Panel>

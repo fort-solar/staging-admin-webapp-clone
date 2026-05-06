@@ -1,291 +1,278 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccessControl } from "@/components/auth/use-access-control";
-import { avatarAssets, installerDirectory, installerSkills, toneFromStatus } from "@/lib/dashboard-data";
-import {
-  Avatar,
-  Button,
-  Checkbox,
-  MetricCardSecondary,
-  Pagination,
-  Panel,
-  PanelHeader,
-  SearchField,
-  SelectField,
-  StatusPill,
-  TableActionsMenu,
-} from "@/components/dashboard/ui";
-import { ChipPicker, FormField, Modal, ModalFooterActions, ModalTextArea, ModalTextInput, UploadField } from "@/components/dashboard/modals";
-import { BanIcon, EyeIcon, PlusIcon, ShieldOffIcon, TrashIcon } from "@/components/dashboard/icons";
+import { ErrorMessage } from "@/components/dashboard/error-message";
+import { BanIcon, EyeIcon, TrashIcon } from "@/components/dashboard/icons";
+import { Avatar, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu } from "@/components/dashboard/ui";
+import { useToast } from "@/components/ui/toast";
+import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { DEFAULT_PAGE_SIZE, deleteInstaller, formatEnumLabel, getInstallers, updateInstaller } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api/errors";
+import { toneFromStatus } from "@/lib/dashboard-data";
+import type { InstallerRecord, PaginationMeta } from "@/types/api.types";
 
-const installerFormId = "installer-create-form";
+const emptyPagination: PaginationMeta = {
+  page: 1,
+  limit: DEFAULT_PAGE_SIZE,
+  total: 0,
+  totalPages: 1,
+};
 
 export default function InstallersPage() {
   const { can } = useAccessControl();
-  const [rows, setRows] = useState(installerDirectory);
+  const { toast } = useToast();
+  const [rows, setRows] = useState<InstallerRecord[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
-  const [openModal, setOpenModal] = useState(false);
+  const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const deferredQuery = useDeferredValue(query);
-  const canCreateInstallers = can("installers", "create");
   const canUpdateInstallers = can("installers", "update");
   const canDeleteInstallers = can("installers", "delete");
 
-  const [form, setForm] = useState({
-    name: "Wade Warren",
-    email: "fashion@example.com",
-    phone: "+234 809 062 0576",
-    address: "",
-    expertise: [installerSkills[0]],
-    certificationDocument: "",
-    ninDocument: "",
-  });
+  useEffect(() => {
+    let cancelled = false;
+
+    setIsLoading(true);
+    setError(null);
+
+    getInstallers({ page, limit: DEFAULT_PAGE_SIZE })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setRows(payload.data);
+        setPagination(payload.pagination);
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(getErrorMessage(loadError, "Installers could not be loaded."));
+        setRows([]);
+        setPagination(emptyPagination);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [page, refreshKey]);
+
+  const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((installer) => formatEnumLabel(installer.user.status))))], [rows]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((installer) => {
-        const matchesQuery = `${installer.name} ${installer.email} ${installer.id}`.toLowerCase().includes(deferredQuery.toLowerCase());
-        const matchesStatus = status === "All" || installer.status === status;
+        const statusLabel = formatEnumLabel(installer.user.status);
+        const haystack = [
+          installer.user.id,
+          installer.user.name,
+          installer.user.fullName,
+          installer.user.email,
+          installer.user.phone ?? "",
+          installer.user.address ?? "",
+          installer.installerProfile.companyName ?? "",
+          installer.installerProfile.city ?? "",
+          installer.installerProfile.state ?? "",
+          statusLabel,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
+        const matchesStatus = status === "All" || statusLabel === status;
         return matchesQuery && matchesStatus;
       }),
     [deferredQuery, rows, status],
   );
 
+  const activeInstallers = rows.filter((installer) => installer.user.status.toLowerCase() === "active").length;
+  const availableInstallers = rows.filter((installer) => installer.installerProfile.availabilityStatus?.toLowerCase() === "available").length;
+  const topRatedInstallers = rows.filter((installer) => (installer.installerProfile.rating ?? 0) >= 4).length;
+
+  async function handleToggleStatus(installer: InstallerRecord) {
+    const nextStatus = installer.user.status.toLowerCase() === "active" ? "inactive" : "active";
+
+    try {
+      await updateInstaller(installer.user.id, {
+        name: installer.user.fullName || installer.user.name,
+        phone: installer.user.phone ?? "",
+        address: installer.user.address ?? "",
+        status: nextStatus,
+      });
+      toast({
+        title: "Installer updated",
+        description: `${installer.user.fullName || installer.user.name} is now ${formatEnumLabel(nextStatus).toLowerCase()}.`,
+        variant: "success",
+      });
+      setRefreshKey((value) => value + 1);
+    } catch (updateError) {
+      if (isDashboardSessionExpiredError(updateError)) {
+        return;
+      }
+
+      toast({
+        title: "Update failed",
+        description: getErrorMessage(updateError, "The installer status could not be updated."),
+        variant: "error",
+      });
+    }
+  }
+
+  async function handleDelete(installer: InstallerRecord) {
+    try {
+      await deleteInstaller(installer.user.id);
+      toast({
+        title: "Installer deleted",
+        description: `${installer.user.fullName || installer.user.name} was removed successfully.`,
+        variant: "success",
+      });
+
+      if (rows.length === 1 && page > 1) {
+        setPage((current) => current - 1);
+      } else {
+        setRefreshKey((value) => value + 1);
+      }
+    } catch (deleteError) {
+      if (isDashboardSessionExpiredError(deleteError)) {
+        return;
+      }
+
+      toast({
+        title: "Delete failed",
+        description: getErrorMessage(deleteError, "The installer could not be deleted."),
+        variant: "error",
+      });
+    }
+  }
+
   return (
-    <>
-      <div className="dashboard-stack">
-        <section className="stats-grid--four">
-          <MetricCardSecondary title="Total Installers" value="1,862" delta="+10.4%" deltaTone="success" subtitle="from last month" icon="installers" spark={[18, 24, 36, 48, 56, 60]} />
-          <MetricCardSecondary title="Active Installers" value="100" delta="+10.4%" deltaTone="success" subtitle="from last month" icon="verification" spark={[12, 18, 26, 34, 46, 54]} />
-          <MetricCardSecondary title="Installer of the month" value="James Ukpong" subtitle="25 Completed Installations • ⭐ 4.9" icon="admins" spark={[18, 22, 26, 30, 34, 40]} />
-          <MetricCardSecondary title="Flagged Installers" value="17" delta="-0.4%" deltaTone="danger" subtitle="from last month" icon="flag" spark={[44, 42, 36, 28, 22, 18]} />
-        </section>
+    <div className="dashboard-stack">
+      <section className="stats-grid--four">
+        <MetricCardSecondary title="Total Installers" value={pagination.total.toLocaleString()} icon="installers" spark={[18, 24, 36, 48, 56, 60]} />
+        <MetricCardSecondary title="Active On This Page" value={activeInstallers.toLocaleString()} icon="verification" spark={[12, 18, 26, 34, 46, 54]} />
+        <MetricCardSecondary title="Available Installers" value={availableInstallers.toLocaleString()} icon="admins" spark={[18, 22, 26, 30, 34, 40]} />
+        <MetricCardSecondary title="Highly Rated" value={topRatedInstallers.toLocaleString()} icon="flag" spark={[44, 42, 36, 28, 22, 18]} />
+      </section>
 
-        <Panel className="overflow-hidden">
-          <PanelHeader
-            title="Installer Directory"
-            action={
-              canCreateInstallers ? (
-                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setOpenModal(true)}>
-                  Add Installer
-                </Button>
-              ) : undefined
-            }
-          />
-          <div className="dashboard-table-toolbar">
-            <SearchField value={query} onChange={setQuery} placeholder="Search installer..." />
-            <div className="inline-actions">
-              <SelectField value={status} onChange={setStatus} options={["All", "Active", "Flagged"]} />
-            </div>
+      <Panel className="overflow-hidden">
+        <PanelHeader title="Installer Directory" />
+        <div className="dashboard-table-toolbar">
+          <SearchField value={query} onChange={setQuery} placeholder="Search installers..." />
+          <div className="inline-actions">
+            <SelectField value={status} onChange={setStatus} options={statusOptions} />
           </div>
-          <div className="table-scroll pt-2">
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th className="table-checkbox-cell">
-                    <Checkbox />
-                  </th>
-                  <th>Installer Id</th>
-                  <th>Installer</th>
-                  <th>Installations</th>
-                  <th>Performance</th>
-                  <th>Verification</th>
-                  <th>Status</th>
-                  <th className="text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((installer) => (
-                  <tr key={installer.id}>
-                    <td className="table-checkbox-cell">
+        </div>
+
+        <ErrorMessage title="Installer load failed" message={error} className="mx-6 mt-4" />
+
+        {!isLoading && !rows.length && !error ? (
+          <div className="p-6">
+            <EmptyScaffold title="No installers found" description="No record found on the database" />
+          </div>
+        ) : (
+          <>
+            <div className="table-scroll pt-2">
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th className="table-checkbox-cell">
                       <Checkbox />
-                    </td>
-                    <td>{installer.id}</td>
-                    <td>
-                      <div className="person-cell">
-                        <Avatar src={installer.avatar} alt={installer.name} size="sm"/>
-                        <div className="person-cell__text">
-                          <strong>{installer.name}</strong>
-                          <span>{installer.email}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{installer.installations}</td>
-                    <td>⭐ {installer.performance.toFixed(1)}</td>
-                    <td>
-                      <StatusPill label={installer.verification} tone={installer.verificationTone} />
-                    </td>
-                    <td>
-                      <StatusPill label={installer.status} tone={installer.statusTone} />
-                    </td>
-                    <td>
-                      <div className="inline-actions justify-end">
-                        <Link href={`/users/installers/${installer.id}`} className="inline-flex">
-                          <button type="button" className="icon-button" aria-label={`View ${installer.name}`}>
-                            <EyeIcon className="menu-icon" />
-                          </button>
-                        </Link>
-                        <TableActionsMenu
-                          panelClassName="is-installer-menu"
-                          items={[
-                            { label: "View Profile", href: `/users/installers/${installer.id}`, icon: <EyeIcon className="menu-icon" /> },
-                            ...(canUpdateInstallers
-                              ? [
-                                  {
-                                    label: "Revoke Verification",
-                                    icon: <ShieldOffIcon className="menu-icon" />,
-                                    onSelect: () =>
-                                      setRows((current) =>
-                                        current.map((row) =>
-                                          row.id === installer.id
-                                            ? {
-                                                ...row,
-                                                verification: "Revoked",
-                                                verificationTone: "neutral",
-                                              }
-                                            : row,
-                                        ),
-                                      ),
-                                  },
-                                  {
-                                    label: "Blacklist Installer",
-                                    icon: <BanIcon className="menu-icon" />,
-                                    onSelect: () =>
-                                      setRows((current) =>
-                                        current.map((row) =>
-                                          row.id === installer.id
-                                            ? {
-                                                ...row,
-                                                status: "Flagged",
-                                                statusTone: toneFromStatus("Flagged"),
-                                              }
-                                            : row,
-                                        ),
-                                      ),
-                                  },
-                                ]
-                              : []),
-                            ...(canDeleteInstallers
-                              ? [
-                                  {
-                                    label: "Delete Installer",
-                                    tone: "danger" as const,
-                                    icon: <TrashIcon className="menu-icon" />,
-                                    onSelect: () => setRows((current) => current.filter((row) => row.id !== installer.id)),
-                                  },
-                                ]
-                              : []),
-                          ]}
-                        />
-                      </div>
-                    </td>
+                    </th>
+                    <th>Installer</th>
+                    <th>Company</th>
+                    <th>Location</th>
+                    <th>Experience</th>
+                    <th>Rating</th>
+                    <th>Status</th>
+                    <th className="text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Pagination page={page} totalPages={24} onChange={setPage} />
-        </Panel>
-      </div>
-
-      <Modal
-        open={openModal}
-        onClose={() => setOpenModal(false)}
-        title="Add New Installer"
-        size="lg"
-        footer={<ModalFooterActions formId={installerFormId} cancelLabel="Cancel" submitLabel="Add Installer" onCancel={() => setOpenModal(false)} />}
-      >
-        <form
-          id={installerFormId}
-          className="flex flex-col gap-5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setRows((current) => [
-              {
-                id: `VEN${Date.now()}`,
-                name: form.name,
-                email: form.email,
-                avatar: avatarAssets.wade,
-                installations: 0,
-                performance: 0,
-                verification: "Verified",
-                verificationTone: toneFromStatus("Verified"),
-                status: "Active",
-                statusTone: toneFromStatus("Active"),
-                phone: form.phone,
-                address: form.address || "Address not provided",
-              },
-              ...current,
-            ]);
-            setOpenModal(false);
-            setForm({
-              name: "Wade Warren",
-              email: "fashion@example.com",
-              phone: "+234 809 062 0576",
-              address: "",
-              expertise: [installerSkills[0]],
-              certificationDocument: "",
-              ninDocument: "",
-            });
-          }}
-        >
-          <FormField label="Full Name">
-            <ModalTextInput value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Enter full name" />
-          </FormField>
-
-          <FormField label="Expertise">
-            <ChipPicker
-              active={form.expertise}
-              options={installerSkills}
-              searchable=""
-              onToggle={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  expertise: current.expertise.includes(value)
-                    ? current.expertise.filter((item) => item !== value)
-                    : [...current.expertise, value],
-                }))
-              }
-            />
-          </FormField>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="Phone Number">
-              <ModalTextInput value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+234 809 062 0576" />
-            </FormField>
-            <FormField label="Email Address">
-              <ModalTextInput value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="fashion@example.com" type="email" />
-            </FormField>
-          </div>
-
-          <FormField label="Address">
-            <ModalTextArea value={form.address} onChange={(value) => setForm((current) => ({ ...current, address: value }))} placeholder="Address" />
-          </FormField>
-
-          <div className="form-divider">
-            <span>Documents to Upload</span>
-          </div>
-
-          <FormField label="Certification">
-            <UploadField
-              value={form.certificationDocument}
-              onChange={(value) => setForm((current) => ({ ...current, certificationDocument: value }))}
-              showIcon={false}
-            />
-          </FormField>
-
-          <FormField label="Installer NIN">
-            <UploadField
-              value={form.ninDocument}
-              onChange={(value) => setForm((current) => ({ ...current, ninDocument: value }))}
-              showIcon={false}
-            />
-          </FormField>
-        </form>
-      </Modal>
-    </>
+                </thead>
+                <tbody>
+                  {filteredRows.length ? (
+                    filteredRows.map((installer) => (
+                      <tr key={installer.user.id}>
+                        <td className="table-checkbox-cell">
+                          <Checkbox />
+                        </td>
+                        <td>
+                          <div className="person-cell">
+                            <Avatar src={installer.user.avatar_url ?? undefined} alt={installer.user.fullName || installer.user.name} size="sm" />
+                            <div className="person-cell__text">
+                              <strong>{installer.user.fullName || installer.user.name}</strong>
+                              <span>{installer.user.email}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{installer.installerProfile.companyName || "N/A"}</td>
+                        <td>{[installer.installerProfile.city, installer.installerProfile.state].filter(Boolean).join(", ") || "N/A"}</td>
+                        <td>{installer.installerProfile.experienceYears ?? 0} yrs</td>
+                        <td>{installer.installerProfile.rating ? `${installer.installerProfile.rating.toFixed(1)} / 5` : "N/A"}</td>
+                        <td>
+                          <StatusPill label={formatEnumLabel(installer.user.status)} tone={toneFromStatus(installer.user.status)} />
+                        </td>
+                        <td>
+                          <div className="inline-actions justify-end">
+                            <Link href={`/users/installers/${installer.user.id}`} className="inline-flex">
+                              <button type="button" className="icon-button" aria-label={`View ${installer.user.fullName || installer.user.name}`}>
+                                <EyeIcon className="menu-icon" />
+                              </button>
+                            </Link>
+                            <TableActionsMenu
+                              panelClassName="is-installer-menu"
+                              items={[
+                                { label: "View Profile", href: `/users/installers/${installer.user.id}`, icon: <EyeIcon className="menu-icon" /> },
+                                ...(canUpdateInstallers
+                                  ? [
+                                      {
+                                        label: installer.user.status.toLowerCase() === "active" ? "Deactivate Installer" : "Activate Installer",
+                                        icon: <BanIcon className="menu-icon" />,
+                                        onSelect: () => handleToggleStatus(installer),
+                                      },
+                                    ]
+                                  : []),
+                                ...(canDeleteInstallers
+                                  ? [
+                                      {
+                                        label: "Delete Installer",
+                                        tone: "danger" as const,
+                                        icon: <TrashIcon className="menu-icon" />,
+                                        onSelect: () => handleDelete(installer),
+                                      },
+                                    ]
+                                  : []),
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="cell-subtle">
+                        {isLoading ? "Loading installers..." : "No installers matched the current filters."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
+          </>
+        )}
+      </Panel>
+    </div>
   );
 }

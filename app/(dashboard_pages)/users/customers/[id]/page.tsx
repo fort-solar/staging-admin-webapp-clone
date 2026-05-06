@@ -1,43 +1,119 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import {
-  customerActivityFeed,
-  customerPurchases,
-  customerRatingBreakdown,
-  customerReviews,
-  customerWishlist,
-  getCustomer,
-  mapPreview,
-  toneFromStatus,
-} from "@/lib/dashboard-data";
-import {
-  ActivityListItem,
-  Avatar,
-  Button,
-  InfoIcons,
-  InfoRow,
-  MapCard,
-  Panel,
-  RatingBreakdown,
-  RatingStars,
-  ReviewCard,
-  SelectField,
-  StatusPill,
-  TableActionsMenu,
-  Tabs,
-} from "@/components/dashboard/ui";
-import { ChevronLeftIcon, MessageIcon } from "@/components/dashboard/icons";
+import { useAccessControl } from "@/components/auth/use-access-control";
+import { ErrorMessage } from "@/components/dashboard/error-message";
+import { ChevronLeftIcon } from "@/components/dashboard/icons";
+import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
+import { useToast } from "@/components/ui/toast";
+import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { formatEnumLabel, getCustomer, updateCustomer } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api/errors";
+import { toneFromStatus } from "@/lib/dashboard-data";
+import type { CustomerRecord } from "@/types/api.types";
 
-const tabs = ["Purchase History (23)", "Wishlist", "Reviews (23)", "Activity"] as const;
-const orderStatusOptions = ["Processing", "Order Packed", "Shipped", "In Transit", "Delivered", "Cancelled"] as const;
+const statusOptions = ["active", "inactive", "suspended"];
 
 export default function CustomerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const customer = getCustomer(id);
-  const [tab, setTab] = useState<(typeof tabs)[number]>(tabs[0]);
-  const [purchases, setPurchases] = useState(customerPurchases);
+  const { can } = useAccessControl();
+  const { toast } = useToast();
+  const [customer, setCustomer] = useState<CustomerRecord | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    address: "",
+    status: "active",
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canUpdateCustomer = can("customers", "update");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setIsLoading(true);
+    setError(null);
+
+    getCustomer(id)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setCustomer(payload.data);
+        setForm({
+          name: payload.data.fullName || payload.data.name,
+          phone: payload.data.phone ?? "",
+          address: payload.data.address ?? "",
+          status: payload.data.status,
+        });
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(getErrorMessage(loadError, "Customer details could not be loaded."));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!customer) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await updateCustomer(customer.id, {
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        status: form.status,
+      });
+
+      const refreshed = await getCustomer(customer.id);
+      setCustomer(refreshed.data);
+      setForm({
+        name: refreshed.data.fullName || refreshed.data.name,
+        phone: refreshed.data.phone ?? "",
+        address: refreshed.data.address ?? "",
+        status: refreshed.data.status,
+      });
+
+      toast({
+        title: "Customer updated",
+        description: `${refreshed.data.fullName || refreshed.data.name} was updated successfully.`,
+        variant: "success",
+      });
+    } catch (saveError) {
+      if (isDashboardSessionExpiredError(saveError)) {
+        return;
+      }
+
+      toast({
+        title: "Update failed",
+        description: getErrorMessage(saveError, "The customer could not be updated."),
+        variant: "error",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <Panel className="overflow-hidden">
@@ -46,176 +122,76 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
           <Link href="/users/customers" className="icon-button" aria-label="Back to customers">
             <ChevronLeftIcon className="menu-icon" />
           </Link>
-          <Avatar src={customer.avatar} alt={customer.name} size="xl" />
+          <Avatar src={customer?.avatar_url ?? undefined} alt={customer?.fullName || customer?.name || "Customer"} size="xl" />
           <div className="detail-hero__meta">
             <div className="inline-actions">
-              <h2>{customer.name}</h2>
-              <StatusPill label={customer.status} tone={customer.statusTone} className="min-h-7.5!" />
+              <h2>{customer?.fullName || customer?.name || (isLoading ? "Loading customer..." : "Customer")}</h2>
+              {customer ? <StatusPill label={formatEnumLabel(customer.status)} tone={toneFromStatus(customer.status)} className="min-h-7.5!" /> : null}
             </div>
-            <p>
-              {customer.id} • Joined March 17 2024 • Last online Sept, 17 2024 at 1:27pm
-            </p>
+            <p>{customer?.email || "Customer email will appear here once the record loads."}</p>
           </div>
-        </div>
-        <div className="detail-hero__actions">
-          <TableActionsMenu items={[{ label: "Block buyer", tone: "danger" }]} />
-          <Button variant="secondary" leadingIcon={<MessageIcon className="mini-icon" />}>
-            Contact Buyer
-          </Button>
         </div>
       </div>
 
       <div className="detail-layout px-6 py-6">
-        <Panel className="border border-(--border) shadow-none">
-          <div className="p-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <Tabs value={tab} onChange={setTab} options={tabs} />
-              {tab === "Activity" ? (
-                <Button variant="secondary" size="sm" leadingIcon={InfoIcons.sort}>
-                  Sort
-                </Button>
-              ) : tab === "Reviews (23)" ? (
-                <div className="inline-actions">
-                  <Button variant="secondary" size="sm" leadingIcon={InfoIcons.filter}>
-                    Filter
-                  </Button>
-                  <Button variant="secondary" size="sm" leadingIcon={InfoIcons.sort}>
-                    Sort
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="secondary" size="sm" leadingIcon={InfoIcons.filter}>
-                  Filter
-                </Button>
-              )}
-            </div>
-
-            {tab === "Purchase History (23)" ? (
-              <div className="mt-6 flex flex-col gap-4">
-                {purchases.map((purchase) => (
-                  <article key={purchase.id} className="purchase-history-card">
-                    <div className="purchase-history-card__body">
-                      <div className="purchase-history-card__content">
-                        <StatusPill label={purchase.id} tone="neutral" solid={false} />
-                        <div className="product-cell mt-4">
-                          <span className="product-thumb" aria-hidden="true" />
-                          <div className="product-cell__text">
-
-                            <strong>{purchase.product} <span>{purchase.extraItems}</span></strong>
-                            
-                            <span>Order Date: {purchase.orderDate}</span>
-                            <strong>
-                              {purchase.amount} <span >•  {purchase.payment}</span>
-                            </strong>
-                          </div>
-
-                        </div>
-                        <div className="purchase-history-card__footer">
-                          <p className="purchase-history-card__delivery">
-                            Estimated Delivery Date: <strong>{purchase.delivery}</strong>
-                          </p>
-                          <div className="purchase-history-card__status" data-tone={toneFromStatus(purchase.status)}>
-                            <span className="purchase-history-card__status-label">Order Status</span>
-                            <SelectField
-                              value={purchase.status}
-                              onChange={(nextStatus) =>
-                                setPurchases((current) =>
-                                  current.map((item) =>
-                                    item.id === purchase.id
-                                      ? {
-                                          ...item,
-                                          status: nextStatus,
-                                        }
-                                      : item,
-                                  ),
-                                )
-                              }
-                              options={[...orderStatusOptions]}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : null}
-
-            {tab === "Wishlist" ? (
-              <div className="mt-6 grid gap-4">
-                {customerWishlist.map((item) => (
-                  <article key={item.id} className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4">
-                    <div className="relative overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--surface-soft)]">
-                      <span className="product-placeholder is-static" aria-hidden="true" />
-                    </div>
-                    <h3 className="mb-0 mt-4 text-sm font-bold sm:text-base">{item.title}</h3>
-                    <p className="mb-0 mt-1 text-sm text-[var(--text-soft)]">{item.subtitle}</p>
-                    <div className="mt-4 flex items-center justify-between">
-                      <strong>{item.price}</strong>
-                      <Button variant="secondary" size="sm">
-                        View Item
-                      </Button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : null}
-
-            {tab === "Reviews (23)" ? (
-              <div className="mt-6 flex flex-col gap-8">
-                <div className="grid gap-8 border-b border-[var(--border)] pb-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-                  <div className="flex flex-col gap-2">
-                    <strong className="text-3xl font-extrabold sm:text-[42px]">4.8</strong>
-                    <RatingStars rating={4} />
-                    <span className="text-sm text-[var(--text-soft)]">92 reviews</span>
-                  </div>
-                  <RatingBreakdown rows={customerRatingBreakdown} />
-                </div>
-                <div className="flex flex-col gap-2">
-                  {customerReviews.map((review) => (
-                    <ReviewCard key={review.id} review={review} showOrderMeta />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {tab === "Activity" ? (
-              <div className="mt-6 flex flex-col">
-                {customerActivityFeed.map((item) => (
-                  <ActivityListItem key={item.id} title={item.title} description={item.description} meta={item.meta} tone={item.tone} />
-                ))}
-              </div>
-            ) : null}
+        <Panel className="border border-[var(--border)] p-6 shadow-none">
+          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Customer Information</h3>
+          <ErrorMessage title="Customer load failed" message={error} className="mt-4" />
+          <div className="mt-4">
+            <InfoRow icon={InfoIcons.mail} label="Email" value={customer?.email || "N/A"} />
+            <InfoRow icon={InfoIcons.phone} label="Phone Number" value={customer?.phone || "N/A"} />
+            <InfoRow icon={InfoIcons.filter} label="Address" value={customer?.address || "N/A"} />
+            <InfoRow label="Customer ID" value={customer?.id || "N/A"} />
+            <InfoRow label="Role" value={formatEnumLabel(customer?.role, "N/A")} />
+            <InfoRow label="Email Verified" value={customer?.emailVerified ? "Yes" : "No"} />
           </div>
         </Panel>
 
         <Panel className="border border-[var(--border)] p-6 shadow-none">
-          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Customer Information</h3>
-          <div className="mt-3">
-            <InfoRow icon={InfoIcons.phone} label="Phone Number" value={customer.phone} />
-            <InfoRow icon={InfoIcons.mail} label="Email" value={customer.email} />
+          <div className="flex items-center justify-between gap-4">
+            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Update Customer</h3>
+            {customer ? <StatusPill label={formatEnumLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
           </div>
 
-          <div className="mt-6">
-            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Shipping Address</h3>
-            <div className="mt-4">
-              <MapCard
-                title="Rivers State"
-                addressLines={["123, Main Street Apt 4B", "New York, NY 10001", "United States"]}
-                image={mapPreview}
-              />
-            </div>
-          </div>
+          {!canUpdateCustomer ? (
+            <p className="mt-4 text-sm text-[var(--text-soft)]">You do not have permission to update customer records.</p>
+          ) : (
+            <form className="mt-4 flex flex-col gap-4" onSubmit={handleSave}>
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Full Name</span>
+                </span>
+                <TextField value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Customer name" />
+              </label>
 
-          {tab === "Activity" ? (
-            <div className="mt-8">
-              <h3 className="m-0 text-sm font-bold sm:text-[15px]">Wallet Information</h3>
-              <div className="mt-4 rounded-[20px] bg-[var(--brand)] px-4 py-5 text-white">
-                <p className="m-0 text-2xl font-extrabold sm:text-[32px]">₦7,500.00</p>
-                <span className="text-sm text-white/78">Wallet balance</span>
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Phone Number</span>
+                </span>
+                <TextField value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+2348000000000" />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Status</span>
+                </span>
+                <SelectField value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} options={statusOptions} />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Address</span>
+                </span>
+                <TextAreaField value={form.address} onChange={(value) => setForm((current) => ({ ...current, address: value }))} placeholder="Customer address" rows={5} />
+              </label>
+
+              <div className="inline-actions justify-end">
+                <Button type="submit" variant="primary" disabled={isLoading || isSaving || !customer}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
               </div>
-            </div>
-          ) : null}
+            </form>
+          )}
         </Panel>
       </div>
     </Panel>

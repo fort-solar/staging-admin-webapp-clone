@@ -1,28 +1,124 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { adminActivityFeed, adminPermissions, getAdmin, toneFromStatus } from "@/lib/dashboard-data";
-import {
-  ActivityListItem,
-  Avatar,
-  Button,
-  InfoIcons,
-  InfoRow,
-  InfoStat,
-  Panel,
-  StatusPill,
-  TableActionsMenu,
-  Tabs,
-} from "@/components/dashboard/ui";
-import { ChevronLeftIcon, KeyIcon, MessageIcon, ShieldOffIcon } from "@/components/dashboard/icons";
+import { useAccessControl } from "@/components/auth/use-access-control";
+import { ErrorMessage } from "@/components/dashboard/error-message";
+import { ChevronLeftIcon } from "@/components/dashboard/icons";
+import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
+import { useToast } from "@/components/ui/toast";
+import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { formatEnumLabel, getAdmin, updateAdmin } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api/errors";
+import { toneFromStatus } from "@/lib/dashboard-data";
+import type { AdminRecord } from "@/types/api.types";
 
-const tabs = ["Activity Log (1245)", "Permissions"] as const;
+const statusOptions = ["active", "inactive"];
+const roleOptions = ["super_admin", "operations_manager", "content_manager", "business_manager"];
 
 export default function AdminDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const admin = getAdmin(id);
-  const [tab, setTab] = useState<(typeof tabs)[number]>(tabs[0]);
+  const { can } = useAccessControl();
+  const { toast } = useToast();
+  const [admin, setAdmin] = useState<AdminRecord | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    address: "",
+    status: "active",
+    adminRole: "operations_manager",
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canUpdateAdmin = can("admins", "update");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setIsLoading(true);
+    setError(null);
+
+    getAdmin(id)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAdmin(payload.data);
+        setForm({
+          name: payload.data.fullName || payload.data.name,
+          phone: payload.data.phone ?? "",
+          address: payload.data.address ?? "",
+          status: payload.data.status,
+          adminRole: payload.data.adminRole,
+        });
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(getErrorMessage(loadError, "Admin details could not be loaded."));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!admin) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await updateAdmin(admin.id, {
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        status: form.status,
+        adminRole: form.adminRole,
+      });
+
+      const refreshed = await getAdmin(admin.id);
+      setAdmin(refreshed.data);
+      setForm({
+        name: refreshed.data.fullName || refreshed.data.name,
+        phone: refreshed.data.phone ?? "",
+        address: refreshed.data.address ?? "",
+        status: refreshed.data.status,
+        adminRole: refreshed.data.adminRole,
+      });
+
+      toast({
+        title: "Admin updated",
+        description: `${refreshed.data.fullName || refreshed.data.name} was updated successfully.`,
+        variant: "success",
+      });
+    } catch (saveError) {
+      if (isDashboardSessionExpiredError(saveError)) {
+        return;
+      }
+
+      toast({
+        title: "Update failed",
+        description: getErrorMessage(saveError, "The admin could not be updated."),
+        variant: "error",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <Panel className="overflow-hidden">
@@ -31,91 +127,83 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
           <Link href="/users/admins" className="icon-button" aria-label="Back to admins">
             <ChevronLeftIcon className="menu-icon" />
           </Link>
-          <Avatar src={admin.avatar} alt={admin.name} size="xl" />
+          <Avatar src={admin?.avatar_url ?? undefined} alt={admin?.fullName || admin?.name || "Admin"} size="xl" />
           <div className="detail-hero__meta">
             <div className="inline-actions">
-              <h2>{admin.name}</h2>
-              <StatusPill label={admin.status} tone={admin.statusTone} />
+              <h2>{admin?.fullName || admin?.name || (isLoading ? "Loading admin..." : "Admin")}</h2>
+              {admin ? <StatusPill label={formatEnumLabel(admin.status)} tone={toneFromStatus(admin.status)} /> : null}
             </div>
-            <p>Joined January 12, 2023 • Last online Apr 1st, 2024 at 12:30pm</p>
+            <p>{admin?.email || "Admin email will appear here once the record loads."}</p>
           </div>
-        </div>
-        <div className="detail-hero__actions">
-          <TableActionsMenu
-            panelClassName="is-admin-menu"
-            items={[
-              { label: "Reset Password", icon: <KeyIcon className="menu-icon" /> },
-              { label: "Suspend Admin", tone: "danger", icon: <ShieldOffIcon className="menu-icon" /> },
-            ]}
-          />
-          <Button variant="secondary" leadingIcon={<MessageIcon className="mini-icon" />}>
-            Contact Admin
-          </Button>
         </div>
       </div>
 
       <div className="detail-layout px-6 py-6">
-        <Panel className="border border-[var(--border)] shadow-none">
-          <div className="p-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <Tabs value={tab} onChange={setTab} options={tabs} />
-              <Button variant="secondary" size="sm" leadingIcon={InfoIcons.filter}>
-                Filter
-              </Button>
-            </div>
-
-            {tab === "Activity Log (1245)" ? (
-              <div className="mt-6 flex flex-col">
-                {adminActivityFeed.map((item) => (
-                  <ActivityListItem key={item.id} title={item.title} description={item.description} meta={item.meta} tone={item.tone} />
-                ))}
-              </div>
-            ) : (
-              <div className="table-scroll px-0 pt-6">
-                <table className="dashboard-table min-w-0">
-                  <thead>
-                    <tr>
-                      <th className="table-checkbox-cell"> </th>
-                      <th>Module</th>
-                      <th>Access Level</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adminPermissions.map((permission) => (
-                      <tr key={permission.module}>
-                        <td className="table-checkbox-cell">
-                          <div className="checkbox"><span /></div>
-                        </td>
-                        <td>{permission.module}</td>
-                        <td>{permission.accessLevel}</td>
-                        <td>
-                          <StatusPill label={permission.status} tone={toneFromStatus(permission.status)} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        <Panel className="border border-[var(--border)] p-6 shadow-none">
+          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Admin Information</h3>
+          <ErrorMessage title="Admin load failed" message={error} className="mt-4" />
+          <div className="mt-4">
+            <InfoRow icon={InfoIcons.mail} label="Email" value={admin?.email || "N/A"} />
+            <InfoRow icon={InfoIcons.phone} label="Phone Number" value={admin?.phone || "N/A"} />
+            <InfoRow icon={InfoIcons.filter} label="Address" value={admin?.address || "N/A"} />
+            <InfoRow label="Admin ID" value={admin?.id || "N/A"} />
+            <InfoRow label="Role" value={formatEnumLabel(admin?.adminRole, "N/A")} />
+            <InfoRow label="Email Verified" value={admin?.emailVerified ? "Yes" : "No"} />
           </div>
         </Panel>
 
         <Panel className="border border-[var(--border)] p-6 shadow-none">
-          <h3 className="m-0 text-sm font-bold sm:text-[15px]">Admin Information</h3>
-          <div className="mt-3">
-            <InfoRow icon={InfoIcons.phone} label="Phone Number" value={admin.phone} />
-            <InfoRow icon={InfoIcons.mail} label="Email" value={admin.email} />
+          <div className="flex items-center justify-between gap-4">
+            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Update Admin</h3>
+            {admin ? <StatusPill label={formatEnumLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
           </div>
 
-          <div className="mt-8">
-            <h3 className="m-0 text-sm font-bold sm:text-[15px]">Account Statistics</h3>
-            <div className="mt-4 flex flex-col gap-4">
-              <InfoStat label="Account Age" value="449 days" progress={88} />
-              <InfoStat label="Activity Level" value="High" progress={100} />
-              <InfoStat label="Last Activity" value="3 hours ago" progress={85} />
-            </div>
-          </div>
+          {!canUpdateAdmin ? (
+            <p className="mt-4 text-sm text-[var(--text-soft)]">You do not have permission to update admin records.</p>
+          ) : (
+            <form className="mt-4 flex flex-col gap-4" onSubmit={handleSave}>
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Full Name</span>
+                </span>
+                <TextField value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Admin name" />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Phone Number</span>
+                </span>
+                <TextField value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+2348000000000" />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Status</span>
+                </span>
+                <SelectField value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} options={statusOptions} />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Admin Role</span>
+                </span>
+                <SelectField value={form.adminRole} onChange={(value) => setForm((current) => ({ ...current, adminRole: value }))} options={roleOptions} />
+              </label>
+
+              <label className="form-field">
+                <span className="form-field__label">
+                  <span>Address</span>
+                </span>
+                <TextAreaField value={form.address} onChange={(value) => setForm((current) => ({ ...current, address: value }))} placeholder="Admin address" rows={5} />
+              </label>
+
+              <div className="inline-actions justify-end">
+                <Button type="submit" variant="primary" disabled={isLoading || isSaving || !admin}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          )}
         </Panel>
       </div>
     </Panel>
