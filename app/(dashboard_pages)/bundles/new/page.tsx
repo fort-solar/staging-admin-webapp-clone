@@ -1,5 +1,5 @@
-import { BundleFormScreen } from "@/components/dashboard/bundles-management";
+import { redirect } from "next/navigation";
 
 export default function NewBundlePage() {
-  return <BundleFormScreen />;
+  redirect("/packages/new");
 }

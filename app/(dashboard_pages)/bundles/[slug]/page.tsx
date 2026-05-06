@@ -1,14 +1,6 @@
-import { notFound } from "next/navigation";
-import { BundleDetailScreen } from "@/components/dashboard/bundles-management";
-import { getBundleBySlug } from "@/lib/management-data";
+import { redirect } from "next/navigation";
 
 export default async function BundleDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const bundle = getBundleBySlug(slug);
-
-  if (!bundle) {
-    notFound();
-  }
-
-  return <BundleDetailScreen bundle={bundle} />;
+  redirect(`/packages/${slug}`);
 }

@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { BundlesManagementScreen } from "@/components/dashboard/bundles-management";
+import { redirect } from "next/navigation";
 
 export default function BundlesPage() {
-  return (
-    <Suspense fallback={null}>
-      <BundlesManagementScreen />
-    </Suspense>
-  );
+  redirect("/packages");
 }
