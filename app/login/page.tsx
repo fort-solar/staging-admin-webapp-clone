@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
@@ -25,7 +26,7 @@ export default async function LoginPage() {
               operations at scale.
             </h1>
             <p className="m-0 max-w-[420px] pt-5 text-base text-white/82">
-              Oversee customer requests, product inventory, bundle sales, payments, and installer delivery from a secure Fortsolar workspace.
+              Oversee customer requests, product inventory, package sales, payments, and installer delivery from a secure Fortsolar workspace.
             </p>
           </div>
           <div className="auth-card-hero-note rounded-[24px] border p-6 text-sm text-white/82">
@@ -35,9 +36,10 @@ export default async function LoginPage() {
 
         <section className="auth-card-form flex w-full flex-col justify-center px-6 py-10 sm:px-10 lg:w-[440px]">
           <div className="mb-8">
-            <p className="brand-mark">
-              <span>Fort</span>
-              <strong>solar</strong>
+            <p className="brand-mark" aria-label="Fortsolar">
+              <span className="brand-mark__icon" aria-hidden="true">
+                <Image src="/favicon.ico" alt="" fill sizes="40px" />
+              </span>
             </p>
             <p className="m-0 text-sm font-semibold uppercase sm:text-[15px] text-[var(--brand)]">Welcome back</p>
             <h2 className="m-0 pt-3 text-3xl font-extrabold sm:text-[36px]">Sign in to the admin panel</h2>
