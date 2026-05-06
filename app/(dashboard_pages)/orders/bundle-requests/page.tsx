@@ -1,310 +1,319 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAccessControl } from "@/components/auth/use-access-control";
-import { bundleRequestRows, toneFromStatus } from "@/lib/dashboard-data";
-import {
-  Button,
-  Checkbox,
-  MetricCardSecondary,
-  Pagination,
-  Panel,
-  PanelHeader,
-  SearchField,
-  SelectField,
-  StatusPill,
-  TableActionsMenu,
-} from "@/components/dashboard/ui";
-import {
-  ChipPicker,
-  FormField,
-  Modal,
-  ModalFooterActions,
-  ModalSelect,
-  ModalTextInput,
-} from "@/components/dashboard/modals";
-import { EyeIcon, FilterIcon, PlusIcon } from "@/components/dashboard/icons";
+import { ErrorMessage } from "@/components/dashboard/error-message";
+import { EyeIcon } from "@/components/dashboard/icons";
+import { FormField, Modal } from "@/components/dashboard/modals";
+import { Button, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, TextAreaField } from "@/components/dashboard/ui";
+import { useToast } from "@/components/ui/toast";
+import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { DEFAULT_PAGE_SIZE, formatDateTimeLabel, formatEnumLabel, getBundleRequests, updateBundleRequest } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api/errors";
+import { toneFromStatus } from "@/lib/dashboard-data";
+import type { BundleRequestRecord, PaginationMeta } from "@/types/api.types";
 
-const customBundleRequestFormId = "custom-bundle-request-form";
+const emptyPagination: PaginationMeta = {
+  page: 1,
+  limit: DEFAULT_PAGE_SIZE,
+  total: 0,
+  totalPages: 1,
+};
 
 export default function BundleRequestPage() {
   const { can } = useAccessControl();
-  const [rows, setRows] = useState(bundleRequestRows);
+  const { toast } = useToast();
+  const [rows, setRows] = useState<BundleRequestRecord[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [detailStatus, setDetailStatus] = useState("");
+  const [detailAdminNote, setDetailAdminNote] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const deferredQuery = useDeferredValue(query);
-  const canCreateOrders = can("orders", "create");
   const canUpdateOrders = can("orders", "update");
 
-  const [form, setForm] = useState({
-    name: "",
-    bundle: "Campus Bundle",
-    email: "",
-    phone: "",
-    location: "",
-    financing: "Yes",
-  });
+  useEffect(() => {
+    let cancelled = false;
+
+    setIsLoading(true);
+    setError(null);
+
+    getBundleRequests({ page, limit: DEFAULT_PAGE_SIZE })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setRows(payload.data);
+        setPagination(payload.pagination);
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(getErrorMessage(loadError, "Package requests could not be loaded."));
+        setRows([]);
+        setPagination(emptyPagination);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [page, refreshKey]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
-        const matchesQuery = `${row.customer} ${row.bundle} ${row.email} ${row.phone} ${row.location}`
-          .toLowerCase()
-          .includes(deferredQuery.toLowerCase());
-        const matchesStatus = status === "All" || row.status === status;
+        const statusLabel = formatEnumLabel(row.status);
+        const orderStatusLabel = formatEnumLabel(row.order_status);
+        const haystack = [row.id, row.order_id, row.bundle_id, row.bundle_name, row.admin_note ?? "", statusLabel, orderStatusLabel]
+          .join(" ")
+          .toLowerCase();
+        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
+        const matchesStatus = status === "All" || statusLabel === status;
         return matchesQuery && matchesStatus;
       }),
     [deferredQuery, rows, status],
   );
 
   const activeRequest = rows.find((row) => row.id === detailId) ?? null;
+  const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((row) => formatEnumLabel(row.status))))], [rows]);
+  const detailStatusOptions = useMemo(
+    () => Array.from(new Set(rows.map((row) => row.status).concat(["pending", "approved", "rejected"]))),
+    [rows],
+  );
+
+  useEffect(() => {
+    if (!activeRequest) {
+      setDetailStatus("");
+      setDetailAdminNote("");
+      return;
+    }
+
+    setDetailStatus(activeRequest.status);
+    setDetailAdminNote(activeRequest.admin_note ?? "");
+  }, [activeRequest]);
+
+  const pendingCount = rows.filter((row) => row.status.toLowerCase() === "pending").length;
+  const approvedCount = rows.filter((row) => row.status.toLowerCase() === "approved").length;
+  const completedOrdersCount = rows.filter((row) => row.order_status.toLowerCase() === "completed").length;
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!activeRequest) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await updateBundleRequest(activeRequest.id, {
+        status: detailStatus,
+        admin_note: detailAdminNote,
+      });
+
+      toast({
+        title: "Package request updated",
+        description: `${activeRequest.bundle_name} was updated successfully.`,
+        variant: "success",
+      });
+      setDetailId(null);
+      setRefreshKey((value) => value + 1);
+    } catch (saveError) {
+      if (isDashboardSessionExpiredError(saveError)) {
+        return;
+      }
+
+      toast({
+        title: "Update failed",
+        description: getErrorMessage(saveError, "The package request could not be updated."),
+        variant: "error",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <>
       <div className="dashboard-stack">
         <section className="stats-grid--four">
-          <MetricCardSecondary title="Total Requests" value="100,000" delta="+10.4%" deltaTone="success" subtitle="from last month" icon="bundles" spark={[18, 24, 32, 44, 52, 60]} />
-          <MetricCardSecondary title="Pending Requests" value="100" subtitle="Requests awaiting approvals" icon="orders" spark={[30, 26, 22, 18, 16, 14]} />
-          <MetricCardSecondary title="Approved Requests" value="245" delta="+10.4%" deltaTone="success" subtitle="from last month" icon="verification" spark={[12, 18, 24, 34, 44, 54]} />
-          <MetricCardSecondary title="Delivered Requests" value="80,000" subtitle="Requests Completed" icon="installers" spark={[24, 26, 32, 40, 48, 54]} />
+          <MetricCardSecondary title="Total Requests" value={pagination.total.toLocaleString()} icon="bundles" spark={[18, 24, 32, 44, 52, 60]} />
+          <MetricCardSecondary title="Pending On This Page" value={pendingCount.toLocaleString()} icon="orders" spark={[30, 26, 22, 18, 16, 14]} />
+          <MetricCardSecondary title="Approved On This Page" value={approvedCount.toLocaleString()} icon="verification" spark={[12, 18, 24, 34, 44, 54]} />
+          <MetricCardSecondary title="Completed Parent Orders" value={completedOrdersCount.toLocaleString()} icon="installers" spark={[24, 26, 32, 40, 48, 54]} />
         </section>
 
         <Panel className="overflow-hidden">
-          <PanelHeader
-            title="Request List"
-            action={
-              canCreateOrders ? (
-                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setModalOpen(true)}>
-                  Custom Request
-                </Button>
-              ) : undefined
-            }
-          />
+          <PanelHeader title="Request List" />
           <div className="dashboard-table-toolbar">
-            <SearchField value={query} onChange={setQuery} placeholder="Search order report..." />
+            <SearchField value={query} onChange={setQuery} placeholder="Search package requests..." />
             <div className="inline-actions">
-              <Button variant="secondary" size="sm" leadingIcon={<FilterIcon className="mini-icon" />}>
-                Filter
-              </Button>
-              <SelectField value={status} onChange={setStatus} options={["All", ...Array.from(new Set(rows.map((row) => row.status)))]} />
+              <SelectField value={status} onChange={setStatus} options={statusOptions} />
             </div>
           </div>
-          <div className="table-scroll pt-2">
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th className="table-checkbox-cell">
-                    <Checkbox />
-                  </th>
-                  <th>Name</th>
-                  <th>Bundle</th>
-                  <th>Contact Info</th>
-                  <th>Location</th>
-                  <th>Financing</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th className="text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="table-checkbox-cell">
-                      <Checkbox />
-                    </td>
-                    <td>{row.customer}</td>
-                    <td>{row.bundle}</td>
-                    <td>
-                      <div className="product-cell__text">
-                        <strong>{row.email}</strong>
-                        <span>{row.phone}</span>
-                      </div>
-                    </td>
-                    <td>{row.location}</td>
-                    <td>{row.financing}</td>
-                    <td>{row.date}</td>
-                    <td>
-                      <StatusPill label={row.status} tone={row.statusTone} />
-                    </td>
-                    <td>
-                      <div className="inline-actions justify-end">
-                        <Button variant="secondary" size="sm" leadingIcon={<EyeIcon className="mini-icon" />} onClick={() => setDetailId(row.id)}>
-                          View
-                        </Button>
-                        <TableActionsMenu
-                          items={[
-                            ...(canUpdateOrders
-                              ? [
-                                  {
-                                    label: "Mark as Processing",
-                                    onSelect: () =>
-                                      setRows((current) =>
-                                        current.map((item) =>
-                                          item.id === row.id
-                                            ? {
-                                                ...item,
-                                                status: "Processing",
-                                                statusTone: toneFromStatus("Processing"),
-                                              }
-                                            : item,
-                                        ),
-                                      ),
-                                  },
-                                  {
-                                    label: "Mark as Installed",
-                                    onSelect: () =>
-                                      setRows((current) =>
-                                        current.map((item) =>
-                                          item.id === row.id
-                                            ? {
-                                                ...item,
-                                                status: "System Installed",
-                                                statusTone: toneFromStatus("Approved"),
-                                              }
-                                            : item,
-                                        ),
-                                      ),
-                                  },
-                                ]
-                              : []),
-                          ]}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Pagination page={page} totalPages={24} onChange={setPage} />
+
+          <ErrorMessage title="Package request load failed" message={error} className="mx-6 mt-4" />
+
+          {!isLoading && !rows.length && !error ? (
+            <div className="p-6">
+              <EmptyScaffold title="No package requests found" description="No record found on the database" />
+            </div>
+          ) : (
+            <>
+              <div className="table-scroll pt-2">
+                <table className="dashboard-table">
+                  <thead>
+                    <tr>
+                      <th className="table-checkbox-cell">
+                        <Checkbox />
+                      </th>
+                      <th>Package</th>
+                      <th>Request ID</th>
+                      <th>Order ID</th>
+                      <th>Order Status</th>
+                      <th>Created</th>
+                      <th>Status</th>
+                      <th>Admin Note</th>
+                      <th className="text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.length ? (
+                      filteredRows.map((row) => (
+                        <tr key={row.id}>
+                          <td className="table-checkbox-cell">
+                            <Checkbox />
+                          </td>
+                          <td>{row.bundle_name}</td>
+                          <td>{row.id}</td>
+                          <td>{row.order_id}</td>
+                          <td>
+                            <StatusPill label={formatEnumLabel(row.order_status)} tone={toneFromStatus(row.order_status)} solid={false} />
+                          </td>
+                          <td>{formatDateTimeLabel(row.created_at)}</td>
+                          <td>
+                            <StatusPill label={formatEnumLabel(row.status)} tone={toneFromStatus(row.status)} />
+                          </td>
+                          <td>{row.admin_note || "N/A"}</td>
+                          <td>
+                            <div className="inline-actions justify-end">
+                              <Button variant="secondary" size="sm" leadingIcon={<EyeIcon className="mini-icon" />} onClick={() => setDetailId(row.id)}>
+                                View
+                              </Button>
+                              <TableActionsMenu
+                                items={[
+                                  { label: canUpdateOrders ? "View / Edit Request" : "View Request", icon: <EyeIcon className="menu-icon" />, onSelect: () => setDetailId(row.id) },
+                                ]}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="cell-subtle">
+                          {isLoading ? "Loading package requests..." : "No package requests matched the current filters."}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
+            </>
+          )}
         </Panel>
       </div>
 
       <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Custom Bundle Request"
-        footer={<ModalFooterActions formId={customBundleRequestFormId} cancelLabel="Cancel" submitLabel="Add Request" onCancel={() => setModalOpen(false)} />}
-      >
-        <form
-          id={customBundleRequestFormId}
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setRows((current) => [
-              {
-                id: `BR${Date.now()}`,
-                customer: form.name || "New Request",
-                bundle: form.bundle,
-                email: form.email || "newrequest@example.com",
-                phone: form.phone || "+234 000 000 0000",
-                location: form.location || "Lagos",
-                financing: form.financing as "Yes" | "No",
-                date: "20 Apr, 2026",
-                status: "Pending",
-                statusTone: toneFromStatus("Pending"),
-              },
-              ...current,
-            ]);
-            setModalOpen(false);
-            setForm({ name: "", bundle: "Campus Bundle", email: "", phone: "", location: "", financing: "Yes" });
-          }}
-        >
-          <FormField label="Customer Name">
-            <ModalTextInput value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Enter customer name" />
-          </FormField>
-          <FormField label="Bundle">
-            <ModalSelect value={form.bundle} onChange={(value) => setForm((current) => ({ ...current, bundle: value }))} options={["Campus Bundle", "Campus Lite", "Home Bundle"]} />
-          </FormField>
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="Email Address">
-              <ModalTextInput value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Enter email address" type="email" />
-            </FormField>
-            <FormField label="Phone Number">
-              <ModalTextInput value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+234 809 062 0576" />
-            </FormField>
-          </div>
-          <FormField label="Location">
-            <ModalTextInput value={form.location} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} placeholder="Lagos" />
-          </FormField>
-          <FormField label="Financing">
-            <ChipPicker
-              active={[form.financing]}
-              options={["Yes", "No"]}
-              onToggle={(value) => setForm((current) => ({ ...current, financing: value }))}
-            />
-          </FormField>
-        </form>
-      </Modal>
-
-      <Modal
         open={Boolean(activeRequest)}
-        onClose={() => setDetailId(null)}
-        title={activeRequest?.customer ?? "Bundle Request"}
+        onClose={() => !isSaving && setDetailId(null)}
+        title={activeRequest?.bundle_name ?? "Package Request"}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setDetailId(null)}>
+            <Button variant="secondary" onClick={() => setDetailId(null)} disabled={isSaving}>
               Cancel
             </Button>
             {canUpdateOrders ? (
-              <Button variant="primary" onClick={() => setDetailId(null)}>
-                Update
+              <Button type="submit" form="bundle-request-update-form" variant="primary" disabled={isSaving || !activeRequest}>
+                {isSaving ? "Saving..." : "Update"}
               </Button>
             ) : null}
           </>
         }
       >
-
         {activeRequest ? (
-          <div className="flex flex-col gap-6">
+          <form id="bundle-request-update-form" className="flex flex-col gap-6" onSubmit={handleSave}>
             <div className="rounded-[20px] bg-(--surface-soft) p-5">
-              <p className="m-0 text-sm font-semibold text-(--brand)">Bundle Request</p>
-              <h3 className="m-0 pt-2 text-2xl font-extrabold sm:text-[28px]">{activeRequest.bundle}</h3>
-              <p className="m-0 pt-2 text-sm text-(--text-soft)">Affordable and efficient solutions tailored to the customer’s needs.</p>
+              <p className="m-0 text-sm font-semibold text-(--brand)">Package Request</p>
+              <h3 className="m-0 pt-2 text-2xl font-extrabold sm:text-[28px]">{activeRequest.bundle_name}</h3>
+              <p className="m-0 pt-2 text-sm text-(--text-soft)">Review the linked order state and update the package request status or admin note.</p>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <p className="cell-subtle">Solar Financing</p>
-                <strong>{activeRequest.financing}</strong>
-              </div>
-              <div>
-                <p className="cell-subtle">Date Initiated</p>
-                <strong>{activeRequest.date}</strong>
-              </div>
-              <div>
-                <p className="cell-subtle">Location</p>
-                <strong>{activeRequest.location}</strong>
-              </div>
-            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <p className="cell-subtle">Phone</p>
-                <strong>{activeRequest.phone}</strong>
+                <p className="cell-subtle">Request ID</p>
+                <strong>{activeRequest.id}</strong>
               </div>
               <div>
-                <p className="cell-subtle">Email</p>
-                <strong>{activeRequest.email}</strong>
+                <p className="cell-subtle">Order ID</p>
+                <strong>{activeRequest.order_id}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Package ID</p>
+                <strong>{activeRequest.bundle_id}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Order Status</p>
+                <strong>{formatEnumLabel(activeRequest.order_status)}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Created</p>
+                <strong>{formatDateTimeLabel(activeRequest.created_at)}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Updated</p>
+                <strong>{formatDateTimeLabel(activeRequest.updated_at)}</strong>
               </div>
             </div>
+
             {canUpdateOrders ? (
-              <FormField label="Status">
-                <SelectField
-                  value={activeRequest.status}
-                  onChange={(value) =>
-                    setRows((current) =>
-                      current.map((row) =>
-                        row.id === activeRequest.id ? { ...row, status: value, statusTone: toneFromStatus(value) } : row,
-                      ),
-                    )
-                  }
-                  options={["Processing", "System Installed", "Installer in-transit", "Closed", "Packed"]}
-                />
-              </FormField>
-            ) : null}
-          </div>
+              <>
+                <FormField label="Status">
+                  <SelectField value={detailStatus} onChange={setDetailStatus} options={detailStatusOptions} />
+                </FormField>
+
+                <FormField label="Admin Note">
+                  <TextAreaField value={detailAdminNote} onChange={setDetailAdminNote} placeholder="Enter an internal note for this request." rows={5} />
+                </FormField>
+              </>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="cell-subtle">Status</p>
+                  <strong>{formatEnumLabel(activeRequest.status)}</strong>
+                </div>
+                <div>
+                  <p className="cell-subtle">Admin Note</p>
+                  <strong>{activeRequest.admin_note || "N/A"}</strong>
+                </div>
+              </div>
+            )}
+          </form>
         ) : null}
       </Modal>
     </>
