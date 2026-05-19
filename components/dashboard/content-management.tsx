@@ -7,11 +7,13 @@ import { ErrorMessage } from "@/components/dashboard/error-message";
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
 import { ActionLink, DirectoryToolbar, TagList } from "@/components/dashboard/management-primitives";
 import { FormField, ImageSelectField, Modal } from "@/components/dashboard/modals";
+import { normalizeRichTextHtml, RichTextContent, RichTextEditor } from "@/components/dashboard/rich-text";
 import {
   Button,
   MetricCardSecondary,
   Pagination,
   Panel,
+  SelectField,
   StatusPill,
   TableActionsMenu,
   Tabs,
@@ -38,7 +40,7 @@ import {
 } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { BlogPostRecord, PaginationMeta, SitePageRecord } from "@/types/api.types";
+import type { BlogPostRecord, PaginationMeta, SitePageRecord, SitePageSection } from "@/types/api.types";
 
 const statusTabs = ["All", "Published", "Draft"] as const;
 const blogFormId = "blog-post-form";
@@ -51,6 +53,22 @@ const emptyPagination: PaginationMeta = {
 };
 
 type StatusFilter = (typeof statusTabs)[number];
+type SitePageCardFormState = {
+  id: string;
+  title: string;
+  subtitle: string;
+  content: string;
+};
+
+type SitePageSectionFormState = {
+  id: string;
+  type: string;
+  title: string;
+  subtitle: string;
+  content: string;
+  isCard: boolean;
+  cards: SitePageCardFormState[];
+};
 
 function slugify(value: string) {
   return value
@@ -68,24 +86,186 @@ function matchesStatus(status: string, filter: StatusFilter) {
   return filter === "All" || statusLabel(status) === filter;
 }
 
-function parseSectionsInput(value: string) {
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return {};
-  }
-
-  const parsed = JSON.parse(trimmed) as unknown;
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Sections must be a valid JSON object.");
-  }
-
-  return parsed as Record<string, unknown>;
+function createLocalId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function stringifySections(value: Record<string, unknown> | null | undefined) {
-  return JSON.stringify(value ?? {}, null, 2);
+function createEmptyCard(): SitePageCardFormState {
+  return {
+    id: createLocalId("card"),
+    title: "",
+    subtitle: "",
+    content: "",
+  };
+}
+
+function createEmptySection(): SitePageSectionFormState {
+  return {
+    id: createLocalId("section"),
+    type: "",
+    title: "",
+    subtitle: "",
+    content: "",
+    isCard: false,
+    cards: [],
+  };
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function booleanValue(value: unknown) {
+  return typeof value === "boolean" ? value : false;
+}
+
+function normalizeCards(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((card) => {
+    if (!card || typeof card !== "object" || Array.isArray(card)) {
+      return [];
+    }
+
+    return [
+      {
+        id: createLocalId("card"),
+        title: stringValue(card.title),
+        subtitle: stringValue(card.subtitle),
+        content: stringValue(card.content),
+      },
+    ];
+  });
+}
+
+function normalizeSection(section: unknown, fallbackType = ""): SitePageSectionFormState | null {
+  if (!section || typeof section !== "object" || Array.isArray(section)) {
+    return null;
+  }
+
+  const candidate = section as Record<string, unknown>;
+  const cards = normalizeCards(candidate.cards);
+  const isCard = booleanValue(candidate.isCard) || cards.length > 0;
+
+  return {
+    id: createLocalId("section"),
+    type: stringValue(candidate.type) || fallbackType,
+    title: stringValue(candidate.title),
+    subtitle: stringValue(candidate.subtitle),
+    content: stringValue(candidate.content),
+    isCard,
+    cards,
+  };
+}
+
+function normalizeSitePageSections(value: SitePageRecord["sections"] | null | undefined) {
+  if (Array.isArray(value)) {
+    const sections = value.flatMap((section) => {
+      const normalized = normalizeSection(section);
+      return normalized ? [normalized] : [];
+    });
+
+    return sections.length ? sections : [createEmptySection()];
+  }
+
+  if (value && typeof value === "object") {
+    const sections = Object.entries(value).flatMap(([key, section]) => {
+      const normalized = normalizeSection(section, key);
+      return normalized ? [normalized] : [];
+    });
+
+    return sections.length ? sections : [createEmptySection()];
+  }
+
+  return [createEmptySection()];
+}
+
+function buildSitePageSectionsPayload(sections: SitePageSectionFormState[]): SitePageSection[] {
+  return sections.flatMap((section, index) => {
+    const type = section.type.trim();
+    const title = section.title.trim();
+    const subtitle = section.subtitle.trim();
+    const content = section.content.trim();
+    const cards = section.isCard
+      ? section.cards.flatMap((card) => {
+          const cardTitle = card.title.trim();
+          const cardSubtitle = card.subtitle.trim();
+          const cardContent = card.content.trim();
+
+          if (!cardTitle && !cardSubtitle && !cardContent) {
+            return [];
+          }
+
+          return [
+            {
+              ...(cardTitle ? { title: cardTitle } : {}),
+              ...(cardSubtitle ? { subtitle: cardSubtitle } : {}),
+              ...(cardContent ? { content: cardContent } : {}),
+            },
+          ];
+        })
+      : [];
+
+    if (!type && !title && !subtitle && !content && !cards.length) {
+      return [];
+    }
+
+    return [
+      {
+        type: type || `section-${index + 1}`,
+        ...(title ? { title } : {}),
+        ...(subtitle ? { subtitle } : {}),
+        ...(content ? { content } : {}),
+        ...(cards.length ? { cards } : {}),
+      },
+    ];
+  });
+}
+
+function countSitePageSections(value: SitePageRecord["sections"] | null | undefined) {
+  if (Array.isArray(value)) {
+    return value.length;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.keys(value).length;
+  }
+
+  return 0;
+}
+
+function calculateSeoScore({
+  title,
+  description,
+  keywords,
+  sectionCount,
+}: {
+  title: string;
+  description: string;
+  keywords: string;
+  sectionCount: number;
+}) {
+  let score = 0;
+
+  if (title.trim().length >= 20) {
+    score += 30;
+  }
+
+  if (description.trim().length >= 50) {
+    score += 30;
+  }
+
+  if (keywords.trim()) {
+    score += 20;
+  }
+
+  if (sectionCount > 0) {
+    score += 20;
+  }
+
+  return Math.min(score, 100);
 }
 
 function ContentMetricsStrip({ metrics }: { metrics: Array<{ title: string; value: string; subtitle?: string; icon: "products" | "verification" | "bundles" | "calendar"; spark: number[] }> }) {
@@ -326,7 +506,7 @@ export function BlogManagementScreen() {
             <TagList items={[preview.category, statusLabel(preview.status), `${preview.read_time_minutes} min read`]} />
             <h2>{preview.title}</h2>
             <p>{preview.summary}</p>
-            <pre className="whitespace-pre-wrap text-sm text-[var(--text-soft)]">{preview.body}</pre>
+            <RichTextContent value={preview.body} />
             <div className="form-submitter is-between">
               <Button variant="secondary" onClick={() => setPreview(null)}>
                 Close
@@ -387,7 +567,7 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
         setCategory(post.category);
         setImageUrl(post.image_url);
         setImageFile(null);
-        setBody(post.body);
+        setBody(normalizeRichTextHtml(post.body));
         setSeoTitle(post.seo_title);
         setSeoDescription(post.meta_description);
         setReadTimeMinutes(String(post.read_time_minutes));
@@ -423,7 +603,7 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
         slug: slugify(slugValue || title),
         title,
         summary,
-        body,
+        body: normalizeRichTextHtml(body),
         category,
         status: intent === "draft" ? "draft" : "published",
         seo_title: seoTitle || title,
@@ -523,16 +703,16 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
             <section className="detail-panel">
               <div className="detail-panel__header">
                 <h3>Post Content / Body</h3>
-                <p>Compose and format the article body.</p>
+                <p>Compose and format the article body with rich text tools.</p>
               </div>
-              <div className="rich-editor-shell">
-                <div className="rich-editor-toolbar">
-                  <span>Markdown / Rich Text</span>
-                  <button type="button" onClick={() => setBody("")}>
+              <div className="detail-panel__stack">
+                <div className="section-builder__header">
+                  <p>Use headings, emphasis, lists, quotes, and links. The saved body is stored as sanitized HTML.</p>
+                  <Button variant="secondary" size="sm" onClick={() => setBody("")}>
                     Clear
-                  </button>
+                  </Button>
                 </div>
-                <TextAreaField value={body} onChange={setBody} rows={18} placeholder="Write the full blog body here..." />
+                <RichTextEditor value={body} onChange={setBody} placeholder="Write the full blog body here..." />
               </div>
             </section>
             <section className="detail-panel">
@@ -709,9 +889,9 @@ export function SitePagesManagementScreen() {
                 <strong>{record.title}</strong>
                 <span>/{record.slug}</span>
               </div>
-              <span>{record.page_type}</span>
+              <span>{formatEnumLabel(record.page_type)}</span>
               <span className="seo-score">{record.seo_score}%</span>
-              <span>{Object.keys(record.sections ?? {}).length}</span>
+              <span>{countSitePageSections(record.sections)}</span>
               <span>{formatDateLabel(record.updated_at)}</span>
               <StatusPill label={statusLabel(record.status)} tone={toneFromStatus(record.status)} />
               <div className="content-actions">
@@ -752,15 +932,25 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
   const [pageId, setPageId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [slugValue, setSlugValue] = useState("");
-  const [pageType, setPageType] = useState("");
+  const [pageType, setPageType] = useState("content");
   const [seoTitle, setSeoTitle] = useState("");
   const [metaDescription, setMetaDescription] = useState("");
   const [keywords, setKeywords] = useState("");
-  const [seoScore, setSeoScore] = useState("0");
-  const [sections, setSections] = useState("{\n  \"hero\": {},\n  \"faq\": {}\n}");
+  const [sections, setSections] = useState<SitePageSectionFormState[]>([createEmptySection()]);
   const [isLoading, setIsLoading] = useState(Boolean(slug));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const preparedSections = useMemo(() => buildSitePageSectionsPayload(sections), [sections]);
+  const computedSeoScore = useMemo(
+    () =>
+      calculateSeoScore({
+        title: seoTitle || title,
+        description: metaDescription,
+        keywords,
+        sectionCount: preparedSections.length,
+      }),
+    [keywords, metaDescription, preparedSections.length, seoTitle, title],
+  );
 
   useEffect(() => {
     if (!slug) {
@@ -787,8 +977,7 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
         setSeoTitle(pageRecord.seo_title);
         setMetaDescription(pageRecord.meta_description);
         setKeywords(pageRecord.keywords);
-        setSeoScore(String(pageRecord.seo_score));
-        setSections(stringifySections(pageRecord.sections));
+        setSections(normalizeSitePageSections(pageRecord.sections));
       })
       .catch((loadError) => {
         if (!cancelled) {
@@ -806,6 +995,74 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
     };
   }, [slug]);
 
+  function addSection() {
+    setSections((current) => [...current, createEmptySection()]);
+  }
+
+  function updateSection(sectionId: string, patch: Partial<Omit<SitePageSectionFormState, "id" | "cards">>) {
+    setSections((current) => current.map((section) => (section.id === sectionId ? { ...section, ...patch } : section)));
+  }
+
+  function removeSection(sectionId: string) {
+    setSections((current) => current.filter((section) => section.id !== sectionId));
+  }
+
+  function toggleSectionCards(sectionId: string, enabled: boolean) {
+    setSections((current) =>
+      current.map((section) => {
+        if (section.id !== sectionId) {
+          return section;
+        }
+
+        return {
+          ...section,
+          isCard: enabled,
+          cards: enabled ? (section.cards.length ? section.cards : [createEmptyCard()]) : [],
+        };
+      }),
+    );
+  }
+
+  function addCard(sectionId: string) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? {
+              ...section,
+              isCard: true,
+              cards: [...section.cards, createEmptyCard()],
+            }
+          : section,
+      ),
+    );
+  }
+
+  function updateCard(sectionId: string, cardId: string, patch: Partial<Omit<SitePageCardFormState, "id">>) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? {
+              ...section,
+              cards: section.cards.map((card) => (card.id === cardId ? { ...card, ...patch } : card)),
+            }
+          : section,
+      ),
+    );
+  }
+
+  function removeCard(sectionId: string, cardId: string) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? {
+              ...section,
+              cards: section.cards.filter((card) => card.id !== cardId),
+            }
+          : section,
+      ),
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -813,15 +1070,31 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
       setIsSubmitting(true);
 
       const intent = getFormSubmitIntent(event, "publish");
+      const invalidCardSectionIndex = sections.findIndex(
+        (section) =>
+          section.isCard &&
+          !section.cards.some((card) => card.title.trim() || card.subtitle.trim() || card.content.trim()),
+      );
+
+      if (invalidCardSectionIndex >= 0) {
+        throw new Error(`Add at least one completed card to section ${invalidCardSectionIndex + 1}.`);
+      }
+
+      const structuredSections = preparedSections;
+
+      if (!structuredSections.length) {
+        throw new Error("Add at least one section before saving this page.");
+      }
+
       const payload = {
         slug: slugify(slugValue || title),
         title,
-        page_type: pageType,
+        page_type: pageType.trim() || "content",
         seo_title: seoTitle || title,
         meta_description: metaDescription,
         keywords,
-        sections: parseSectionsInput(sections),
-        seo_score: Number(seoScore) || 0,
+        sections: structuredSections,
+        seo_score: computedSeoScore,
         status: intent === "draft" ? "draft" : "published",
       };
 
@@ -855,9 +1128,9 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
       <ContentMetricsStrip
         metrics={[
           { title: "Workflow", value: pageId ? "Editing" : "New Draft", icon: "products", spark: [12, 16, 22, 30, 34, 40] },
-          { title: "SEO Score", value: `${seoScore || 0}%`, icon: "verification", spark: [10, 14, 18, 24, 28, 34] },
+          { title: "SEO Score", value: `${computedSeoScore}%`, icon: "verification", spark: [10, 14, 18, 24, 28, 34] },
           { title: "Slug", value: slugify(slugValue || title) || "pending", icon: "calendar", spark: [18, 20, 22, 26, 30, 34] },
-          { title: "Sections", value: `${Object.keys(parseSectionsInputSafe(sections)).length}`, icon: "bundles", spark: [16, 18, 24, 28, 34, 40] },
+          { title: "Sections", value: `${preparedSections.length}`, icon: "bundles", spark: [16, 18, 24, 28, 34, 40] },
         ]}
       />
       <Panel className="product-form-shell">
@@ -890,12 +1163,131 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
                 <FormField label="Slug">
                   <TextField value={slugValue} onChange={(event) => setSlugValue(event.target.value)} placeholder="home" />
                 </FormField>
-                <FormField label="Page Type">
-                  <TextField value={pageType} onChange={(event) => setPageType(event.target.value)} placeholder="Main Page" />
+                <FormField label="Page Type" hint="Use values like content, landing, legal, or support.">
+                  <TextField value={pageType} onChange={(event) => setPageType(event.target.value)} placeholder="content" />
                 </FormField>
-                <FormField label="SEO Score">
-                  <TextField value={seoScore} onChange={(event) => setSeoScore(event.target.value)} placeholder="0" />
-                </FormField>
+                <div className="summary-card">
+                  <div className="summary-card__top">
+                    <span>Route preview</span>
+                    <strong>/{slugify(slugValue || title) || "pending"}</strong>
+                  </div>
+                  <div className="summary-card__items">
+                    <div className="summary-item">
+                      <span>Page status</span>
+                      <strong>{pageId ? "Editing" : "New Draft"}</strong>
+                    </div>
+                    <div className="summary-item">
+                      <span>Sections</span>
+                      <strong>{preparedSections.length}</strong>
+                    </div>
+                    <div className="summary-item">
+                      <span>SEO score</span>
+                      <strong>{computedSeoScore}%</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className="detail-panel">
+              <div className="detail-panel__header">
+                <h3>Page Sections</h3>
+                <p>Build the exact ordered sections array the API expects without asking writers to touch JSON.</p>
+              </div>
+              <div className="detail-panel__stack">
+                <div className="section-builder__header">
+                  <p>Common types include `hero`, `content`, `features`, `faq`, `cta`, and `contact_form`.</p>
+                  <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={addSection}>
+                    Add Section
+                  </Button>
+                </div>
+
+                {sections.length ? (
+                  <div className="section-builder">
+                    {sections.map((section, index) => (
+                      <article key={section.id} className="section-builder__item">
+                        <div className="section-builder__item-head">
+                          <div>
+                            <strong>Section {index + 1}</strong>
+                            <span>{section.type.trim() || "No type selected yet"}</span>
+                          </div>
+                          <Button variant="danger" size="sm" onClick={() => removeSection(section.id)}>
+                            Remove
+                          </Button>
+                        </div>
+
+                        <div className="detail-panel__stack">
+                          <FormField label="Section Type" hint="Example: hero or contact_form">
+                            <TextField value={section.type} onChange={(event) => updateSection(section.id, { type: event.target.value })} placeholder="hero" />
+                          </FormField>
+                          <FormField label="Section Title">
+                            <TextField value={section.title} onChange={(event) => updateSection(section.id, { title: event.target.value })} placeholder="Get in Touch" />
+                          </FormField>
+                          <FormField label="Section Subtitle">
+                            <TextField value={section.subtitle} onChange={(event) => updateSection(section.id, { subtitle: event.target.value })} placeholder="We are here to help." />
+                          </FormField>
+                          <FormField label="Section Content">
+                            <TextAreaField value={section.content} onChange={(value) => updateSection(section.id, { content: value })} placeholder="Optional body copy for this section." rows={4} />
+                          </FormField>
+                          <FormField label="Card Layout">
+                            <SelectField
+                              value={section.isCard ? "yes" : "no"}
+                              onChange={(value) => toggleSectionCards(section.id, value === "yes")}
+                              options={[
+                                { label: "No", value: "no" },
+                                { label: "Yes", value: "yes" },
+                              ]}
+                            />
+                          </FormField>
+
+                          {section.isCard ? (
+                            <div className="card-builder">
+                              <div className="card-builder__header">
+                                <strong>Cards ({section.cards.length})</strong>
+                                <Button variant="secondary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => addCard(section.id)}>
+                                  Add Card
+                                </Button>
+                              </div>
+                              {section.cards.length ? (
+                                <div className="card-builder__list">
+                                  {section.cards.map((card, cardIndex) => (
+                                    <div key={card.id} className="card-builder__item">
+                                      <div className="card-builder__item-head">
+                                        <div>
+                                          <strong>Card {cardIndex + 1}</strong>
+                                          <span>Use this for repeating highlight or info blocks.</span>
+                                        </div>
+                                        <Button variant="danger" size="sm" onClick={() => removeCard(section.id, card.id)}>
+                                          Remove
+                                        </Button>
+                                      </div>
+                                      <FormField label="Card Title">
+                                        <TextField value={card.title} onChange={(event) => updateCard(section.id, card.id, { title: event.target.value })} placeholder="Support line" />
+                                      </FormField>
+                                      <FormField label="Card Subtitle">
+                                        <TextField value={card.subtitle} onChange={(event) => updateCard(section.id, card.id, { subtitle: event.target.value })} placeholder="Fast response time" />
+                                      </FormField>
+                                      <FormField label="Card Content">
+                                        <TextAreaField value={card.content} onChange={(value) => updateCard(section.id, card.id, { content: value })} placeholder="Write the card copy here." rows={4} />
+                                      </FormField>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="upload-showcase-empty">
+                                  <p>This section is marked as a card layout. Add at least one card.</p>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="upload-showcase-empty">
+                    <p>Add your first section to begin building the page structure.</p>
+                  </div>
+                )}
               </div>
             </section>
             <section className="detail-panel">
@@ -913,26 +1305,31 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
                 <FormField label="Keywords">
                   <TextField value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="solar panels, solar installation, inverter, Nigeria" />
                 </FormField>
+                <div className="summary-card">
+                  <div className="summary-card__top">
+                    <span>Submission preview</span>
+                    <strong>{pageType.trim() || "content"}</strong>
+                  </div>
+                  <div className="summary-card__items">
+                    <div className="summary-item">
+                      <span>Status</span>
+                      <strong>{isSubmitting ? "Saving" : "Ready"}</strong>
+                    </div>
+                    <div className="summary-item">
+                      <span>Sections ready</span>
+                      <strong>{preparedSections.length}</strong>
+                    </div>
+                    <div className="summary-item">
+                      <span>SEO description</span>
+                      <strong>{metaDescription.trim() ? "Added" : "Missing"}</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </section>
-            <section className="detail-panel">
-              <div className="detail-panel__header">
-                <h3>Page Sections</h3>
-                <p>Store the sections payload as JSON.</p>
-              </div>
-              <TextAreaField value={sections} onChange={setSections} rows={12} />
             </section>
           </div>
         </form>
       </Panel>
     </div>
   );
-}
-
-function parseSectionsInputSafe(value: string) {
-  try {
-    return parseSectionsInput(value);
-  } catch {
-    return {};
-  }
 }

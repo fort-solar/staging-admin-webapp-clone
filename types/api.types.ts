@@ -877,6 +877,22 @@ export type CreateBlogPostRequest = {
 };
 export type UpdateBlogPostRequest = Partial<CreateBlogPostRequest & { views: number }>;
 
+export type SitePageSectionCard = {
+  title?: string;
+  subtitle?: string;
+  content?: string;
+  [key: string]: unknown;
+};
+
+export type SitePageSection = {
+  type: string;
+  title?: string;
+  subtitle?: string;
+  content?: string;
+  cards?: SitePageSectionCard[];
+  [key: string]: unknown;
+};
+
 export type SitePageRecord = {
   id: string;
   slug: string;
@@ -885,7 +901,7 @@ export type SitePageRecord = {
   seo_title: string;
   meta_description: string;
   keywords: string;
-  sections: Record<string, unknown>;
+  sections: SitePageSection[] | Record<string, unknown>;
   seo_score: number;
   status: string;
   created_at: string;
@@ -901,7 +917,7 @@ export type CreateSitePageRequest = {
   seo_title: string;
   meta_description: string;
   keywords: string;
-  sections: Record<string, unknown>;
+  sections: SitePageSection[];
   seo_score: number;
   status: string;
 };
