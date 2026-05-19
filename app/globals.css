@@ -3926,8 +3926,8 @@ img {
 }
 
 .rich-editor-content {
-  min-height: 420px;
-  padding: 20px;
+  min-height: 560px;
+  padding: 28px 30px 36px;
   outline: none;
   color: var(--text);
   line-height: 1.65;
@@ -4967,6 +4967,11 @@ img {
 
   .content-preview p {
     font-size: 16px;
+  }
+
+  .rich-editor-content {
+    min-height: 420px;
+    padding: 22px 20px 28px;
   }
 
   .dashboard-surface {
