@@ -3,7 +3,11 @@ import type {
   AdminDetailApiResponse,
   AdminListApiResponse,
   ApiSuccessResponse,
+  ApplianceDetailApiResponse,
+  ApplianceListApiResponse,
+  AdminActivityListApiResponse,
   BundleRequestListApiResponse,
+  CreateApplianceRequest,
   CreatePackageRequest,
   CreateProductBatteryRequest,
   CreateProductCategoryRequest,
@@ -11,6 +15,7 @@ import type {
   CreateProductPanelRequest,
   CreateAdminRequest,
   CreateBlogPostRequest,
+  CreateCustomerRequest,
   CreateOrderRequest,
   CreateNotificationRequest,
   CustomerDetailApiResponse,
@@ -48,6 +53,7 @@ import type {
   UpdateBlogPostRequest,
   UpdateBundleRequestRequest,
   UpdateAdminRequest,
+  UpdateApplianceRequest,
   UpdateNotificationRequest,
   UpdatePackageRequest,
   UpdateInstallationRequest,
@@ -80,8 +86,11 @@ type ListParams = {
   category?: string;
   search?: string;
   q?: string;
+  scope?: string;
   fields?: string | string[];
 };
+
+type MultipartCapable<TBody> = TBody | FormData;
 
 function withQuery(path: string, params: Record<string, string | number | string[] | null | undefined>) {
   const search = new URLSearchParams();
@@ -96,6 +105,39 @@ function withQuery(path: string, params: Record<string, string | number | string
 
   const query = search.toString();
   return query ? `${path}?${query}` : path;
+}
+
+function appendFormDataValue(formData: FormData, key: string, value: unknown) {
+  if (value === null || value === undefined) {
+    return;
+  }
+
+  if (value instanceof Blob) {
+    formData.append(key, value);
+    return;
+  }
+
+  if (value instanceof Date) {
+    formData.append(key, value.toISOString());
+    return;
+  }
+
+  if (Array.isArray(value) || (typeof value === "object" && value)) {
+    formData.append(key, JSON.stringify(value));
+    return;
+  }
+
+  formData.append(key, String(value));
+}
+
+export function buildMultipartFormData(payload: Record<string, unknown>) {
+  const formData = new FormData();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    appendFormDataValue(formData, key, value);
+  });
+
+  return formData;
 }
 
 async function requestWithEndpointFallback<TResponse>(
@@ -139,6 +181,21 @@ export function formatEnumLabel(value: string | null | undefined, fallback = "Un
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+export function normalizeManagedUserStatus(status: string | null | undefined) {
+  const normalized = status?.trim().toLowerCase() ?? "";
+
+  if (normalized === "inactive" || normalized === "deactivated" || normalized === "disactivated") {
+    return "deactivated";
+  }
+
+  return normalized;
+}
+
+export function formatManagedUserStatusLabel(status: string | null | undefined, fallback = "Unknown") {
+  const normalized = normalizeManagedUserStatus(status);
+  return normalized ? formatEnumLabel(normalized, fallback) : fallback;
 }
 
 export function formatDateLabel(value: string | null | undefined) {
@@ -208,6 +265,10 @@ export function getCustomer(id: string) {
   return dashboardGet<CustomerDetailApiResponse>(`/api/v1/admin/customers/${id}`);
 }
 
+export function createCustomer(body: CreateCustomerRequest) {
+  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/customers/", body, { method: "POST" });
+}
+
 export function updateCustomer(id: string, body: Partial<UpdateCustomerRequest>) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/customers/${id}`, body, { method: "PATCH" });
 }
@@ -267,7 +328,7 @@ export function getProductPanel(id: string) {
   return dashboardGet<ProductPanelDetailApiResponse>(`/api/v1/admin/products/panels/${id}`);
 }
 
-export function createProductPanel(body: CreateProductPanelRequest) {
+export function createProductPanel(body: MultipartCapable<CreateProductPanelRequest>) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/panels", body, { method: "POST" });
 }
 
@@ -300,7 +361,7 @@ export function getProductInverterBySlug(slug: string) {
   return dashboardGet<ProductInverterDetailApiResponse>(`/api/v1/admin/products/inverters/slug/${slug}`);
 }
 
-export function createProductInverter(body: CreateProductInverterRequest) {
+export function createProductInverter(body: MultipartCapable<CreateProductInverterRequest>) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/inverters", body, { method: "POST" });
 }
 
@@ -333,7 +394,7 @@ export function getProductBatteryBySlug(slug: string) {
   return dashboardGet<ProductBatteryDetailApiResponse>(`/api/v1/admin/products/batteries/slug/${slug}`);
 }
 
-export function createProductBattery(body: CreateProductBatteryRequest) {
+export function createProductBattery(body: MultipartCapable<CreateProductBatteryRequest>) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/batteries", body, { method: "POST" });
 }
 
@@ -362,11 +423,11 @@ export function getProductCategory(id: string) {
   return dashboardGet<ProductCategoryDetailApiResponse>(`/api/v1/admin/product-categories/${id}`);
 }
 
-export function createProductCategory(body: CreateProductCategoryRequest) {
+export function createProductCategory(body: MultipartCapable<CreateProductCategoryRequest>) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/product-categories", body, { method: "POST" });
 }
 
-export function updateProductCategory(id: string, body: UpdateProductCategoryRequest) {
+export function updateProductCategory(id: string, body: MultipartCapable<UpdateProductCategoryRequest>) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/product-categories/${id}`, body, { method: "PATCH" });
 }
 
@@ -460,7 +521,7 @@ export async function getPackageBySlug(slug: string) {
   return payload.data.find((pkg) => pkg.slug.trim().toLowerCase() === normalizedSlug) ?? null;
 }
 
-export function createPackage(body: CreatePackageRequest) {
+export function createPackage(body: MultipartCapable<CreatePackageRequest>) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/packages/", body, { method: "POST" });
 }
 
@@ -600,6 +661,40 @@ export function deleteNotification(id: string) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/notifications/${id}`, null, { method: "DELETE" });
 }
 
+export function getAdminActivity(params: ListParams & { scope?: "all" | "me" } = {}) {
+  return dashboardGet<AdminActivityListApiResponse>(
+    withQuery("/api/v1/admin/activity/", {
+      page: params.page ?? 1,
+      limit: params.limit ?? DEFAULT_PAGE_SIZE,
+      scope: params.scope ?? "all",
+      category: params.category,
+      search: params.search,
+      q: params.q,
+      fields: params.fields,
+    }),
+  );
+}
+
+export function getAppliances() {
+  return dashboardGet<ApplianceListApiResponse>("/api/v1/admin/appliances/");
+}
+
+export function getAppliance(id: string) {
+  return dashboardGet<ApplianceDetailApiResponse>(`/api/v1/admin/appliances/${id}`);
+}
+
+export function createAppliance(body: CreateApplianceRequest) {
+  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/appliances/", body, { method: "POST" });
+}
+
+export function updateAppliance(id: string, body: UpdateApplianceRequest) {
+  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/appliances/${id}`, body, { method: "PATCH" });
+}
+
+export function deleteAppliance(id: string) {
+  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/appliances/${id}`, null, { method: "DELETE" });
+}
+
 export function getBlogPosts(params: ListParams = {}) {
   return dashboardGet<BlogListApiResponse>(
     withQuery("/api/v1/admin/blog/", {
@@ -645,11 +740,11 @@ export async function getBlogPostBySlug(slug: string) {
   return payload.data.find((post) => post.slug.trim().toLowerCase() === normalizedSlug) ?? null;
 }
 
-export function createBlogPost(body: CreateBlogPostRequest) {
+export function createBlogPost(body: MultipartCapable<CreateBlogPostRequest>) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/blog/", body, { method: "POST" });
 }
 
-export function updateBlogPost(id: string, body: UpdateBlogPostRequest) {
+export function updateBlogPost(id: string, body: MultipartCapable<UpdateBlogPostRequest>) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/blog/${id}`, body, { method: "PATCH" });
 }
 

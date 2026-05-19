@@ -193,6 +193,13 @@ export type DashboardRevenueByPeriod = {
 export type CustomerRecord = ManagedUserRecord;
 export type CustomerListApiResponse = ApiCollectionResponse<CustomerRecord>;
 export type CustomerDetailApiResponse = ApiDataResponse<CustomerRecord>;
+export type CreateCustomerRequest = {
+  email: string;
+  password: string;
+  name: string;
+  phone: string;
+  address: string;
+};
 export type UpdateCustomerRequest = {
   name: string;
   phone: string;
@@ -763,6 +770,80 @@ export type UpdateNotificationRequest = Partial<{
   metadata: Record<string, unknown>;
 }>;
 
+export type AdminActivityRecord = Record<string, unknown> & {
+  id?: string;
+  action?: string;
+  event?: string;
+  activity?: string;
+  type?: string;
+  kind?: string;
+  title?: string;
+  message?: string;
+  description?: string;
+  summary?: string;
+  status?: string;
+  result?: string;
+  outcome?: string;
+  created_at?: string;
+  updated_at?: string;
+  timestamp?: string;
+  occurred_at?: string;
+  admin_name?: string;
+  admin_email?: string;
+  user_name?: string;
+  user_email?: string;
+  actor_name?: string;
+  actor_email?: string;
+  target_name?: string;
+  target_id?: string;
+  entity?: string;
+  entity_type?: string;
+  resource?: string;
+  module?: string;
+};
+
+export type AdminActivityListApiResponse = ApiCollectionResponse<AdminActivityRecord>;
+
+export type ApplianceCatalogRecord = {
+  id: string;
+  name: string;
+  category: string;
+  power_rating_watts: number;
+  daily_hours_usage: number;
+  monthly_kwh: number;
+  description: string | null;
+  icon: string | null;
+  is_active: boolean;
+  catalog_key: string | null;
+  surge_multiplier: number;
+  is_inductive: boolean;
+  search_aliases: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApplianceListApiResponse = ApiSuccessResponse & {
+  data: ApplianceCatalogRecord[];
+};
+
+export type ApplianceDetailApiResponse = ApiDataResponse<ApplianceCatalogRecord>;
+
+export type CreateApplianceRequest = {
+  name: string;
+  category: string;
+  power_rating_watts: number;
+  daily_hours_usage: number;
+  description: string;
+  icon: string;
+  catalog_key: string;
+  surge_multiplier: number;
+  is_inductive: boolean;
+  search_aliases: string[];
+  is_active: boolean;
+};
+
+export type UpdateApplianceRequest = Partial<CreateApplianceRequest>;
+
 export type BlogPostRecord = {
   id: string;
   slug: string;
@@ -829,6 +910,7 @@ export type UpdateSitePageRequest = Partial<CreateSitePageRequest>;
 export type SocketSessionApiResponse = ApiDataResponse<{
   accessToken: string;
   socketUrl: string;
+  socketPath: string;
   eventNames: string[];
 }>;
 

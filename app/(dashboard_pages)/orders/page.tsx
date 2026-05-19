@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAccessControl } from "@/components/auth/use-access-control";
+import { CreateCustomerModal } from "@/components/dashboard/create-customer-modal";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { EyeIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
 import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextArea, ModalTextInput } from "@/components/dashboard/modals";
@@ -12,7 +13,7 @@ import { isDashboardSessionExpiredError } from "@/lib/api/client";
 import { createOrder, DEFAULT_PAGE_SIZE, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getCustomers, getDashboardOverview, getOrders, getPackages, getProductPanels } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { CustomerRecord, DashboardOverview, OrderRecord, PackageRecord, PaginationMeta, ProductPanelRecord } from "@/types/api.types";
+import type { CreateCustomerRequest, CustomerRecord, DashboardOverview, OrderRecord, PackageRecord, PaginationMeta, ProductPanelRecord } from "@/types/api.types";
 
 const orderFormId = "order-create-form";
 const orderStatusOptions = ["pending", "processing", "completed", "cancelled"];
@@ -90,6 +91,7 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [openModal, setOpenModal] = useState(false);
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +110,7 @@ export default function OrdersPage() {
   const [productPanelErrors, setProductPanelErrors] = useState<Record<string, string | null>>({});
   const deferredQuery = useDeferredValue(query);
   const deferredCustomerQuery = useDeferredValue(customerQuery);
+  const canCreateCustomers = can("customers", "create");
   const canCreateOrders = can("orders", "create");
 
   useEffect(() => {
@@ -258,7 +261,7 @@ export default function OrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [openModal, productLookupSignature]);
+  }, [form.items, openModal, productLookupSignature]);
 
   useEffect(() => {
     if (!openModal) {
@@ -320,7 +323,7 @@ export default function OrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [openModal, productLookupSignature]);
+  }, [form.items, openModal, productLookupSignature]);
 
   const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((order) => formatEnumLabel(order.status))))], [rows]);
 
@@ -370,6 +373,7 @@ export default function OrdersPage() {
 
   function resetCreateOrderForm() {
     setForm(createInitialOrderForm());
+    setCreateCustomerOpen(false);
     setCustomerQuery("");
     setCustomerResults([]);
     setSelectedCustomer(null);
@@ -392,11 +396,13 @@ export default function OrdersPage() {
       return;
     }
 
+    setCreateCustomerOpen(false);
     setOpenModal(false);
     resetCreateOrderForm();
   }
 
   function completeCreateOrderModal() {
+    setCreateCustomerOpen(false);
     setOpenModal(false);
     resetCreateOrderForm();
   }
@@ -404,6 +410,47 @@ export default function OrdersPage() {
   function handleCustomerSelect(customerId: string) {
     setForm((current) => ({ ...current, customer_user_id: customerId }));
     setSelectedCustomer(customerResults.find((customer) => customer.id === customerId) ?? selectedCustomer);
+  }
+
+  async function handleCustomerCreated(createdCustomer: CreateCustomerRequest) {
+    const searchTerm = createdCustomer.email.trim() || createdCustomer.name.trim();
+
+    setCustomerQuery(searchTerm);
+    setIsCustomerLoading(true);
+    setCustomerSearchError(null);
+
+    try {
+      const payload = await getCustomers({
+        page: 1,
+        limit: 10,
+        search: searchTerm || undefined,
+        q: searchTerm || undefined,
+        fields: ["id", "name", "fullName", "email"],
+      });
+
+      setCustomerResults(payload.data);
+
+      const normalizedEmail = createdCustomer.email.trim().toLowerCase();
+      const normalizedName = createdCustomer.name.trim().toLowerCase();
+      const matchedCustomer =
+        payload.data.find((customer) => customer.email.trim().toLowerCase() === normalizedEmail) ??
+        payload.data.find((customer) => (customer.fullName || customer.name).trim().toLowerCase() === normalizedName) ??
+        payload.data[0] ??
+        null;
+
+      if (matchedCustomer) {
+        setSelectedCustomer(matchedCustomer);
+        setForm((current) => ({ ...current, customer_user_id: matchedCustomer.id }));
+      }
+    } catch (loadError) {
+      if (isDashboardSessionExpiredError(loadError)) {
+        return;
+      }
+
+      setCustomerSearchError(getErrorMessage(loadError, "The new customer was created, but the refreshed search could not be loaded."));
+    } finally {
+      setIsCustomerLoading(false);
+    }
   }
 
   function handleItemChange(key: string, field: keyof Omit<OrderFormItem, "key">, value: string) {
@@ -631,12 +678,24 @@ export default function OrdersPage() {
                 isCustomerLoading
                   ? "Loading matching customers..."
                   : !customerSelectOptions.length
-                    ? "No matching customers found."
+                    ? canCreateCustomers
+                      ? "No matching customers found. Create one to continue."
+                      : "No matching customers found."
                     : "Select the customer to attach to this order."
               }
             >
               <ModalSelect value={form.customer_user_id} onChange={handleCustomerSelect} options={customerSelectOptions} placeholder="Select a customer" required />
             </FormField>
+            {!isCustomerLoading && !customerSelectOptions.length && canCreateCustomers ? (
+              <div className="rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 py-4 text-sm text-[var(--text-soft)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span>No customer matched this search. Create the customer now and continue with this order.</span>
+                  <Button variant="secondary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={() => setCreateCustomerOpen(true)}>
+                    Create Customer
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {selectedCustomer ? (
               <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
                 Selected customer: <strong className="text-[var(--text)]">{selectedCustomer.fullName || selectedCustomer.name}</strong> - {selectedCustomer.email}
@@ -821,6 +880,14 @@ export default function OrdersPage() {
           </div>
         </form>
       </Modal>
+
+      <CreateCustomerModal
+        open={createCustomerOpen}
+        onClose={() => setCreateCustomerOpen(false)}
+        initialValues={customerQuery ? { email: customerQuery.includes("@") ? customerQuery.trim() : "", name: customerQuery.includes("@") ? "" : customerQuery.trim() } : undefined}
+        onCreated={handleCustomerCreated}
+        title="Create Customer For Order"
+      />
     </>
   );
 }

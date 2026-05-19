@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useNotifications } from "@/components/dashboard/notifications-provider";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import {
   ActivityListItem,
   Avatar,
+  Button,
   InfoRow,
   Panel,
   StatusPill,
@@ -20,12 +23,13 @@ import {
   ShieldIcon,
   UsersIcon,
 } from "@/components/dashboard/icons";
-import { formatDateLabel, formatDateTimeLabel, formatEnumLabel } from "@/lib/admin-api";
+import { normalizeAdminActivity } from "@/lib/admin-activity";
+import { formatDateLabel, formatDateTimeLabel, formatEnumLabel, formatManagedUserStatusLabel, getAdminActivity } from "@/lib/admin-api";
 import { dashboardGet, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { formatAdminRole } from "@/lib/auth/access-control";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus, type Tone } from "@/lib/dashboard-data";
-import type { AdminMeApiResponse } from "@/types/api.types";
+import type { AdminActivityRecord, AdminMeApiResponse } from "@/types/api.types";
 import type { AdminRole } from "@/types/common.types";
 
 const settingsTabs = [
@@ -153,7 +157,7 @@ function buildActivityItems({
     items.push({
       id: "created",
       title: "Account Created",
-      description: `Account status is ${formatEnumLabel(status, "unknown").toLowerCase()}.`,
+      description: `Account status is ${formatManagedUserStatusLabel(status, "unknown").toLowerCase()}.`,
       meta: formatDateLabel(createdAt),
       tone: toneFromStatus(status ?? "unknown"),
     });
@@ -164,10 +168,22 @@ function buildActivityItems({
 
 export default function SettingsPage() {
   const { session } = useAuth();
+  const {
+    notifications,
+    markRead,
+    browserNotificationStatus,
+    isPermissionSubmitting,
+    openBrowserNotificationsPrompt,
+    refreshBrowserNotificationStatus,
+    requestBrowserNotifications,
+  } = useNotifications();
   const [activeTab, setActiveTab] = useState<SettingsTab>("Personal Information");
   const [profile, setProfile] = useState<AdminMeApiResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activityRows, setActivityRows] = useState<AdminActivityRecord[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [browserTimeZone, setBrowserTimeZone] = useState("Detecting browser timezone...");
   const [appearance, setAppearance] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") {
@@ -226,6 +242,37 @@ export default function SettingsPage() {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    getAdminActivity({ scope: "me", page: 1, limit: 8 })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setActivityRows(payload.data);
+        setActivityError(null);
+      })
+      .catch((loadError) => {
+        if (cancelled || isDashboardSessionExpiredError(loadError)) {
+          return;
+        }
+
+        setActivityRows([]);
+        setActivityError(getErrorMessage(loadError, "Personal activity history could not be loaded."));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setActivityLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function applyAppearance(next: "light" | "dark") {
     setAppearance(next);
     window.localStorage.setItem("fortsolar:appearance", next);
@@ -245,7 +292,7 @@ export default function SettingsPage() {
   const phone = formatTextValue(account?.phone);
   const address = formatTextValue(account?.address);
   const statusValue = account?.status ?? session?.user.status ?? null;
-  const statusLabel = formatEnumLabel(statusValue, "Unknown");
+  const statusLabel = formatManagedUserStatusLabel(statusValue, "Unknown");
   const adminRoleValue = account?.adminRole ?? session?.user.adminRole ?? accountSession?.adminRole ?? null;
   const adminRoleLabel = formatAdminRoleValue(adminRoleValue);
   const platformRoleLabel = formatEnumLabel(account?.role ?? session?.user.role, "Unknown");
@@ -268,6 +315,66 @@ export default function SettingsPage() {
     permissions,
     status: statusValue,
   });
+  const personalActivityFeed = activityRows.map(normalizeAdminActivity);
+  const unreadNotificationCount = notifications.filter((item) => !item.is_read).length;
+  const browserPermissionLabel =
+    browserNotificationStatus.permission === "granted"
+      ? "Allowed"
+      : browserNotificationStatus.permission === "denied"
+        ? "Blocked"
+        : browserNotificationStatus.permission === "default"
+          ? "Not requested"
+          : browserNotificationStatus.permission === "unsupported"
+            ? "Unsupported"
+            : "Checking";
+  const browserPermissionTone: Tone =
+    browserNotificationStatus.permission === "granted"
+      ? "success"
+      : browserNotificationStatus.permission === "denied"
+        ? "danger"
+        : browserNotificationStatus.permission === "unsupported"
+          ? "danger"
+          : "warning";
+  const browserSubscriptionLabel =
+    !browserNotificationStatus.isConfigured
+      ? "Not configured"
+      : browserNotificationStatus.initState === "failed"
+        ? "Initialization failed"
+        : browserNotificationStatus.isOptedIn
+          ? "Subscribed"
+          : browserNotificationStatus.permission === "granted"
+            ? "Pending registration"
+            : "Not subscribed";
+  const browserSubscriptionTone: Tone =
+    !browserNotificationStatus.isConfigured || browserNotificationStatus.initState === "failed"
+      ? "danger"
+      : browserNotificationStatus.isOptedIn
+        ? "success"
+        : browserNotificationStatus.permission === "granted"
+          ? "info"
+          : "warning";
+  const browserNotificationSummary = !browserNotificationStatus.isConfigured
+    ? "OneSignal is not configured for this environment yet."
+    : browserNotificationStatus.permission === "unsupported"
+      ? "This browser does not support web push notifications."
+      : browserNotificationStatus.initState === "failed"
+        ? "OneSignal could not initialize on this origin. Check the active app ID and site URL for this environment."
+        : browserNotificationStatus.permission === "denied"
+          ? "Notifications were blocked in this browser. Retrying from here will hand off to the browser settings when the native prompt can no longer re-open."
+          : browserNotificationStatus.isOptedIn
+            ? "This browser is subscribed to push notifications for the current OneSignal app."
+            : "Browser push is available, but this browser has not finished subscribing yet.";
+  const browserNotificationActionLabel =
+    browserNotificationStatus.permission === "denied"
+      ? "Open Browser Settings"
+      : browserNotificationStatus.permission === "granted"
+        ? "Retry Subscription"
+        : "Enable Browser Notifications";
+  const canManageBrowserNotifications = browserNotificationStatus.isConfigured && browserNotificationStatus.isSupported;
+  const showPrimaryBrowserNotificationAction = canManageBrowserNotifications && !browserNotificationStatus.isOptedIn;
+  const browserNotificationTriggerLabel = browserNotificationStatus.notifyButtonEnabled
+    ? "OneSignal bell enabled"
+    : "Profile retry only";
 
   return (
     <div className="dashboard-stack">
@@ -387,31 +494,162 @@ export default function SettingsPage() {
             {activeTab === "Notifications" ? (
               <div className="settings-section">
                 <div className="settings-section-heading">
-                  <h3>Notification Preferences</h3>
-                  <p>Notification-specific settings are not exposed by `/api/v1/admin/me` yet.</p>
+                  <h3>Browser Push Subscription</h3>
+                  <p>Review this browser&apos;s OneSignal subscription state and trigger setup again from here at any time.</p>
                 </div>
 
-                <div className="settings-banner">
-                  This tab is ready for backend notification fields when they are added. For now, the active contact email is shown below.
+                <div className="settings-checklist">
+                  <div className="settings-checklist__row">
+                    <div className="settings-checklist__copy">
+                      <strong>Browser Permission</strong>
+                      <span>{browserNotificationSummary}</span>
+                    </div>
+                    <StatusPill label={browserPermissionLabel} tone={browserPermissionTone} solid={false} />
+                  </div>
+                  <div className="settings-checklist__row">
+                    <div className="settings-checklist__copy">
+                      <strong>OneSignal Subscription</strong>
+                      <span>Current registration state for this browser profile and environment.</span>
+                    </div>
+                    <StatusPill label={browserSubscriptionLabel} tone={browserSubscriptionTone} solid={false} />
+                  </div>
+                  <div className="settings-checklist__row">
+                    <div className="settings-checklist__copy">
+                      <strong>Prompt Fallback</strong>
+                      <span>
+                        {browserNotificationStatus.notifyButtonEnabled
+                          ? "The OneSignal subscription bell is enabled as an extra opt-in path on this environment."
+                          : "The floating OneSignal subscription bell is disabled, so this profile section is the retry path."}
+                      </span>
+                    </div>
+                    <StatusPill label={browserNotificationTriggerLabel} tone="info" solid={false} />
+                  </div>
                 </div>
 
-                <div className="settings-summary__meta">
-                  <InfoRow icon={<MailIcon className="mini-icon" />} label="Notification Email" value={email} />
+                <div className="settings-form-grid is-single">
+                  <SettingsField label="OneSignal Subscription ID" icon={<ShieldIcon className="mini-icon" />}>
+                    <SettingsValue value={browserNotificationStatus.subscriptionId ?? "Not available yet"} />
+                  </SettingsField>
+                </div>
+
+                <div className="inline-actions justify-between">
+                  <div className="settings-summary__meta">
+                    <InfoRow icon={<MailIcon className="mini-icon" />} label="Notification Email" value={email} />
+                  </div>
+                  <div className="inline-actions">
+                    {showPrimaryBrowserNotificationAction ? (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          if (browserNotificationStatus.permission === "default") {
+                            openBrowserNotificationsPrompt();
+                            return;
+                          }
+
+                          void requestBrowserNotifications();
+                        }}
+                        disabled={isPermissionSubmitting}
+                      >
+                        {isPermissionSubmitting ? "Working..." : browserNotificationActionLabel}
+                      </Button>
+                    ) : null}
+                    <Button variant="secondary" size="sm" onClick={() => void refreshBrowserNotificationStatus()} disabled={isPermissionSubmitting}>
+                      Refresh Status
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="settings-divider" />
+
+                <div className="settings-section-heading">
+                  <h3>Profile Notifications</h3>
+                  <p>Latest admin notifications delivered to this dashboard session.</p>
+                </div>
+
+                {notifications.length ? (
+                  <div className="settings-checklist">
+                    {notifications.map((notification) => (
+                      <div className="settings-checklist__row" key={notification.id}>
+                        <div className="settings-checklist__copy">
+                          <strong>{notification.title}</strong>
+                          <span>{notification.message}</span>
+                          <span>{formatDateTimeLabel(notification.created_at)}</span>
+                        </div>
+                        <div className="inline-actions">
+                          <StatusPill label={notification.is_read ? "Read" : "Unread"} tone={notification.is_read ? "neutral" : "warning"} solid={false} />
+                          {!notification.is_read ? (
+                            <Button variant="secondary" size="sm" onClick={() => void markRead(notification.id, true)}>
+                              Mark Read
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="settings-banner">No notifications have been delivered to this profile yet.</div>
+                )}
+
+                <div className="settings-divider" />
+
+                <div className="inline-actions justify-between">
+                  <div className="inline-actions">
+                    <span className="text-sm text-[var(--text-soft)]">Unread: {unreadNotificationCount}</span>
+                    <Link href="/notifications" className="action-button is-secondary is-sm">
+                      Open Notifications
+                    </Link>
+                  </div>
                 </div>
               </div>
             ) : null}
 
             {activeTab === "Activity Log" ? (
-              <div className="settings-activity">
-                {activityItems.map((item) => (
-                  <ActivityListItem
-                    key={item.id}
-                    title={item.title}
-                    description={item.description}
-                    meta={item.meta}
-                    tone={item.tone}
-                  />
-                ))}
+              <div className="settings-section">
+                <div className="settings-section-heading">
+                  <h3>My Activity History</h3>
+                  <p>Recent audit log entries for the signed-in admin account.</p>
+                </div>
+
+                <ErrorMessage title="Activity history load failed" message={activityError} />
+
+                <div className="settings-activity">
+                  {personalActivityFeed.length
+                    ? personalActivityFeed.map((item) => (
+                        <ActivityListItem
+                          key={item.id}
+                          title={item.title}
+                          description={item.description}
+                          meta={item.meta}
+                          tone={item.tone}
+                        />
+                      ))
+                    : activityLoading
+                      ? (
+                          <div className="settings-banner">Loading your activity history...</div>
+                        )
+                      : activityError
+                        ? activityItems.map((item) => (
+                            <ActivityListItem
+                              key={item.id}
+                              title={item.title}
+                              description={item.description}
+                              meta={item.meta}
+                              tone={item.tone}
+                            />
+                          ))
+                        : (
+                            <div className="settings-banner">No personal activity history has been recorded yet.</div>
+                          )}
+                </div>
+
+                <div className="settings-divider" />
+
+                <div className="inline-actions justify-end">
+                  <Link href="/activity-history" className="action-button is-secondary is-sm">
+                    Open Full Activity History
+                  </Link>
+                </div>
               </div>
             ) : null}
 

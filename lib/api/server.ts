@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { extractApiMessage } from "@/lib/api/errors";
+import { readNonEmptyEnv } from "@/lib/env";
 import { createSessionSnapshotFromProfile, setAuthCookies, setSessionSnapshotCookie } from "@/lib/auth/session";
 import type { AdminMeApiResponse, ApiErrorResponse, LoginApiResponse, RefreshTokenApiResponse, SessionSnapshot } from "@/types/api.types";
 
-export const FORTSOLAR_API_BASE_URL = process.env.FORTSOLAR_API_BASE_URL ?? process.env.NEXT_PUBLIC_FORTSOLAR_API_BASE_URL ?? "https://api.fortsolar.ng";
+export const FORTSOLAR_API_BASE_URL = readNonEmptyEnv(process.env.FORTSOLAR_API_BASE_URL, process.env.NEXT_PUBLIC_FORTSOLAR_API_BASE_URL);
 
 type ServerPayload = LoginApiResponse | RefreshTokenApiResponse | AdminMeApiResponse | ApiErrorResponse | null;
 
 function buildApiUrl(path: string) {
+  if (!FORTSOLAR_API_BASE_URL) {
+    throw new Error("FORTSOLAR_API_BASE_URL is not configured.");
+  }
+
   return new URL(path, FORTSOLAR_API_BASE_URL).toString();
 }
 
@@ -100,14 +105,15 @@ export async function syncAuthCookiesFromLogin(response: NextResponse, payload: 
   };
 }
 
-export function getRequestBodyText(request: Request) {
+export async function getRequestBody(request: Request) {
   const method = request.method.toUpperCase();
 
   if (method === "GET" || method === "HEAD") {
-    return Promise.resolve<BodyInit | null>(null);
+    return null;
   }
 
-  return request.text().then((body) => (body.length ? body : null));
+  const body = await request.arrayBuffer();
+  return body.byteLength ? body : null;
 }
 
 export function makeProxyHeaders(request: Request, accessToken: string) {

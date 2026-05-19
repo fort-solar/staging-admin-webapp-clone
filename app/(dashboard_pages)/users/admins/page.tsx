@@ -9,7 +9,7 @@ import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextInput } fro
 import { Avatar, Button, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardSessionExpiredError } from "@/lib/api/client";
-import { createAdmin, DEFAULT_PAGE_SIZE, deleteAdmin, formatEnumLabel, getAdmins, updateAdmin } from "@/lib/admin-api";
+import { createAdmin, DEFAULT_PAGE_SIZE, deleteAdmin, formatEnumLabel, formatManagedUserStatusLabel, getAdmins, updateAdmin } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { AdminRecord, PaginationMeta } from "@/types/api.types";
@@ -87,12 +87,12 @@ export default function AdminsPage() {
     };
   }, [page, refreshKey]);
 
-  const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((admin) => formatEnumLabel(admin.status))))], [rows]);
+  const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((admin) => formatManagedUserStatusLabel(admin.status))))], [rows]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((admin) => {
-        const statusLabel = formatEnumLabel(admin.status);
+        const statusLabel = formatManagedUserStatusLabel(admin.status);
         const haystack = [
           admin.id,
           admin.name,
@@ -162,7 +162,7 @@ export default function AdminsPage() {
   }
 
   async function handleToggleStatus(admin: AdminRecord) {
-    const nextStatus = admin.status.toLowerCase() === "active" ? "inactive" : "active";
+    const nextStatus = admin.status.toLowerCase() === "active" ? "deactivated" : "active";
 
     try {
       await updateAdmin(admin.id, {
@@ -174,7 +174,7 @@ export default function AdminsPage() {
       });
       toast({
         title: "Admin updated",
-        description: `${admin.fullName || admin.name} is now ${formatEnumLabel(nextStatus).toLowerCase()}.`,
+        description: `${admin.fullName || admin.name} is now ${formatManagedUserStatusLabel(nextStatus).toLowerCase()}.`,
         variant: "success",
       });
       setRefreshKey((value) => value + 1);
@@ -271,8 +271,8 @@ export default function AdminsPage() {
                   </thead>
                   <tbody>
                     {filteredRows.length ? (
-                      filteredRows.map((admin) => {
-                        const statusLabel = formatEnumLabel(admin.status);
+                    filteredRows.map((admin) => {
+                      const statusLabel = formatManagedUserStatusLabel(admin.status);
 
                         return (
                           <tr key={admin.id}>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildErrorResponse, fetchFortsolar, getPayloadMessage, getRequestBodyText, makeProxyHeaders, parseServerPayload, refreshAccessToken, syncSessionCookieFromProfile } from "@/lib/api/server";
+import { buildErrorResponse, fetchFortsolar, getPayloadMessage, getRequestBody, makeProxyHeaders, parseServerPayload, refreshAccessToken, syncSessionCookieFromProfile } from "@/lib/api/server";
 import { clearAuthCookies, getAuthTokens, getSessionSnapshotFromCookieStore, setAuthCookies } from "@/lib/auth/session";
 
 type RouteContext = {
@@ -7,7 +7,7 @@ type RouteContext = {
 };
 
 async function forwardRequest(request: NextRequest, path: string, accessToken: string) {
-  const body = await getRequestBodyText(request);
+  const body = await getRequestBody(request);
 
   return fetchFortsolar(path, {
     method: request.method,

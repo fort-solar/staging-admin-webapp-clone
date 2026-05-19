@@ -6,11 +6,12 @@ import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
 import { ActionLink, AttachmentItem, CatalogCard, DetailPanel, DirectoryToolbar, InlineCallout, KeyValueList, ManagementBackLink, MediaShowcase } from "@/components/dashboard/management-primitives";
-import { FormField, Modal, ModalFooterActions, ModalTextArea, ModalTextInput } from "@/components/dashboard/modals";
+import { FormField, ImageSelectField, Modal, ModalFooterActions, ModalTextArea, ModalTextInput } from "@/components/dashboard/modals";
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField, cx } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import {
+  buildMultipartFormData,
   createProductBattery,
   createProductCategory,
   createProductInverter,
@@ -248,6 +249,7 @@ export function ProductsManagementScreen() {
   const [categoryTitle, setCategoryTitle] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
   const [categoryImageUrl, setCategoryImageUrl] = useState("");
+  const [categoryImageFile, setCategoryImageFile] = useState<File | null>(null);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const deferredQuery = useDeferredValue(query);
@@ -394,6 +396,7 @@ export function ProductsManagementScreen() {
     setCategoryTitle("");
     setCategoryDescription("");
     setCategoryImageUrl("");
+    setCategoryImageFile(null);
   }
 
   function openCreateCategoryModal() {
@@ -406,6 +409,7 @@ export function ProductsManagementScreen() {
     setCategoryTitle(category.name);
     setCategoryDescription(category.description ?? "");
     setCategoryImageUrl(category.image_url ?? "");
+    setCategoryImageFile(null);
     setCategoryModalOpen(true);
   }
 
@@ -477,16 +481,29 @@ export function ProductsManagementScreen() {
     setIsSavingCategory(true);
 
     try {
+      if (!editingCategory && !categoryImageFile) {
+        throw new Error("Select a category image to upload.");
+      }
+
       const payload = {
         name: categoryTitle.trim(),
         description: categoryDescription.trim(),
-        image_url: categoryImageUrl.trim(),
       };
 
+      const body = categoryImageFile
+        ? buildMultipartFormData({
+            ...payload,
+            image_url: categoryImageFile,
+          })
+        : {
+            ...payload,
+            image_url: categoryImageUrl.trim(),
+          };
+
       if (editingCategory) {
-        await updateProductCategory(editingCategory.id, payload);
+        await updateProductCategory(editingCategory.id, body);
       } else {
-        await createProductCategory(payload);
+        await createProductCategory(body);
       }
 
       toast({
@@ -728,8 +745,12 @@ export function ProductsManagementScreen() {
           <FormField label="Description">
             <ModalTextArea value={categoryDescription} onChange={setCategoryDescription} placeholder="Short category description" />
           </FormField>
-          <FormField label="Image URL">
-            <ModalTextInput value={categoryImageUrl} onChange={(event) => setCategoryImageUrl(event.target.value)} placeholder="https://example.com/category.png" />
+          <FormField label="Category Image">
+            <ImageSelectField
+              file={categoryImageFile}
+              onFileChange={setCategoryImageFile}
+              previewUrl={categoryImageUrl || undefined}
+            />
           </FormField>
         </form>
       </Modal>
@@ -929,7 +950,7 @@ export function ProductFormScreen() {
   const [brand, setBrand] = useState("");
   const [price, setPrice] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [status, setStatus] = useState("active");
   const [panelWattage, setPanelWattage] = useState("");
   const [panelEfficiency, setPanelEfficiency] = useState("");
@@ -963,6 +984,10 @@ export function ProductFormScreen() {
     setIsSubmitting(true);
 
     try {
+      if (!imageFile) {
+        throw new Error("Select a product image to upload.");
+      }
+
       const specifications = Object.fromEntries(
         specs.filter((row) => row.label.trim()).map((row) => [row.label.trim(), row.value.trim()]),
       );
@@ -970,7 +995,7 @@ export function ProductFormScreen() {
       const isActive = isDraft ? false : status === "active";
 
       if (productType === "panels") {
-        await createProductPanel({
+        await createProductPanel(buildMultipartFormData({
           name: name.trim(),
           brand: brand.trim(),
           wattage: Number(panelWattage),
@@ -980,12 +1005,12 @@ export function ProductFormScreen() {
           weight_kg: Number(panelWeight),
           price: Number(price),
           stock_quantity: Number(stockQuantity),
-          image_url: imageUrl.trim(),
+          image_url: imageFile,
           specifications,
           is_active: isActive,
-        });
+        }));
       } else if (productType === "inverters") {
-        await createProductInverter({
+        await createProductInverter(buildMultipartFormData({
           name: name.trim(),
           brand: brand.trim(),
           type: inverterType.trim(),
@@ -994,12 +1019,12 @@ export function ProductFormScreen() {
           voltage_range: voltageRange.trim(),
           price: Number(price),
           stock_quantity: Number(stockQuantity),
-          image_url: imageUrl.trim(),
+          image_url: imageFile,
           specifications,
           is_active: isActive,
-        });
+        }));
       } else {
-        await createProductBattery({
+        await createProductBattery(buildMultipartFormData({
           name: name.trim(),
           brand: brand.trim(),
           capacity_ah: Number(capacityAh),
@@ -1008,10 +1033,10 @@ export function ProductFormScreen() {
           cycle_life: Number(cycleLife),
           price: Number(price),
           stock_quantity: Number(stockQuantity),
-          image_url: imageUrl.trim(),
+          image_url: imageFile,
           specifications,
           is_active: isActive,
-        });
+        }));
       }
 
       navigateWith(isDraft ? "draft" : "created");
@@ -1076,8 +1101,8 @@ export function ProductFormScreen() {
                     <SelectField value={status} onChange={setStatus} options={["active", "inactive"]} />
                   </FormField>
                 </div>
-                <FormField label="Image URL">
-                  <TextField value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="https://example.com/image.png" />
+                <FormField label="Product Image">
+                  <ImageSelectField file={imageFile} onFileChange={setImageFile} />
                 </FormField>
               </div>
             </DetailPanel>

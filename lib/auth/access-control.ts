@@ -41,6 +41,7 @@ export type NavIconKey =
   | "pages"
   | "energy_audit"
   | "jobs"
+  | "activity_history"
   | "settings";
 
 export type DashboardNavChild = {
@@ -193,6 +194,7 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/energy-audit", permission: { resource: "energy_audits", action: "read" }, title: "Energy Calculator" },
   { prefix: "/jobs/new", permission: { resource: "jobs", action: "create" }, title: "Add Job" },
   { prefix: "/jobs", permission: { resource: "jobs", action: "read" }, title: "Job Management" },
+  { prefix: "/activity-history", permission: { resource: "settings", action: "read" }, title: "Activity History" },
   { prefix: "/settings", permission: { resource: "settings", action: "read" }, title: "Account Settings" },
 ];
 
@@ -274,6 +276,7 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     createHref: "/jobs/new",
     createPermission: { resource: "jobs", action: "create" },
   },
+  { label: "Activity History", href: "/activity-history", icon: "activity_history", section: "footer", permission: { resource: "settings", action: "read" } },
   { label: "Settings", href: "/settings", icon: "settings", section: "footer", permission: { resource: "settings", action: "read" } },
 ];
 

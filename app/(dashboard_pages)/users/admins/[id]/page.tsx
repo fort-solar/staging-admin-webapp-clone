@@ -8,12 +8,12 @@ import { ChevronLeftIcon } from "@/components/dashboard/icons";
 import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardSessionExpiredError } from "@/lib/api/client";
-import { formatEnumLabel, getAdmin, updateAdmin } from "@/lib/admin-api";
+import { formatEnumLabel, formatManagedUserStatusLabel, getAdmin, normalizeManagedUserStatus, updateAdmin } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { AdminRecord } from "@/types/api.types";
 
-const statusOptions = ["active", "inactive"];
+const statusOptions = ["active", "deactivated"];
 const roleOptions = ["super_admin", "operations_manager", "content_manager", "business_manager"];
 
 export default function AdminDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +50,7 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
           name: payload.data.fullName || payload.data.name,
           phone: payload.data.phone ?? "",
           address: payload.data.address ?? "",
-          status: payload.data.status,
+          status: normalizeManagedUserStatus(payload.data.status) || "active",
           adminRole: payload.data.adminRole,
         });
       })
@@ -96,7 +96,7 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
         name: refreshed.data.fullName || refreshed.data.name,
         phone: refreshed.data.phone ?? "",
         address: refreshed.data.address ?? "",
-        status: refreshed.data.status,
+        status: normalizeManagedUserStatus(refreshed.data.status) || "active",
         adminRole: refreshed.data.adminRole,
       });
 
@@ -131,7 +131,7 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
           <div className="detail-hero__meta">
             <div className="inline-actions">
               <h2>{admin?.fullName || admin?.name || (isLoading ? "Loading admin..." : "Admin")}</h2>
-              {admin ? <StatusPill label={formatEnumLabel(admin.status)} tone={toneFromStatus(admin.status)} /> : null}
+              {admin ? <StatusPill label={formatManagedUserStatusLabel(admin.status)} tone={toneFromStatus(admin.status)} /> : null}
             </div>
             <p>{admin?.email || "Admin email will appear here once the record loads."}</p>
           </div>
@@ -155,7 +155,7 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
         <Panel className="border border-[var(--border)] p-6 shadow-none">
           <div className="flex items-center justify-between gap-4">
             <h3 className="m-0 text-sm font-bold sm:text-[15px]">Update Admin</h3>
-            {admin ? <StatusPill label={formatEnumLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
+            {admin ? <StatusPill label={formatManagedUserStatusLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
           </div>
 
           {!canUpdateAdmin ? (

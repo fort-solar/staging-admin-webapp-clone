@@ -7,14 +7,13 @@ import { ErrorMessage } from "@/components/dashboard/error-message";
 import { AttachmentItem, DetailPanel, DirectoryToolbar, KeyValueList, TagList } from "@/components/dashboard/management-primitives";
 import { FormField } from "@/components/dashboard/modals";
 import { EyeIcon, FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
-import { appliances as seedAppliances, type ApplianceRecord } from "@/lib/operations-data";
 import { Button, EmptyScaffold, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { DEFAULT_PAGE_SIZE, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getQuoteRequest, getQuoteRequests, updateQuoteRequest } from "@/lib/admin-api";
+import { createAppliance, DEFAULT_PAGE_SIZE, deleteAppliance, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getAppliances, getQuoteRequest, getQuoteRequests, updateAppliance, updateQuoteRequest } from "@/lib/admin-api";
 import { isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { PaginationMeta, QuoteRequestDetailRecord, QuoteRequestRecord } from "@/types/api.types";
+import type { ApplianceCatalogRecord, PaginationMeta, QuoteRequestDetailRecord, QuoteRequestRecord } from "@/types/api.types";
 
 const auditTabs = ["Quote Request", "Appliances"] as const;
 const quoteStatusDefaults = [
@@ -23,8 +22,30 @@ const quoteStatusDefaults = [
   { label: "Closed", value: "closed" },
   { label: "Reviewed", value: "reviewed" },
 ] as const;
+const booleanOptions = [
+  { label: "Yes", value: "true" },
+  { label: "No", value: "false" },
+] as const;
+const activeOptions = [
+  { label: "Active", value: "true" },
+  { label: "Deactivated", value: "false" },
+] as const;
 
 type AuditTab = (typeof auditTabs)[number];
+
+type ApplianceFormState = {
+  name: string;
+  category: string;
+  power_rating_watts: string;
+  daily_hours_usage: string;
+  description: string;
+  icon: string;
+  catalog_key: string;
+  surge_multiplier: string;
+  is_inductive: string;
+  search_aliases: string;
+  is_active: string;
+};
 
 const emptyPagination: PaginationMeta = {
   page: 1,
@@ -33,8 +54,52 @@ const emptyPagination: PaginationMeta = {
   totalPages: 1,
 };
 
-function applianceMatchesQuery(record: ApplianceRecord, query: string) {
-  return `${record.name} ${record.wattage}`.toLowerCase().includes(query.toLowerCase());
+const defaultApplianceForm: ApplianceFormState = {
+  name: "",
+  category: "",
+  power_rating_watts: "0",
+  daily_hours_usage: "0",
+  description: "",
+  icon: "",
+  catalog_key: "",
+  surge_multiplier: "1",
+  is_inductive: "false",
+  search_aliases: "",
+  is_active: "true",
+};
+
+function applianceMatchesQuery(record: ApplianceCatalogRecord, query: string) {
+  return [
+    record.name,
+    record.category,
+    record.description ?? "",
+    record.icon ?? "",
+    record.catalog_key ?? "",
+    record.search_aliases.join(" "),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(query.toLowerCase());
+}
+
+function createApplianceForm(record?: ApplianceCatalogRecord | null): ApplianceFormState {
+  if (!record) {
+    return defaultApplianceForm;
+  }
+
+  return {
+    name: record.name,
+    category: record.category,
+    power_rating_watts: String(record.power_rating_watts ?? 0),
+    daily_hours_usage: String(record.daily_hours_usage ?? 0),
+    description: record.description ?? "",
+    icon: record.icon ?? "",
+    catalog_key: record.catalog_key ?? "",
+    surge_multiplier: String(record.surge_multiplier ?? 1),
+    is_inductive: String(Boolean(record.is_inductive)),
+    search_aliases: record.search_aliases.join(", "),
+    is_active: String(Boolean(record.is_active)),
+  };
 }
 
 function quoteStatusOptions(current?: string) {
@@ -49,6 +114,7 @@ function quoteStatusOptions(current?: string) {
 
 export function EnergyAuditManagementScreen() {
   const { can } = useAccessControl();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<AuditTab>("Quote Request");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -56,10 +122,15 @@ export function EnergyAuditManagementScreen() {
   const [quotePagination, setQuotePagination] = useState<PaginationMeta>(emptyPagination);
   const [quotesLoading, setQuotesLoading] = useState(true);
   const [quoteError, setQuoteError] = useState<string | null>(null);
-  const [appliances, setAppliances] = useState(seedAppliances);
-  const [selectedApplianceId, setSelectedApplianceId] = useState(seedAppliances[0]?.id ?? "");
+  const [appliances, setAppliances] = useState<ApplianceCatalogRecord[]>([]);
+  const [selectedApplianceId, setSelectedApplianceId] = useState<string | null>(null);
+  const [applianceForm, setApplianceForm] = useState<ApplianceFormState>(defaultApplianceForm);
+  const [appliancesLoading, setAppliancesLoading] = useState(true);
+  const [applianceError, setApplianceError] = useState<string | null>(null);
+  const [applianceRefreshKey, setApplianceRefreshKey] = useState(0);
+  const [isApplianceSaving, setIsApplianceSaving] = useState(false);
   const deferredQuery = useDeferredValue(query);
-  const selectedAppliance = appliances.find((appliance) => appliance.id === selectedApplianceId) ?? appliances[0];
+  const selectedAppliance = appliances.find((appliance) => appliance.id === selectedApplianceId) ?? null;
   const canCreateAudits = can("energy_audits", "create");
   const canUpdateAudits = can("energy_audits", "update");
   const canDeleteAudits = can("energy_audits", "delete");
@@ -123,6 +194,61 @@ export function EnergyAuditManagementScreen() {
     };
   }, [activeTab, deferredQuery, page]);
 
+  useEffect(() => {
+    if (activeTab !== "Appliances") {
+      return;
+    }
+
+    let cancelled = false;
+
+    setAppliancesLoading(true);
+    setApplianceError(null);
+
+    getAppliances()
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAppliances(payload.data);
+        setSelectedApplianceId((current) => {
+          if (current && payload.data.some((item) => item.id === current)) {
+            return current;
+          }
+
+          return payload.data[0]?.id ?? null;
+        });
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAppliances([]);
+        setSelectedApplianceId(null);
+        setApplianceForm(defaultApplianceForm);
+        setApplianceError(getErrorMessage(loadError, "Appliances could not be loaded."));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAppliancesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, applianceRefreshKey]);
+
+  useEffect(() => {
+    if (selectedAppliance) {
+      setApplianceForm(createApplianceForm(selectedAppliance));
+      return;
+    }
+
+    setApplianceForm(defaultApplianceForm);
+  }, [selectedAppliance]);
+
   const filteredAppliances = useMemo(() => appliances.filter((appliance) => applianceMatchesQuery(appliance, deferredQuery)), [appliances, deferredQuery]);
 
   function handleTabChange(nextTab: AuditTab) {
@@ -132,7 +258,11 @@ export function EnergyAuditManagementScreen() {
     if (nextTab === "Quote Request") {
       setQuotesLoading(true);
       setQuoteError(null);
+      return;
     }
+
+    setAppliancesLoading(true);
+    setApplianceError(null);
   }
 
   function handleSearchChange(value: string) {
@@ -149,6 +279,93 @@ export function EnergyAuditManagementScreen() {
     setQuotesLoading(true);
     setQuoteError(null);
     setPage(nextPage);
+  }
+
+  function handleSelectAppliance(appliance: ApplianceCatalogRecord) {
+    setSelectedApplianceId(appliance.id);
+    setApplianceForm(createApplianceForm(appliance));
+  }
+
+  function handleCreateApplianceDraft() {
+    setSelectedApplianceId(null);
+    setApplianceForm(defaultApplianceForm);
+    setApplianceError(null);
+  }
+
+  async function handleApplianceSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsApplianceSaving(true);
+
+    try {
+      const payload = {
+        name: applianceForm.name.trim(),
+        category: applianceForm.category.trim(),
+        power_rating_watts: Number(applianceForm.power_rating_watts) || 0,
+        daily_hours_usage: Number(applianceForm.daily_hours_usage) || 0,
+        description: applianceForm.description.trim(),
+        icon: applianceForm.icon.trim(),
+        catalog_key: applianceForm.catalog_key.trim(),
+        surge_multiplier: Number(applianceForm.surge_multiplier) || 1,
+        is_inductive: applianceForm.is_inductive === "true",
+        search_aliases: applianceForm.search_aliases
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+        is_active: applianceForm.is_active === "true",
+      };
+
+      if (selectedApplianceId) {
+        await updateAppliance(selectedApplianceId, payload);
+      } else {
+        await createAppliance(payload);
+      }
+
+      toast({
+        title: selectedApplianceId ? "Appliance updated" : "Appliance created",
+        description: `${payload.name || "Appliance"} was saved successfully.`,
+        variant: "success",
+      });
+      setApplianceRefreshKey((current) => current + 1);
+    } catch (saveError) {
+      if (isDashboardSessionExpiredError(saveError)) {
+        return;
+      }
+
+      toast({
+        title: selectedApplianceId ? "Update failed" : "Create failed",
+        description: getErrorMessage(saveError, "The appliance could not be saved."),
+        variant: "error",
+      });
+    } finally {
+      setIsApplianceSaving(false);
+    }
+  }
+
+  async function handleDeleteAppliance(appliance: ApplianceCatalogRecord) {
+    try {
+      await deleteAppliance(appliance.id);
+      toast({
+        title: "Appliance deleted",
+        description: `${appliance.name} was removed successfully.`,
+        variant: "success",
+      });
+
+      if (selectedApplianceId === appliance.id) {
+        setSelectedApplianceId(null);
+      }
+
+      setApplianceRefreshKey((current) => current + 1);
+    } catch (deleteError) {
+      if (isDashboardSessionExpiredError(deleteError)) {
+        return;
+      }
+
+      toast({
+        title: "Delete failed",
+        description: getErrorMessage(deleteError, "The appliance could not be deleted."),
+        variant: "error",
+      });
+    }
   }
 
   return (
@@ -169,12 +386,7 @@ export function EnergyAuditManagementScreen() {
             }
             action={
               activeTab === "Appliances" && canCreateAudits ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leadingIcon={<PlusIcon className="mini-icon" />}
-                  onClick={() => setAppliances((current) => [{ id: `APL-${Date.now()}`, name: "New Appliance", wattage: "0.0" }, ...current])}
-                >
+                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={handleCreateApplianceDraft}>
                   Add Appliance
                 </Button>
               ) : null
@@ -182,7 +394,7 @@ export function EnergyAuditManagementScreen() {
           />
         </div>
 
-        <ErrorMessage title="Quote request load failed" message={quoteError} />
+        <ErrorMessage title={activeTab === "Quote Request" ? "Quote request load failed" : "Appliance load failed"} message={activeTab === "Quote Request" ? quoteError : applianceError} />
 
         {activeTab === "Quote Request" ? (
           quotesLoading && !quotes.length ? (
@@ -260,13 +472,7 @@ export function EnergyAuditManagementScreen() {
                                 <EyeIcon className="mini-icon" />
                                 <span>View</span>
                               </Link>
-                              {canUpdateAudits ? (
-                                <TableActionsMenu
-                                  items={[
-                                    { label: "View Request", href: `/energy-audit/${quote.id}` },
-                                  ]}
-                                />
-                              ) : null}
+                              {canUpdateAudits ? <TableActionsMenu items={[{ label: "View Request", href: `/energy-audit/${quote.id}` }]} /> : null}
                             </div>
                           </td>
                         </tr>
@@ -289,58 +495,113 @@ export function EnergyAuditManagementScreen() {
         ) : (
           <div className="audit-appliance-layout">
             <div className="appliance-list">
-              {filteredAppliances.map((appliance) => (
-                <article key={appliance.id} className="appliance-row">
-                  <button type="button" onClick={() => setSelectedApplianceId(appliance.id)}>
-                    <strong>{appliance.name}</strong>
-                    <span>{appliance.wattage}</span>
-                  </button>
-                  <div className="inline-actions">
-                    {canUpdateAudits ? (
-                      <Button variant="secondary" size="sm" onClick={() => setSelectedApplianceId(appliance.id)}>
-                        Edit
-                      </Button>
-                    ) : null}
-                    {canDeleteAudits ? (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        leadingIcon={<TrashIcon className="mini-icon" />}
-                        onClick={() => setAppliances((current) => current.filter((item) => item.id !== appliance.id))}
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+              {appliancesLoading && !appliances.length ? (
+                <div className="p-4 text-sm text-[var(--text-soft)]">Loading appliances...</div>
+              ) : filteredAppliances.length ? (
+                filteredAppliances.map((appliance) => (
+                  <article key={appliance.id} className="appliance-row">
+                    <button type="button" onClick={() => handleSelectAppliance(appliance)}>
+                      <strong>{appliance.name}</strong>
+                      <span>
+                        {appliance.category} • {appliance.power_rating_watts}W • {appliance.daily_hours_usage} hrs/day
+                      </span>
+                    </button>
+                    <div className="inline-actions">
+                      {canUpdateAudits ? (
+                        <Button variant="secondary" size="sm" onClick={() => handleSelectAppliance(appliance)}>
+                          Edit
+                        </Button>
+                      ) : null}
+                      {canDeleteAudits ? (
+                        <Button variant="danger" size="sm" leadingIcon={<TrashIcon className="mini-icon" />} onClick={() => void handleDeleteAppliance(appliance)}>
+                          Delete
+                        </Button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="p-4">
+                  <EmptyScaffold title="No appliances found" description="No appliance catalog item matched the current query." />
+                </div>
+              )}
             </div>
+
             <aside className="side-edit-card">
-              <h3>Edit Appliance</h3>
-              <p>{selectedAppliance?.name ?? "Appliance"} - {selectedAppliance?.wattage ?? "0.0"}</p>
-              <FormField label="Name">
-                <TextField
-                  value={selectedAppliance?.name ?? ""}
-                  onChange={(event) =>
-                    setAppliances((current) =>
-                      current.map((item) => (item.id === selectedAppliance?.id ? { ...item, name: event.target.value } : item)),
-                    )
-                  }
-                  placeholder="Appliance Name"
-                />
-              </FormField>
-              <FormField label="Wattage">
-                <SelectField
-                  value={selectedAppliance?.wattage ?? "90.0"}
-                  onChange={(value) =>
-                    setAppliances((current) =>
-                      current.map((item) => (item.id === selectedAppliance?.id ? { ...item, wattage: value } : item)),
-                    )
-                  }
-                  options={["25.0", "90.0", "120.0", "350.0", "900.0"]}
-                />
-              </FormField>
-              <Button variant="primary">Update Appliance</Button>
+              <h3>{selectedApplianceId ? "Edit Appliance" : "Create Appliance"}</h3>
+              <p>
+                {selectedAppliance
+                  ? `${selectedAppliance.name} • ${selectedAppliance.monthly_kwh} kWh/month`
+                  : "Create a new appliance catalog entry for the energy audit calculator."}
+              </p>
+
+              <form className="flex flex-col gap-4" onSubmit={handleApplianceSubmit}>
+                <FormField label="Name">
+                  <TextField value={applianceForm.name} onChange={(event) => setApplianceForm((current) => ({ ...current, name: event.target.value }))} placeholder={'LED TV (42")'} />
+                </FormField>
+
+                <FormField label="Category">
+                  <TextField value={applianceForm.category} onChange={(event) => setApplianceForm((current) => ({ ...current, category: event.target.value }))} placeholder="Entertainment" />
+                </FormField>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="Power Rating (Watts)">
+                    <TextField value={applianceForm.power_rating_watts} onChange={(event) => setApplianceForm((current) => ({ ...current, power_rating_watts: event.target.value }))} placeholder="120" />
+                  </FormField>
+                  <FormField label="Daily Hours Usage">
+                    <TextField value={applianceForm.daily_hours_usage} onChange={(event) => setApplianceForm((current) => ({ ...current, daily_hours_usage: event.target.value }))} placeholder="5" />
+                  </FormField>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="Icon">
+                    <TextField value={applianceForm.icon} onChange={(event) => setApplianceForm((current) => ({ ...current, icon: event.target.value }))} placeholder="tv" />
+                  </FormField>
+                  <FormField label="Catalog Key">
+                    <TextField value={applianceForm.catalog_key} onChange={(event) => setApplianceForm((current) => ({ ...current, catalog_key: event.target.value }))} placeholder="tv-led-43" />
+                  </FormField>
+                </div>
+
+                <FormField label="Description">
+                  <TextAreaField value={applianceForm.description} onChange={(value) => setApplianceForm((current) => ({ ...current, description: value }))} placeholder="Typical living room TV" rows={4} />
+                </FormField>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="Surge Multiplier">
+                    <TextField value={applianceForm.surge_multiplier} onChange={(event) => setApplianceForm((current) => ({ ...current, surge_multiplier: event.target.value }))} placeholder="1" />
+                  </FormField>
+                  <FormField label="Search Aliases">
+                    <TextField value={applianceForm.search_aliases} onChange={(event) => setApplianceForm((current) => ({ ...current, search_aliases: event.target.value }))} placeholder="tv, television, 43 inch" />
+                  </FormField>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField label="Inductive">
+                    <SelectField value={applianceForm.is_inductive} onChange={(value) => setApplianceForm((current) => ({ ...current, is_inductive: value }))} options={booleanOptions.map((option) => ({ ...option }))} />
+                  </FormField>
+                  <FormField label="Status">
+                    <SelectField value={applianceForm.is_active} onChange={(value) => setApplianceForm((current) => ({ ...current, is_active: value }))} options={activeOptions.map((option) => ({ ...option }))} />
+                  </FormField>
+                </div>
+
+                {selectedAppliance ? (
+                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
+                    Monthly usage: <strong className="text-[var(--text)]">{selectedAppliance.monthly_kwh} kWh</strong> • Updated {formatDateTimeLabel(selectedAppliance.updated_at)}
+                  </div>
+                ) : null}
+
+                {selectedApplianceId ? (
+                  canUpdateAudits ? (
+                    <Button type="submit" variant="primary" disabled={isApplianceSaving}>
+                      {isApplianceSaving ? "Saving..." : "Update Appliance"}
+                    </Button>
+                  ) : null
+                ) : canCreateAudits ? (
+                  <Button type="submit" variant="primary" disabled={isApplianceSaving}>
+                    {isApplianceSaving ? "Saving..." : "Create Appliance"}
+                  </Button>
+                ) : null}
+              </form>
             </aside>
           </div>
         )}

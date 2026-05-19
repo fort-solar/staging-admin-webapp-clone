@@ -6,7 +6,7 @@ import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
 import { ActionLink, DirectoryToolbar, TagList } from "@/components/dashboard/management-primitives";
-import { FormField, Modal } from "@/components/dashboard/modals";
+import { FormField, ImageSelectField, Modal } from "@/components/dashboard/modals";
 import {
   Button,
   MetricCardSecondary,
@@ -21,6 +21,7 @@ import {
 import { CopyIcon, EyeIcon, FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
 import { useToast } from "@/components/ui/toast";
 import {
+  buildMultipartFormData,
   createBlogPost,
   createSitePage,
   DEFAULT_PAGE_SIZE,
@@ -352,6 +353,7 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
   const [summary, setSummary] = useState("");
   const [category, setCategory] = useState("Solar Installation");
   const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [body, setBody] = useState("");
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
@@ -384,6 +386,7 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
         setSummary(post.summary);
         setCategory(post.category);
         setImageUrl(post.image_url);
+        setImageFile(null);
         setBody(post.body);
         setSeoTitle(post.seo_title);
         setSeoDescription(post.meta_description);
@@ -411,6 +414,10 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
     try {
       setIsSubmitting(true);
 
+      if (!postId && !imageFile) {
+        throw new Error("Select a cover image to upload.");
+      }
+
       const intent = getFormSubmitIntent(event, "publish");
       const payload = {
         slug: slugify(slugValue || title),
@@ -419,16 +426,25 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
         body,
         category,
         status: intent === "draft" ? "draft" : "published",
-        image_url: imageUrl,
         seo_title: seoTitle || title,
         meta_description: seoDescription || summary,
         read_time_minutes: Number(readTimeMinutes) || 0,
       };
 
+      const bodyPayload = imageFile
+        ? buildMultipartFormData({
+            ...payload,
+            image_url: imageFile,
+          })
+        : {
+            ...payload,
+            image_url: imageUrl,
+          };
+
       if (postId) {
-        await updateBlogPost(postId, payload);
+        await updateBlogPost(postId, bodyPayload);
       } else {
-        await createBlogPost(payload);
+        await createBlogPost(bodyPayload);
       }
 
       toast({
@@ -493,8 +509,8 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
                 <FormField label="Post Summary / Description" hint="A brief summary of your post (20-200 characters)">
                   <TextAreaField value={summary} onChange={setSummary} placeholder="Electricity costs keep rising..." rows={5} />
                 </FormField>
-                <FormField label="Cover Image URL">
-                  <TextField value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="https://..." />
+                <FormField label="Cover Image">
+                  <ImageSelectField file={imageFile} onFileChange={setImageFile} previewUrl={imageUrl || undefined} />
                 </FormField>
                 <FormField label="Post Category">
                   <TextField value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Solar Installation" />

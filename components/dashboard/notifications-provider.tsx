@@ -3,10 +3,13 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useAuth } from "@/components/auth/auth-provider";
+import { Modal } from "@/components/dashboard/modals";
+import { Button } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { dashboardGet } from "@/lib/api/client";
 import { getNotifications, updateNotification } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
+import { ONE_SIGNAL_PAGE_SCRIPT_SRC, ONE_SIGNAL_UPDATER_WORKER_PATH, ONE_SIGNAL_WORKER_PATH, type OneSignalConfig } from "@/lib/onesignal";
 import type { NotificationRecord, SocketSessionApiResponse } from "@/types/api.types";
 
 type HeaderNotificationItem = {
@@ -26,18 +29,91 @@ type NotificationsContextValue = {
   isLoading: boolean;
   error: string | null;
   feedVersion: number;
+  browserNotificationStatus: BrowserNotificationStatus;
+  isPermissionSubmitting: boolean;
   refresh: () => Promise<void>;
+  refreshBrowserNotificationStatus: () => Promise<void>;
+  openBrowserNotificationsPrompt: () => void;
+  requestBrowserNotifications: () => Promise<void>;
   markRead: (id: string, isRead: boolean) => Promise<void>;
 };
 
-type OneSignalWindow = Window & {
-  OneSignalDeferred?: Array<(oneSignal: { init: (config: Record<string, unknown>) => Promise<void>; Notifications?: { requestPermission?: () => Promise<void> } }) => void>;
+type BrowserNotificationPermission = NotificationPermission | "unsupported" | "unknown";
+type BrowserNotificationInitState = "idle" | "ready" | "failed";
+
+type BrowserNotificationStatus = {
+  isConfigured: boolean;
+  isSupported: boolean;
+  permission: BrowserNotificationPermission;
+  isOptedIn: boolean;
+  subscriptionId: string | null;
+  initState: BrowserNotificationInitState;
+  notifyButtonEnabled: boolean;
 };
+
+type OneSignalPushSubscriptionState = {
+  id: string | null;
+  token: string | null;
+  optedIn: boolean;
+};
+
+type OneSignalPushSubscriptionChangeEvent = {
+  previous: OneSignalPushSubscriptionState;
+  current: OneSignalPushSubscriptionState;
+};
+
+type OneSignalPushSubscriptionChangeHandler = (event: OneSignalPushSubscriptionChangeEvent) => void;
+type OneSignalPermissionChangeHandler = () => void;
+
+type OneSignalClient = {
+  init: (config: Record<string, unknown>) => Promise<void>;
+  Notifications?: {
+    requestPermission?: (fallbackToSettings?: boolean) => Promise<void>;
+    isPushSupported?: () => boolean | Promise<boolean>;
+    permission?: boolean;
+    addEventListener?: (eventName: "permissionChange", handler: OneSignalPermissionChangeHandler) => void;
+    removeEventListener?: (eventName: "permissionChange", handler: OneSignalPermissionChangeHandler) => void;
+  };
+  User?: {
+    PushSubscription?: {
+      id?: string | null;
+      optedIn?: boolean;
+      addEventListener?: (eventName: "change", handler: OneSignalPushSubscriptionChangeHandler) => void;
+      removeEventListener?: (eventName: "change", handler: OneSignalPushSubscriptionChangeHandler) => void;
+    };
+  };
+};
+
+type OneSignalWindow = Window & {
+  OneSignalDeferred?: Array<(oneSignal: OneSignalClient) => void>;
+};
+
+type NotificationMutation =
+  | {
+      kind: "delete";
+      id: string;
+    }
+  | {
+      kind: "upsert";
+      notification: NotificationRecord;
+    };
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 const HEADER_LIMIT = 8;
 const relativeTimeFormatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-const oneSignalAppId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ?? "";
+const notificationPermissionStorageKey = "fortsolar:onesignal-permission-choice";
+
+function getBrowserPermissionState(): BrowserNotificationPermission {
+  if (typeof window === "undefined") {
+    return "unknown";
+  }
+
+  if (!("Notification" in window)) {
+    return "unsupported";
+  }
+
+  return Notification.permission;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -55,16 +131,22 @@ function asObject(value: unknown) {
   return isRecord(value) ? value : {};
 }
 
-function normalizeIncomingNotification(payload: unknown): NotificationRecord | null {
+function normalizeIncomingMutation(payload: unknown): NotificationMutation | null {
   if (isRecord(payload) && "data" in payload) {
-    return normalizeIncomingNotification(payload.data);
+    return normalizeIncomingMutation(payload.data);
   }
 
   if (!isRecord(payload)) {
     return null;
   }
 
-  const id = asString(payload.id) ?? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`);
+  const deleted = asBoolean(payload.deleted);
+  const id = asString(payload.id);
+
+  if (deleted && id) {
+    return { kind: "delete", id };
+  }
+
   const title = asString(payload.title);
   const message = asString(payload.message) ?? asString(payload.description);
 
@@ -73,22 +155,29 @@ function normalizeIncomingNotification(payload: unknown): NotificationRecord | n
   }
 
   return {
-    id,
-    user_id: asString(payload.user_id),
-    type: asString(payload.type) ?? "system",
-    title,
-    message,
-    link: asString(payload.link),
-    is_read: asBoolean(payload.is_read),
-    metadata: asObject(payload.metadata),
-    created_at: asString(payload.created_at) ?? new Date().toISOString(),
-    updated_at: asString(payload.updated_at) ?? new Date().toISOString(),
+    kind: "upsert",
+    notification: {
+      id: id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`),
+      user_id: asString(payload.user_id),
+      type: asString(payload.type) ?? "system",
+      title,
+      message,
+      link: asString(payload.link),
+      is_read: asBoolean(payload.is_read),
+      metadata: asObject(payload.metadata),
+      created_at: asString(payload.created_at) ?? new Date().toISOString(),
+      updated_at: asString(payload.updated_at) ?? new Date().toISOString(),
+    },
   };
 }
 
 function mergeNotifications(current: NotificationRecord[], incoming: NotificationRecord) {
   const next = [incoming, ...current.filter((item) => item.id !== incoming.id)];
   return next.slice(0, HEADER_LIMIT);
+}
+
+function removeNotification(current: NotificationRecord[], id: string) {
+  return current.filter((item) => item.id !== id);
 }
 
 function formatRelativeTime(value: string) {
@@ -161,15 +250,46 @@ function showDesktopNotification(record: NotificationRecord) {
   }
 }
 
-export function NotificationsProvider({ children }: { children: ReactNode }) {
+function showSubscriptionConfirmationNotification() {
+  showDesktopNotification({
+    id: "fortsolar-notification-subscription-success",
+    user_id: null,
+    type: "system",
+    title: "Fortsolar Admin Notifications Enabled",
+    message: "Thank you for subscribing to notifications from the Fortsolar Admin Panel.",
+    link: "/notifications",
+    is_read: false,
+    metadata: {},
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export function NotificationsProvider({ children, oneSignalConfig }: { children: ReactNode; oneSignalConfig: OneSignalConfig }) {
   const { session } = useAuth();
   const { toast } = useToast();
+  const oneSignalAppId = oneSignalConfig.appId;
+  const oneSignalSafariWebId = oneSignalConfig.safariWebId;
+  const oneSignalNotifyButtonEnabled = oneSignalConfig.notifyButtonEnabled;
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [feedVersion, setFeedVersion] = useState(0);
+  const [permissionPromptOpen, setPermissionPromptOpen] = useState(false);
+  const [isPermissionSubmitting, setIsPermissionSubmitting] = useState(false);
+  const [browserNotificationStatus, setBrowserNotificationStatus] = useState<BrowserNotificationStatus>(() => ({
+    isConfigured: Boolean(oneSignalAppId),
+    isSupported: typeof window !== "undefined" && "Notification" in window,
+    permission: getBrowserPermissionState(),
+    isOptedIn: false,
+    subscriptionId: null,
+    initState: "idle",
+    notifyButtonEnabled: oneSignalNotifyButtonEnabled,
+  }));
   const socketRef = useRef<Socket | null>(null);
   const announcedIdsRef = useRef<Set<string>>(new Set());
+  const oneSignalRef = useRef<OneSignalClient | null>(null);
+  const oneSignalInitPromiseRef = useRef<Promise<boolean> | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -184,28 +304,217 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const handleIncoming = useCallback(
-    (payload: unknown, announce = false) => {
-      const nextNotification = normalizeIncomingNotification(payload);
+  const ensureOneSignalReady = useCallback(async () => {
+    if (typeof window === "undefined" || !oneSignalAppId) {
+      return false;
+    }
 
-      if (!nextNotification) {
+    if (oneSignalRef.current) {
+      return true;
+    }
+
+    if (oneSignalInitPromiseRef.current) {
+      return oneSignalInitPromiseRef.current;
+    }
+
+    oneSignalInitPromiseRef.current = new Promise<boolean>((resolve) => {
+      const win = window as OneSignalWindow;
+
+      if (!win.OneSignalDeferred) {
+        win.OneSignalDeferred = [];
+      }
+
+      let settled = false;
+
+      const finish = (value: boolean) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+
+        if (!value) {
+          oneSignalRef.current = null;
+          oneSignalInitPromiseRef.current = null;
+        }
+
+        resolve(value);
+      };
+
+      win.OneSignalDeferred.push(async (oneSignal) => {
+        try {
+          const initConfig: Record<string, unknown> = {
+            appId: oneSignalAppId,
+            allowLocalhostAsSecureOrigin: true,
+            serviceWorkerPath: ONE_SIGNAL_WORKER_PATH,
+            serviceWorkerUpdaterPath: ONE_SIGNAL_UPDATER_WORKER_PATH,
+            notifyButton: { enable: oneSignalNotifyButtonEnabled },
+          };
+
+          if (oneSignalSafariWebId) {
+            initConfig.safari_web_id = oneSignalSafariWebId;
+          }
+
+          oneSignalRef.current = oneSignal;
+          await oneSignal.init(initConfig);
+          finish(true);
+        } catch {
+          finish(false);
+        }
+      });
+
+      const existingScript = document.getElementById("onesignal-sdk") as HTMLScriptElement | null;
+
+      if (!existingScript) {
+        const script = document.createElement("script");
+        script.id = "onesignal-sdk";
+        script.src = ONE_SIGNAL_PAGE_SCRIPT_SRC;
+        script.defer = true;
+        script.onerror = () => finish(false);
+        document.body.appendChild(script);
+      }
+    });
+
+    return oneSignalInitPromiseRef.current;
+  }, [oneSignalAppId, oneSignalNotifyButtonEnabled, oneSignalSafariWebId]);
+
+  const syncBrowserNotificationStatus = useCallback(
+    async (oneSignal: OneSignalClient | null = oneSignalRef.current, initState?: BrowserNotificationInitState) => {
+      const permission = getBrowserPermissionState();
+      const baseStatus: BrowserNotificationStatus = {
+        isConfigured: Boolean(oneSignalAppId),
+        isSupported: permission !== "unsupported",
+        permission,
+        isOptedIn: false,
+        subscriptionId: null,
+        initState: initState ?? (oneSignal ? "ready" : "idle"),
+        notifyButtonEnabled: oneSignalNotifyButtonEnabled,
+      };
+
+      if (!oneSignal) {
+        setBrowserNotificationStatus(baseStatus);
         return;
       }
 
-      setNotifications((current) => mergeNotifications(current, nextNotification));
-      setFeedVersion((current) => current + 1);
+      try {
+        const isSupported = await Promise.resolve(oneSignal.Notifications?.isPushSupported?.() ?? baseStatus.isSupported);
 
-      if (announce && !announcedIdsRef.current.has(nextNotification.id)) {
-        announcedIdsRef.current.add(nextNotification.id);
-        toast({
-          title: nextNotification.title,
-          description: nextNotification.message,
-          variant: "info",
+        setBrowserNotificationStatus({
+          ...baseStatus,
+          isSupported: Boolean(isSupported),
+          isOptedIn: Boolean(oneSignal.User?.PushSubscription?.optedIn),
+          subscriptionId: oneSignal.User?.PushSubscription?.id ?? null,
+          initState: initState ?? "ready",
         });
-        showDesktopNotification(nextNotification);
+      } catch {
+        setBrowserNotificationStatus({
+          ...baseStatus,
+          initState: initState ?? "failed",
+        });
       }
     },
-    [toast],
+    [oneSignalAppId, oneSignalNotifyButtonEnabled],
+  );
+
+  const refreshBrowserNotificationStatus = useCallback(async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!oneSignalAppId || !("Notification" in window)) {
+      await syncBrowserNotificationStatus(null, "idle");
+      return;
+    }
+
+    const ready = await ensureOneSignalReady();
+    await syncBrowserNotificationStatus(ready ? oneSignalRef.current : null, ready ? "ready" : "failed");
+  }, [ensureOneSignalReady, oneSignalAppId, syncBrowserNotificationStatus]);
+
+  const openBrowserNotificationsPrompt = useCallback(() => {
+    setPermissionPromptOpen(true);
+  }, []);
+
+  const requestBrowserNotifications = useCallback(async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setIsPermissionSubmitting(true);
+
+    try {
+      const ready = await ensureOneSignalReady();
+
+      if (!ready) {
+        throw new Error("OneSignal could not be initialized.");
+      }
+
+      await oneSignalRef.current?.Notifications?.requestPermission?.(true);
+      await syncBrowserNotificationStatus(oneSignalRef.current, "ready");
+
+      if (Notification.permission === "granted") {
+        window.localStorage.setItem(notificationPermissionStorageKey, "accepted");
+        showSubscriptionConfirmationNotification();
+        toast({
+          title: "Browser notifications enabled",
+          description: "Real-time admin notifications will now be delivered to this browser.",
+          variant: "success",
+        });
+      } else if (Notification.permission === "denied") {
+        window.localStorage.setItem(notificationPermissionStorageKey, "declined");
+        toast({
+          title: "Permission blocked",
+          description: "Browser notifications are blocked for this site. Update your browser site settings to test the prompt again.",
+          variant: "info",
+        });
+      } else {
+        window.localStorage.removeItem(notificationPermissionStorageKey);
+        toast({
+          title: "Permission not granted",
+          description: "Browser notification settings were opened so you can enable notifications manually.",
+          variant: "info",
+        });
+      }
+    } catch {
+      window.localStorage.removeItem(notificationPermissionStorageKey);
+      await syncBrowserNotificationStatus(null, "failed");
+      toast({
+        title: "Notification setup failed",
+        description: "OneSignal could not be initialized for this browser session.",
+        variant: "error",
+      });
+    } finally {
+      setPermissionPromptOpen(false);
+      setIsPermissionSubmitting(false);
+    }
+  }, [ensureOneSignalReady, syncBrowserNotificationStatus, toast]);
+
+  const handleIncoming = useCallback(
+    (payload: unknown, announce = false) => {
+      const mutation = normalizeIncomingMutation(payload);
+
+      if (!mutation) {
+        return;
+      }
+
+      setNotifications((current) =>
+        mutation.kind === "delete"
+          ? removeNotification(current, mutation.id)
+          : mergeNotifications(current, mutation.notification),
+      );
+      setFeedVersion((current) => current + 1);
+      void refresh();
+
+      if (mutation.kind === "upsert" && announce && !announcedIdsRef.current.has(mutation.notification.id)) {
+        announcedIdsRef.current.add(mutation.notification.id);
+        toast({
+          title: mutation.notification.title,
+          description: mutation.notification.message,
+          variant: "info",
+        });
+        showDesktopNotification(mutation.notification);
+      }
+    },
+    [refresh, toast],
   );
 
   const markRead = useCallback(async (id: string, isRead: boolean) => {
@@ -227,45 +536,81 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [refresh, session]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !oneSignalAppId) {
+    if (typeof window === "undefined" || !session || !oneSignalAppId || !("Notification" in window)) {
+      void syncBrowserNotificationStatus(null, "idle");
       return;
     }
 
-    const win = window as OneSignalWindow;
-
-    if (!win.OneSignalDeferred) {
-      win.OneSignalDeferred = [];
+    if (Notification.permission === "granted") {
+      window.localStorage.setItem(notificationPermissionStorageKey, "accepted");
+      void ensureOneSignalReady();
+      void syncBrowserNotificationStatus(oneSignalRef.current, oneSignalRef.current ? "ready" : "idle");
+      return;
     }
 
-    if (!document.getElementById("onesignal-sdk")) {
-      const script = document.createElement("script");
-      script.id = "onesignal-sdk";
-      script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-      script.async = true;
-      document.body.appendChild(script);
+    if (Notification.permission === "denied") {
+      window.localStorage.setItem(notificationPermissionStorageKey, "declined");
+      void syncBrowserNotificationStatus(oneSignalRef.current, oneSignalRef.current ? "ready" : "idle");
+      return;
     }
 
-    win.OneSignalDeferred.push(async (oneSignal) => {
-      try {
-        await oneSignal.init({
-          appId: oneSignalAppId,
-          allowLocalhostAsSecureOrigin: true,
-          serviceWorkerPath: "/OneSignalSDKWorker.js",
-          serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-          notifyButton: { enable: false },
-        });
+    void syncBrowserNotificationStatus(oneSignalRef.current, oneSignalRef.current ? "ready" : "idle");
 
-        const permissionKey = "fortsolar:onesignal-prompted";
+    if (!window.localStorage.getItem(notificationPermissionStorageKey)) {
+      setPermissionPromptOpen(true);
+    }
+  }, [ensureOneSignalReady, oneSignalAppId, session, syncBrowserNotificationStatus]);
 
-        if (!window.localStorage.getItem(permissionKey)) {
-          window.localStorage.setItem(permissionKey, "true");
-          await oneSignal.Notifications?.requestPermission?.();
-        }
-      } catch {
-        // Ignore OneSignal init failures and keep in-app notifications active.
+  useEffect(() => {
+    if (typeof window === "undefined" || !session || !oneSignalAppId || !("Notification" in window)) {
+      return;
+    }
+
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+
+    (async () => {
+      const ready = await ensureOneSignalReady();
+
+      if (cancelled) {
+        return;
       }
-    });
-  }, []);
+
+      const oneSignal = ready ? oneSignalRef.current : null;
+      await syncBrowserNotificationStatus(oneSignal, ready ? "ready" : "failed");
+
+      if (!oneSignal) {
+        return;
+      }
+
+      const handlePermissionChange: OneSignalPermissionChangeHandler = () => {
+        void syncBrowserNotificationStatus(oneSignal, "ready");
+      };
+      const handlePushSubscriptionChange: OneSignalPushSubscriptionChangeHandler = () => {
+        void syncBrowserNotificationStatus(oneSignal, "ready");
+      };
+
+      oneSignal.Notifications?.addEventListener?.("permissionChange", handlePermissionChange);
+      oneSignal.User?.PushSubscription?.addEventListener?.("change", handlePushSubscriptionChange);
+
+      const handleWindowFocus = () => {
+        void syncBrowserNotificationStatus(oneSignalRef.current, oneSignalRef.current ? "ready" : "idle");
+      };
+
+      window.addEventListener("focus", handleWindowFocus);
+
+      cleanup = () => {
+        oneSignal.Notifications?.removeEventListener?.("permissionChange", handlePermissionChange);
+        oneSignal.User?.PushSubscription?.removeEventListener?.("change", handlePushSubscriptionChange);
+        window.removeEventListener("focus", handleWindowFocus);
+      };
+    })();
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [ensureOneSignalReady, oneSignalAppId, session, syncBrowserNotificationStatus]);
 
   useEffect(() => {
     if (!session) {
@@ -283,6 +628,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         }
 
         const socket = io(payload.data.socketUrl, {
+          path: payload.data.socketPath,
           transports: ["websocket", "polling"],
           auth: {
             token: payload.data.accessToken,
@@ -330,6 +676,15 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh, session]);
 
+  function handleDismissBrowserNotifications() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(notificationPermissionStorageKey, "declined");
+    }
+
+    void syncBrowserNotificationStatus(oneSignalRef.current, oneSignalRef.current ? "ready" : "idle");
+    setPermissionPromptOpen(false);
+  }
+
   const value = useMemo(
     () => ({
       notifications,
@@ -338,13 +693,59 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       isLoading,
       error,
       feedVersion,
+      browserNotificationStatus,
+      isPermissionSubmitting,
       refresh,
+      refreshBrowserNotificationStatus,
+      openBrowserNotificationsPrompt,
+      requestBrowserNotifications,
       markRead,
     }),
-    [error, feedVersion, isLoading, markRead, notifications, refresh],
+    [
+      browserNotificationStatus,
+      error,
+      feedVersion,
+      isLoading,
+      isPermissionSubmitting,
+      markRead,
+      notifications,
+      openBrowserNotificationsPrompt,
+      refresh,
+      refreshBrowserNotificationStatus,
+      requestBrowserNotifications,
+    ],
   );
 
-  return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
+  return (
+    <NotificationsContext.Provider value={value}>
+      {children}
+
+      <Modal
+        open={permissionPromptOpen}
+        onClose={handleDismissBrowserNotifications}
+        title="Enable Browser Notifications"
+        footer={
+          <>
+            <Button variant="secondary" onClick={handleDismissBrowserNotifications} disabled={isPermissionSubmitting}>
+              Not Now
+            </Button>
+            <Button variant="primary" onClick={() => void requestBrowserNotifications()} disabled={isPermissionSubmitting}>
+              {isPermissionSubmitting ? "Enabling..." : "Allow Notifications"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3 text-sm text-[var(--text-soft)]">
+          <p className="m-0">
+            Allow Fortsolar to send real-time browser notifications for new admin alerts and account activity.
+          </p>
+          <p className="m-0">
+            In-app notifications will still appear on your profile and inside the dashboard even if you skip this step.
+          </p>
+        </div>
+      </Modal>
+    </NotificationsContext.Provider>
+  );
 }
 
 export function useNotifications() {

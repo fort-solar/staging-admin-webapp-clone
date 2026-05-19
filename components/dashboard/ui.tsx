@@ -291,7 +291,7 @@ export function TextField({
   value: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
-  type?: "text" | "email" | "password";
+  type?: "text" | "email" | "password" | "date" | "time" | "datetime-local";
 }) {
   return <input className="dashboard-input" type={type} value={value} onChange={onChange} placeholder={placeholder} />;
 }
@@ -784,8 +784,8 @@ export function RevenueChart({ labels, values, tooltipIndex, tooltipLabel, toolt
   return (
     <div className="revenue-chart">
       <div className="revenue-chart__axis">
-        {axisLabels.map((label) => (
-          <span key={label}>{label}</span>
+        {axisLabels.map((label, index) => (
+          <span key={`${index}-${label}`}>{label}</span>
         ))}
       </div>
       <div className="revenue-chart__plot">
@@ -816,7 +816,7 @@ export function RevenueChart({ labels, values, tooltipIndex, tooltipLabel, toolt
         ) : null}
         <div className="revenue-chart__labels">
           {labels.map((label, index) => (
-            <span key={label} className={cx(index === tooltipIndex && "is-active")}>
+            <span key={`${index}-${label}`} className={cx(index === tooltipIndex && "is-active")}>
               {label}
             </span>
           ))}

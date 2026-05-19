@@ -75,11 +75,6 @@ function metadataValue(record: NotificationRecord, key: string) {
   return typeof candidate === "string" ? candidate : null;
 }
 
-function metadataNumber(record: NotificationRecord, key: string) {
-  const candidate = record.metadata?.[key];
-  return typeof candidate === "number" ? candidate : 0;
-}
-
 function notificationKind(record: NotificationRecord): NotificationKind {
   const workflowKind = metadataValue(record, "kind")?.toLowerCase();
 
@@ -101,14 +96,16 @@ function notificationTab(record: NotificationRecord): NotificationManagementTab 
 }
 
 function notificationStatus(record: NotificationRecord) {
-  const workflowStatus = metadataValue(record, "deliveryStatus");
+  const workflowStatus = metadataValue(record, "workflowStatus");
 
-  if (workflowStatus) {
-    return workflowStatus;
+  if (workflowStatus?.toLowerCase() === "draft") {
+    return "Draft";
   }
 
-  if (notificationTab(record) === "Draft") {
-    return "Draft";
+  const deliveryStatus = metadataValue(record, "deliveryStatus");
+
+  if (deliveryStatus) {
+    return deliveryStatus;
   }
 
   return record.is_read ? "Read" : "Unread";
@@ -129,8 +126,13 @@ function notificationTone(record: NotificationRecord) {
 }
 
 function formatNotificationSchedule(record: NotificationRecord) {
+  const scheduledDateTime = metadataValue(record, "scheduledDateTime");
   const date = metadataValue(record, "scheduledDate");
   const time = metadataValue(record, "scheduledTime");
+
+  if (scheduledDateTime) {
+    return formatDateTimeLabel(scheduledDateTime);
+  }
 
   if (date && time) {
     return `${date} at ${time}`;
@@ -139,10 +141,50 @@ function formatNotificationSchedule(record: NotificationRecord) {
   return date ?? time ?? "N/A";
 }
 
+function splitScheduledDateTime(value: string | null | undefined) {
+  if (!value) {
+    return { scheduledDate: "", scheduledTime: "" };
+  }
+
+  const parsed = new Date(value);
+
+  if (!Number.isNaN(parsed.getTime())) {
+    const pad = (part: number) => String(part).padStart(2, "0");
+
+    return {
+      scheduledDate: `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
+      scheduledTime: `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`,
+    };
+  }
+
+  const [scheduledDate = "", rawTime = ""] = value.split("T");
+  return {
+    scheduledDate,
+    scheduledTime: rawTime.slice(0, 5),
+  };
+}
+
+function buildScheduledDateTime(date: string, time: string) {
+  if (!date || !time) {
+    return null;
+  }
+
+  const parsed = new Date(`${date}T${time}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 function createComposerState(record?: NotificationRecord | null): ComposerFormState {
   if (!record) {
     return defaultComposerState;
   }
+
+  const schedule =
+    metadataValue(record, "scheduledDateTime")
+      ? splitScheduledDateTime(metadataValue(record, "scheduledDateTime"))
+      : {
+          scheduledDate: metadataValue(record, "scheduledDate") ?? "",
+          scheduledTime: metadataValue(record, "scheduledTime") ?? "",
+        };
 
   return {
     kind: notificationKind(record),
@@ -151,8 +193,8 @@ function createComposerState(record?: NotificationRecord | null): ComposerFormSt
     link: record.link ?? "",
     recipients: metadataValue(record, "recipients") ?? "All Users",
     triggerEvent: metadataValue(record, "triggerEvent") ?? "New User",
-    scheduledDate: metadataValue(record, "scheduledDate") ?? "",
-    scheduledTime: metadataValue(record, "scheduledTime") ?? "",
+    scheduledDate: schedule.scheduledDate,
+    scheduledTime: schedule.scheduledTime,
     frequency: metadataValue(record, "frequency") ?? "No Repeat",
   };
 }
@@ -286,13 +328,7 @@ export function NotificationsManagementScreen() {
 
   async function handleMarkRead(record: NotificationRecord, isRead: boolean) {
     try {
-      await updateNotification(record.id, {
-        is_read: isRead,
-        metadata: {
-          ...record.metadata,
-          deliveryStatus: isRead ? "Read" : "Unread",
-        },
-      });
+      await updateNotification(record.id, { is_read: isRead });
       setRows((current) => current.map((item) => (item.id === record.id ? { ...item, is_read: isRead } : item)));
       await refreshHeader();
       setRefreshKey((current) => current + 1);
@@ -340,31 +376,51 @@ export function NotificationsManagementScreen() {
 
       const intent = getFormSubmitIntent(event, "publish");
       const workflowStatus = intent === "draft" ? "draft" : "published";
-      const deliveryStatus = intent === "draft" ? "Draft" : "Unread";
+      const scheduledDateTime = form.kind === "Scheduled" ? buildScheduledDateTime(form.scheduledDate, form.scheduledTime) : null;
+      const metadataKeysToReset = new Set([
+        "kind",
+        "recipients",
+        "triggerEvent",
+        "scheduledDate",
+        "scheduledTime",
+        "scheduledDateTime",
+        "frequency",
+        "workflowStatus",
+        "deliveryStatus",
+        "totalClicks",
+      ]);
+
+      if (form.kind === "Scheduled" && !scheduledDateTime) {
+        throw new Error("Select a valid notification date and time.");
+      }
+
+      const restMetadata = Object.fromEntries(
+        Object.entries(editingRecord?.metadata ?? {}).filter(([key]) => !metadataKeysToReset.has(key)),
+      );
+
       const payload = {
-        type: form.kind.toLowerCase(),
+        type: "system",
         title: form.title || `${form.kind} Notification`,
         message: form.content || "Notification content preview.",
         link: form.link || undefined,
         metadata: {
-          ...(editingRecord?.metadata ?? {}),
+          ...restMetadata,
           kind: form.kind.toLowerCase(),
-          recipients: form.recipients,
-          triggerEvent: form.kind === "Triggered" ? form.triggerEvent : undefined,
-          scheduledDate: form.kind === "Scheduled" ? form.scheduledDate : undefined,
-          scheduledTime: form.kind === "Scheduled" ? form.scheduledTime : undefined,
-          frequency: form.kind === "Scheduled" ? form.frequency : undefined,
           workflowStatus,
-          deliveryStatus,
-          totalClicks: editingRecord ? metadataNumber(editingRecord, "totalClicks") : 0,
+          recipients: form.recipients,
+          ...(form.kind === "Triggered"
+            ? {
+                triggerEvent: form.triggerEvent,
+              }
+            : {
+                scheduledDateTime,
+                frequency: form.frequency,
+              }),
         },
       };
 
       if (editingRecord) {
-        await updateNotification(editingRecord.id, {
-          ...payload,
-          is_read: editingRecord.is_read,
-        });
+        await updateNotification(editingRecord.id, payload);
       } else {
         await createNotification(payload);
       }
@@ -393,6 +449,10 @@ export function NotificationsManagementScreen() {
     <>
       <div className="dashboard-stack">
         <ErrorMessage title="Notifications load failed" message={error} />
+
+        <InlineCallout>
+          New admin posts are saved through the shared notifications endpoint as `system` notifications, with scheduling and routing stored in metadata.
+        </InlineCallout>
 
         <section className="stats-grid--three">
           {metrics.map((metric) => (
@@ -599,10 +659,10 @@ export function NotificationsManagementScreen() {
                   <>
                     <div className="notification-form-grid__split">
                       <FormField label="Date">
-                        <ModalTextInput value={form.scheduledDate} onChange={(event) => setForm((current) => ({ ...current, scheduledDate: event.target.value }))} placeholder="2026-05-06" />
+                        <ModalTextInput type="date" value={form.scheduledDate} onChange={(event) => setForm((current) => ({ ...current, scheduledDate: event.target.value }))} />
                       </FormField>
                       <FormField label="Time">
-                        <ModalTextInput value={form.scheduledTime} onChange={(event) => setForm((current) => ({ ...current, scheduledTime: event.target.value }))} placeholder="09:00 AM" />
+                        <ModalTextInput type="time" value={form.scheduledTime} onChange={(event) => setForm((current) => ({ ...current, scheduledTime: event.target.value }))} />
                       </FormField>
                     </div>
                     <FormField label="Frequency">
@@ -659,7 +719,7 @@ export function NotificationsManagementScreen() {
         size="lg"
       >
         {activeRecord ? (
-          <div className="detail-key-list">
+          <div className="detail-key-list detail-key-list--notification">
             <div className="detail-key-list__row">
               <span>Title</span>
               <strong>{activeRecord.title}</strong>

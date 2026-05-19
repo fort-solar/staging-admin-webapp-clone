@@ -8,12 +8,12 @@ import { ChevronLeftIcon } from "@/components/dashboard/icons";
 import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardSessionExpiredError } from "@/lib/api/client";
-import { formatEnumLabel, getCustomer, updateCustomer } from "@/lib/admin-api";
+import { formatEnumLabel, formatManagedUserStatusLabel, getCustomer, normalizeManagedUserStatus, updateCustomer } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { CustomerRecord } from "@/types/api.types";
 
-const statusOptions = ["active", "inactive", "suspended"];
+const statusOptions = ["active", "deactivated", "suspended"];
 
 export default function CustomerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -48,7 +48,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
           name: payload.data.fullName || payload.data.name,
           phone: payload.data.phone ?? "",
           address: payload.data.address ?? "",
-          status: payload.data.status,
+          status: normalizeManagedUserStatus(payload.data.status) || "active",
         });
       })
       .catch((loadError) => {
@@ -92,7 +92,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
         name: refreshed.data.fullName || refreshed.data.name,
         phone: refreshed.data.phone ?? "",
         address: refreshed.data.address ?? "",
-        status: refreshed.data.status,
+        status: normalizeManagedUserStatus(refreshed.data.status) || "active",
       });
 
       toast({
@@ -126,7 +126,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
           <div className="detail-hero__meta">
             <div className="inline-actions">
               <h2>{customer?.fullName || customer?.name || (isLoading ? "Loading customer..." : "Customer")}</h2>
-              {customer ? <StatusPill label={formatEnumLabel(customer.status)} tone={toneFromStatus(customer.status)} className="min-h-7.5!" /> : null}
+              {customer ? <StatusPill label={formatManagedUserStatusLabel(customer.status)} tone={toneFromStatus(customer.status)} className="min-h-7.5!" /> : null}
             </div>
             <p>{customer?.email || "Customer email will appear here once the record loads."}</p>
           </div>
@@ -150,7 +150,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
         <Panel className="border border-[var(--border)] p-6 shadow-none">
           <div className="flex items-center justify-between gap-4">
             <h3 className="m-0 text-sm font-bold sm:text-[15px]">Update Customer</h3>
-            {customer ? <StatusPill label={formatEnumLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
+            {customer ? <StatusPill label={formatManagedUserStatusLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
           </div>
 
           {!canUpdateCustomer ? (

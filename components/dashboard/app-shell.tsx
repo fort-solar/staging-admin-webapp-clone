@@ -7,6 +7,7 @@ import { type ComponentType, type ReactNode, type SVGProps, useEffect, useMemo, 
 import { useAuth } from "@/components/auth/auth-provider";
 import { useNotifications } from "@/components/dashboard/notifications-provider";
 import {
+  ActivityIcon,
   BellIcon,
   BriefcaseIcon,
   BundlesIcon,
@@ -45,6 +46,7 @@ const iconMap: Record<NavIconKey, IconComponent> = {
   pages: PagesIcon,
   energy_audit: EnergyAuditIcon,
   jobs: BriefcaseIcon,
+  activity_history: ActivityIcon,
   settings: SettingsIcon,
 };
 
@@ -332,7 +334,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                           ),
                         )
                       ) : (
-                        <p className="text-sm text-[var(--text-soft)]">No recent notifications.</p>
+                        <div className="topbar-panel__empty">
+                          <p className="text-sm text-[var(--text-soft)]">No recent notifications.</p>
+                        </div>
                       )}
                     </div>
                   </div>

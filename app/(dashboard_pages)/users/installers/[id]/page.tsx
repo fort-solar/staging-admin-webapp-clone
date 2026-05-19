@@ -8,12 +8,12 @@ import { ChevronLeftIcon } from "@/components/dashboard/icons";
 import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardSessionExpiredError } from "@/lib/api/client";
-import { formatEnumLabel, getInstaller, updateInstaller } from "@/lib/admin-api";
+import { formatEnumLabel, formatManagedUserStatusLabel, getInstaller, normalizeManagedUserStatus, updateInstaller } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { InstallerRecord } from "@/types/api.types";
 
-const statusOptions = ["active", "inactive", "suspended"];
+const statusOptions = ["active", "deactivated", "suspended"];
 
 export default function InstallerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -48,7 +48,7 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
           name: payload.data.user.fullName || payload.data.user.name,
           phone: payload.data.user.phone ?? "",
           address: payload.data.user.address ?? "",
-          status: payload.data.user.status,
+          status: normalizeManagedUserStatus(payload.data.user.status) || "active",
         });
       })
       .catch((loadError) => {
@@ -92,7 +92,7 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
         name: refreshed.data.user.fullName || refreshed.data.user.name,
         phone: refreshed.data.user.phone ?? "",
         address: refreshed.data.user.address ?? "",
-        status: refreshed.data.user.status,
+        status: normalizeManagedUserStatus(refreshed.data.user.status) || "active",
       });
 
       toast({
@@ -126,7 +126,7 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
           <div className="detail-hero__meta">
             <div className="inline-actions">
               <h2>{installer?.user.fullName || installer?.user.name || (isLoading ? "Loading installer..." : "Installer")}</h2>
-              {installer ? <StatusPill label={formatEnumLabel(installer.user.status)} tone={toneFromStatus(installer.user.status)} /> : null}
+              {installer ? <StatusPill label={formatManagedUserStatusLabel(installer.user.status)} tone={toneFromStatus(installer.user.status)} /> : null}
             </div>
             <p>{installer?.user.email || "Installer email will appear here once the record loads."}</p>
           </div>
@@ -153,7 +153,7 @@ export default function InstallerDetailsPage({ params }: { params: Promise<{ id:
         <Panel className="border border-[var(--border)] p-6 shadow-none">
           <div className="flex items-center justify-between gap-4">
             <h3 className="m-0 text-sm font-bold sm:text-[15px]">Update Installer</h3>
-            {installer ? <StatusPill label={formatEnumLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
+            {installer ? <StatusPill label={formatManagedUserStatusLabel(form.status)} tone={toneFromStatus(form.status)} solid={false} /> : null}
           </div>
 
           {!canUpdateInstaller ? (

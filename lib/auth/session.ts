@@ -1,6 +1,6 @@
 import type { AdminMeApiResponse, LoginApiResponse, RefreshTokenApiResponse, SessionSnapshot } from "@/types/api.types";
 
-const SESSION_SECRET = process.env.FORTSOLAR_SESSION_SECRET ?? "fortsolar-admin-session-secret";
+const SESSION_SECRET = process.env.FORTSOLAR_SESSION_SECRET ?? process.env.NEXT_PUBLIC_FORTSOLAR_SESSION_SECRET;
 const ACCESS_MAX_AGE_FALLBACK = 60 * 15;
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
 

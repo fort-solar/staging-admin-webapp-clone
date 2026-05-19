@@ -1,9 +1,9 @@
 "use client";
 
-import type { ChangeEvent, ReactNode } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { FormSubmitter } from "@/components/dashboard/form-submitter";
 import { SelectField, TextAreaField, TextField, cx, type SelectOption } from "@/components/dashboard/ui";
-import { MessageIcon, PhoneIcon, ProductsIcon, SearchIcon } from "@/components/dashboard/icons";
+import { CameraIcon, MessageIcon, PhoneIcon, ProductsIcon, SearchIcon } from "@/components/dashboard/icons";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 export function Modal({
@@ -69,7 +69,7 @@ export function ModalTextInput({
   value: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
-  type?: "text" | "email" | "password";
+  type?: "text" | "email" | "password" | "date" | "time" | "datetime-local";
 }) {
   return <TextField value={value} onChange={onChange} placeholder={placeholder} type={type} />;
 }
@@ -165,6 +165,107 @@ export function UploadField({
       </span>
       <span className="upload-field__value">{value || placeholder}</span>
     </label>
+  );
+}
+
+function formatFileSize(value: number) {
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  if (value >= 1024) {
+    return `${Math.round(value / 1024)} KB`;
+  }
+
+  return `${value} B`;
+}
+
+export function ImageSelectField({
+  file,
+  onFileChange,
+  previewUrl,
+  placeholder = "Select an image to upload",
+  buttonLabel,
+}: {
+  file: File | null;
+  onFileChange: (file: File | null) => void;
+  previewUrl?: string | null;
+  placeholder?: string;
+  buttonLabel?: string;
+}) {
+  const inputId = useId();
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setObjectUrl(reader.result);
+      }
+    };
+
+    reader.readAsDataURL(file);
+
+    return () => {
+      reader.abort();
+    };
+  }, [file]);
+
+  const activePreviewUrl = file ? (objectUrl ?? "") : (previewUrl ?? "");
+  const activeLabel = file?.name ?? (previewUrl ? "Current image on record" : placeholder);
+  const activeButtonLabel = buttonLabel ?? (file || previewUrl ? "Replace image" : "Choose image");
+  const helper = file
+    ? `${file.type || "image"} • ${formatFileSize(file.size)}`
+    : previewUrl
+      ? "The current image will remain until you select a replacement."
+      : "PNG, JPG, WEBP, or SVG.";
+
+  return (
+    <div className="upload-preview-card">
+      <label className="upload-field" htmlFor={inputId}>
+        <input
+          id={inputId}
+          type="file"
+          accept="image/*"
+          onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+        />
+        <span className="upload-field__button">
+          <CameraIcon className="mini-icon" />
+          <span>{activeButtonLabel}</span>
+        </span>
+        <span className="upload-field__value">{activeLabel}</span>
+      </label>
+
+      {activePreviewUrl ? (
+        <div
+          className="upload-preview-card__canvas has-image"
+          style={{ backgroundImage: `linear-gradient(180deg, rgba(17, 24, 39, 0.08) 0%, rgba(17, 24, 39, 0.72) 100%), url("${activePreviewUrl}")` }}
+          role="img"
+          aria-label={file ? `Preview of ${file.name}` : "Current uploaded image"}
+        >
+          <div className="upload-preview-card__meta">
+            <strong>{file ? file.name : "Current image"}</strong>
+            <span>{helper}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="upload-showcase-empty">
+          <CameraIcon className="mini-icon" />
+          <p>{helper}</p>
+        </div>
+      )}
+
+      {file ? (
+        <button type="button" className="upload-preview-card__reset" onClick={() => onFileChange(null)}>
+          {previewUrl ? "Use current image instead" : "Clear selected image"}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

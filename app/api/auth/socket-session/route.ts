@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { FORTSOLAR_API_BASE_URL, buildErrorResponse } from "@/lib/api/server";
+import { buildErrorResponse } from "@/lib/api/server";
+import { readNonEmptyEnv } from "@/lib/env";
 import { getAuthTokens, getSessionSnapshotFromCookieStore, isAdminSnapshot } from "@/lib/auth/session";
 
 export async function GET() {
@@ -12,8 +13,21 @@ export async function GET() {
     return buildErrorResponse("Please sign in to continue.", 401);
   }
 
-  const socketUrl = process.env.FORTSOLAR_SOCKET_URL ?? process.env.NEXT_PUBLIC_FORTSOLAR_SOCKET_URL ?? FORTSOLAR_API_BASE_URL;
-  const configuredEvents = process.env.NEXT_PUBLIC_FORTSOLAR_NOTIFICATION_EVENTS ?? process.env.FORTSOLAR_NOTIFICATION_EVENTS ?? "admin:notification,notification,notification:new";
+  const socketUrl = readNonEmptyEnv(
+    process.env.FORTSOLAR_SOCKET_URL,
+    process.env.NEXT_PUBLIC_FORTSOLAR_SOCKET_URL,
+    process.env.FORTSOLAR_API_BASE_URL,
+    process.env.NEXT_PUBLIC_FORTSOLAR_API_BASE_URL,
+  );
+  const socketPath = readNonEmptyEnv(process.env.FORTSOLAR_SOCKET_PATH, process.env.NEXT_PUBLIC_FORTSOLAR_SOCKET_PATH) ?? "/socket.io";
+  const configuredEvents =
+    readNonEmptyEnv(process.env.FORTSOLAR_NOTIFICATION_EVENTS, process.env.NEXT_PUBLIC_FORTSOLAR_NOTIFICATION_EVENTS) ??
+    "admin:notification,notification,notification:new";
+
+  if (!socketUrl) {
+    return buildErrorResponse("Socket URL is not configured.", 500);
+  }
+
   const eventNames = configuredEvents
     .split(",")
     .map((value) => value.trim())
@@ -24,6 +38,7 @@ export async function GET() {
     data: {
       accessToken,
       socketUrl,
+      socketPath,
       eventNames,
     },
   });

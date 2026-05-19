@@ -1,16 +1,17 @@
 "use client";
 
-import { type FormEvent, useDeferredValue, useEffect, useMemo, useState, startTransition } from "react";
+import { type FormEvent, useDeferredValue, useEffect, useState, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
 import { ActionLink, AttachmentItem, CatalogCard, DetailPanel, DirectoryToolbar, InlineCallout, KeyValueList, ManagementBackLink, MediaShowcase } from "@/components/dashboard/management-primitives";
-import { FormField } from "@/components/dashboard/modals";
+import { FormField, ImageSelectField } from "@/components/dashboard/modals";
 import { FormSubmitter, getFormSubmitIntent } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import {
+  buildMultipartFormData,
   createPackage,
   DEFAULT_PAGE_SIZE,
   deletePackage,
@@ -70,8 +71,12 @@ export function BundlesManagementScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    setIsLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setIsLoading(true);
+        setError(null);
+      }
+    });
 
     getPackages({
       page,
@@ -363,7 +368,7 @@ export function BundleFormScreen() {
   const [warrantyYears, setWarrantyYears] = useState("");
   const [estimatedSavingsMonthly, setEstimatedSavingsMonthly] = useState("");
   const [paybackPeriodYears, setPaybackPeriodYears] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isActive, setIsActive] = useState(true);
   const [categoryOptions, setCategoryOptions] = useState<ProductCategoryApiRecord[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
@@ -413,7 +418,11 @@ export function BundleFormScreen() {
     setIsSubmitting(true);
 
     try {
-      await createPackage({
+      if (!imageFile) {
+        throw new Error("Select a package image to upload.");
+      }
+
+      await createPackage(buildMultipartFormData({
         slug: slug.trim(),
         name: name.trim(),
         description: description.trim(),
@@ -427,9 +436,9 @@ export function BundleFormScreen() {
         warranty_years: Number(warrantyYears),
         estimated_savings_monthly: Number(estimatedSavingsMonthly || 0),
         payback_period_years: Number(paybackPeriodYears || 0),
-        image_url: imageUrl.trim(),
+        image_url: imageFile,
         is_active: draft ? false : isActive,
-      });
+      }));
 
       navigateWith(draft ? "draft" : "created");
     } catch (saveError) {
@@ -528,8 +537,8 @@ export function BundleFormScreen() {
                     <TextField value={paybackPeriodYears} onChange={(event) => setPaybackPeriodYears(event.target.value)} placeholder="0" />
                   </FormField>
                 </div>
-                <FormField label="Image URL">
-                  <TextField value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="https://example.com/package.png" />
+                <FormField label="Package Image">
+                  <ImageSelectField file={imageFile} onFileChange={setImageFile} />
                 </FormField>
                 <div className="toggle-row">
                   <div>

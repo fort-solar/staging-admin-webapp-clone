@@ -182,7 +182,7 @@ export const mapPreview = "/dashboard/map.svg";
 export function toneFromStatus(status: string): Tone {
   const normalized = status.toLowerCase();
 
-  if (normalized.includes("inactive")) {
+  if (normalized.includes("inactive") || normalized.includes("deactivated") || normalized.includes("disactivated")) {
     return "neutral";
   }
 

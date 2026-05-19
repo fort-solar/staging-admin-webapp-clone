@@ -8,7 +8,7 @@ import { BanIcon, EyeIcon, TrashIcon } from "@/components/dashboard/icons";
 import { Avatar, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardSessionExpiredError } from "@/lib/api/client";
-import { DEFAULT_PAGE_SIZE, deleteInstaller, formatEnumLabel, getInstallers, updateInstaller } from "@/lib/admin-api";
+import { DEFAULT_PAGE_SIZE, deleteInstaller, formatManagedUserStatusLabel, getInstallers, updateInstaller } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { InstallerRecord, PaginationMeta } from "@/types/api.types";
@@ -37,9 +37,6 @@ export default function InstallersPage() {
 
   useEffect(() => {
     let cancelled = false;
-
-    setIsLoading(true);
-    setError(null);
 
     getInstallers({ page, limit: DEFAULT_PAGE_SIZE })
       .then((payload) => {
@@ -70,12 +67,18 @@ export default function InstallersPage() {
     };
   }, [page, refreshKey]);
 
-  const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((installer) => formatEnumLabel(installer.user.status))))], [rows]);
+  function handlePageChange(nextPage: number) {
+    setIsLoading(true);
+    setError(null);
+    setPage(nextPage);
+  }
+
+  const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((installer) => formatManagedUserStatusLabel(installer.user.status))))], [rows]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((installer) => {
-        const statusLabel = formatEnumLabel(installer.user.status);
+        const statusLabel = formatManagedUserStatusLabel(installer.user.status);
         const haystack = [
           installer.user.id,
           installer.user.name,
@@ -103,7 +106,7 @@ export default function InstallersPage() {
   const topRatedInstallers = rows.filter((installer) => (installer.installerProfile.rating ?? 0) >= 4).length;
 
   async function handleToggleStatus(installer: InstallerRecord) {
-    const nextStatus = installer.user.status.toLowerCase() === "active" ? "inactive" : "active";
+    const nextStatus = installer.user.status.toLowerCase() === "active" ? "deactivated" : "active";
 
     try {
       await updateInstaller(installer.user.id, {
@@ -114,9 +117,11 @@ export default function InstallersPage() {
       });
       toast({
         title: "Installer updated",
-        description: `${installer.user.fullName || installer.user.name} is now ${formatEnumLabel(nextStatus).toLowerCase()}.`,
+        description: `${installer.user.fullName || installer.user.name} is now ${formatManagedUserStatusLabel(nextStatus).toLowerCase()}.`,
         variant: "success",
       });
+      setIsLoading(true);
+      setError(null);
       setRefreshKey((value) => value + 1);
     } catch (updateError) {
       if (isDashboardSessionExpiredError(updateError)) {
@@ -140,6 +145,8 @@ export default function InstallersPage() {
         variant: "success",
       });
 
+      setIsLoading(true);
+      setError(null);
       if (rows.length === 1 && page > 1) {
         setPage((current) => current - 1);
       } else {
@@ -221,7 +228,7 @@ export default function InstallersPage() {
                         <td>{installer.installerProfile.experienceYears ?? 0} yrs</td>
                         <td>{installer.installerProfile.rating ? `${installer.installerProfile.rating.toFixed(1)} / 5` : "N/A"}</td>
                         <td>
-                          <StatusPill label={formatEnumLabel(installer.user.status)} tone={toneFromStatus(installer.user.status)} />
+                          <StatusPill label={formatManagedUserStatusLabel(installer.user.status)} tone={toneFromStatus(installer.user.status)} />
                         </td>
                         <td>
                           <div className="inline-actions justify-end">
@@ -269,7 +276,7 @@ export default function InstallersPage() {
                 </tbody>
               </table>
             </div>
-            <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
+            <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={handlePageChange} />
           </>
         )}
       </Panel>
