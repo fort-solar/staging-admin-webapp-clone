@@ -3,14 +3,11 @@ name: Mirror to Personal Repo
 on:
   push:
     branches:
-      - '**'
-    tags:
-      - '**'
+      - '**' # Matches pushes to every single branch
 
 jobs:
   git-mirror:
     runs-on: ubuntu-latest
-    # 💡 CRITICAL: Only run this job if it is executing inside the core organization repository
     if: github.repository == 'fortsolar/fortsolar-admin-webapp-frontend'
     
     steps:
@@ -20,9 +17,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Mirror Push to Personal Repository
+      - name: Re-author and Mirror Push
         run: |
-          TARGET_URL="https://${{ secrets.PERSONAL_REPO_TOKEN }}@github.com/fort-solar/fortsolar-admin-webapp-frontend-clone.git"
+          # 1. Configure your personal profile on the fly
+          git config --global user.name "fort-solar"
+          git config --global user.email "fortsolarx@gmail.com"
           
-          # Push everything cleanly
-          git push --prune --force "$TARGET_URL" "+refs/remotes/origin/*:refs/heads/*" "+refs/tags/*:refs/tags/*"
+          # 2. Re-sign the top commit as you to satisfy Vercel
+          git commit --amend --no-edit --author="fort-solar <fortsolarx@gmail.com>"
+          
+          # 3. Safely push the branch code to your personal clone
+          TARGET_URL="https://${{ secrets.PERSONAL_REPO_TOKEN }}@github.com/fort-solar/fortsolar-admin-webapp-frontend-clone.git"
+          git push --force "$TARGET_URL" HEAD:refs/heads/${{ github.ref_name }}
