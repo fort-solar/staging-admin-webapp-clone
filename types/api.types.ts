@@ -269,7 +269,7 @@ export type ProductPanelRecord = {
   weight_kg: number;
   price: number;
   stock_quantity: number;
-  image_url: string;
+  image: string;
   specifications: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -288,7 +288,7 @@ export type CreateProductPanelRequest = {
   weight_kg: number;
   price: number;
   stock_quantity: number;
-  image_url: string;
+  image: string;
   specifications: Record<string, unknown>;
   is_active: boolean;
 };
@@ -305,7 +305,7 @@ export type ProductInverterRecord = {
   voltage_range: string;
   price: number;
   stock_quantity: number;
-  image_url: string;
+  image: string;
   specifications: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -323,7 +323,7 @@ export type CreateProductInverterRequest = {
   voltage_range: string;
   price: number;
   stock_quantity: number;
-  image_url: string;
+  image: string;
   specifications: Record<string, unknown>;
   is_active: boolean;
 };
@@ -340,7 +340,7 @@ export type ProductBatteryRecord = {
   cycle_life: number;
   price: number;
   stock_quantity: number;
-  image_url: string;
+  image: string;
   specifications: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -358,7 +358,7 @@ export type CreateProductBatteryRequest = {
   cycle_life: number;
   price: number;
   stock_quantity: number;
-  image_url: string;
+  image: string;
   specifications: Record<string, unknown>;
   is_active: boolean;
 };
@@ -368,7 +368,7 @@ export type ProductCategoryApiRecord = {
   id: string;
   name: string;
   description: string | null;
-  image_url: string | null;
+  image: string | null;
   created_at: string;
 };
 
@@ -377,7 +377,7 @@ export type ProductCategoryDetailApiResponse = ApiDataResponse<ProductCategoryAp
 export type CreateProductCategoryRequest = {
   name: string;
   description: string;
-  image_url: string;
+  image: string;
 };
 export type UpdateProductCategoryRequest = Partial<CreateProductCategoryRequest>;
 
@@ -396,7 +396,7 @@ export type PackageRecord = {
   warranty_years: number;
   estimated_savings_monthly: number | null;
   payback_period_years: number | null;
-  image_url: string | null;
+  image: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -417,7 +417,7 @@ export type CreatePackageRequest = {
   warranty_years: number;
   estimated_savings_monthly: number;
   payback_period_years: number;
-  image_url: string;
+  image: string;
   is_active: boolean;
 };
 export type UpdatePackageRequest = Partial<CreatePackageRequest>;
@@ -852,7 +852,7 @@ export type BlogPostRecord = {
   body: string;
   category: string;
   status: string;
-  image_url: string;
+  image: string;
   seo_title: string;
   meta_description: string;
   read_time_minutes: number;
@@ -870,7 +870,7 @@ export type CreateBlogPostRequest = {
   body: string;
   category: string;
   status: string;
-  image_url: string;
+  image: string;
   seo_title: string;
   meta_description: string;
   read_time_minutes: number;

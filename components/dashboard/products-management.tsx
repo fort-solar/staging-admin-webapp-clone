@@ -64,7 +64,7 @@ type ProductCatalogRow = {
   categoryLabel: string;
   price: number;
   stockQuantity: number;
-  imageUrl: string;
+  image: string;
   isActive: boolean;
   summary: string;
   primaryStatLabel: string;
@@ -101,7 +101,7 @@ function normalizePanelRecord(product: ProductPanelRecord): ProductCatalogRow {
     categoryLabel: "Panels",
     price: product.price,
     stockQuantity: product.stock_quantity,
-    imageUrl: product.image_url,
+    image: product.image,
     isActive: product.is_active,
     summary: `${product.brand}${product.wattage ? ` · ${product.wattage}W` : ""}`,
     primaryStatLabel: "Stock",
@@ -133,7 +133,7 @@ function normalizeInverterRecord(product: ProductInverterRecord): ProductCatalog
     categoryLabel: "Inverters",
     price: product.price,
     stockQuantity: product.stock_quantity,
-    imageUrl: product.image_url,
+    image: product.image,
     isActive: product.is_active,
     summary: `${product.brand}${product.type ? ` · ${product.type}` : ""}`,
     primaryStatLabel: "Stock",
@@ -164,7 +164,7 @@ function normalizeBatteryRecord(product: ProductBatteryRecord): ProductCatalogRo
     categoryLabel: "Batteries",
     price: product.price,
     stockQuantity: product.stock_quantity,
-    imageUrl: product.image_url,
+    image: product.image,
     isActive: product.is_active,
     summary: `${product.brand}${product.type ? ` · ${product.type}` : ""}`,
     primaryStatLabel: "Stock",
@@ -275,7 +275,7 @@ export function ProductsManagementScreen() {
             limit: DEFAULT_PAGE_SIZE,
             search: deferredQuery.trim() || undefined,
             q: deferredQuery.trim() || undefined,
-            fields: ["id", "slug", "name", "brand", "type", "capacity_kva", "efficiency", "price", "stock_quantity", "image_url", "is_active"],
+            fields: ["id", "slug", "name", "brand", "type", "capacity_kva", "efficiency", "price", "stock_quantity", "image", "is_active"],
           }).then((payload) => ({
             data: payload.data.map(normalizeInverterRecord),
             pagination: payload.pagination,
@@ -286,7 +286,7 @@ export function ProductsManagementScreen() {
               limit: DEFAULT_PAGE_SIZE,
               search: deferredQuery.trim() || undefined,
               q: deferredQuery.trim() || undefined,
-              fields: ["id", "slug", "name", "brand", "type", "capacity_ah", "voltage", "cycle_life", "price", "stock_quantity", "image_url", "is_active"],
+              fields: ["id", "slug", "name", "brand", "type", "capacity_ah", "voltage", "cycle_life", "price", "stock_quantity", "image", "is_active"],
             }).then((payload) => ({
               data: payload.data.map(normalizeBatteryRecord),
               pagination: payload.pagination,
@@ -296,7 +296,7 @@ export function ProductsManagementScreen() {
               limit: DEFAULT_PAGE_SIZE,
               search: deferredQuery.trim() || undefined,
               q: deferredQuery.trim() || undefined,
-              fields: ["id", "slug", "name", "brand", "wattage", "efficiency", "price", "stock_quantity", "image_url", "is_active"],
+              fields: ["id", "slug", "name", "brand", "wattage", "efficiency", "price", "stock_quantity", "image", "is_active"],
             }).then((payload) => ({
               data: payload.data.map(normalizePanelRecord),
               pagination: payload.pagination,
@@ -346,7 +346,7 @@ export function ProductsManagementScreen() {
       limit: DEFAULT_PAGE_SIZE,
       search: deferredQuery.trim() || undefined,
       q: deferredQuery.trim() || undefined,
-      fields: ["id", "name", "description", "image_url", "created_at"],
+      fields: ["id", "name", "description", "image", "created_at"],
     })
       .then((payload) => {
         if (cancelled) {
@@ -388,7 +388,7 @@ export function ProductsManagementScreen() {
   const activeProducts = rows.filter((product) => product.isActive).length;
   const totalStock = rows.reduce((sum, product) => sum + product.stockQuantity, 0);
   const describedCategories = categories.filter((category) => Boolean(category.description)).length;
-  const imagedCategories = categories.filter((category) => Boolean(category.image_url)).length;
+  const imagedCategories = categories.filter((category) => Boolean(category.image)).length;
   const notice = searchParams.get("created") ? "Product saved successfully." : searchParams.get("draft") ? "Product draft saved." : null;
 
   function resetCategoryForm() {
@@ -408,7 +408,7 @@ export function ProductsManagementScreen() {
     setEditingCategory(category);
     setCategoryTitle(category.name);
     setCategoryDescription(category.description ?? "");
-    setCategoryImageUrl(category.image_url ?? "");
+    setCategoryImageUrl(category.image ?? "");
     setCategoryImageFile(null);
     setCategoryModalOpen(true);
   }
@@ -493,11 +493,11 @@ export function ProductsManagementScreen() {
       const body = categoryImageFile
         ? buildMultipartFormData({
             ...payload,
-            image_url: categoryImageFile,
+            image: categoryImageFile,
           })
         : {
             ...payload,
-            image_url: categoryImageUrl.trim(),
+            image: categoryImageUrl.trim(),
           };
 
       if (editingCategory) {
@@ -602,7 +602,7 @@ export function ProductsManagementScreen() {
                             <CatalogCard
                               key={`${product.type}-${product.id}`}
                               href={`/products/${product.id}?type=${product.type}`}
-                              image={product.imageUrl || ""}
+                              image={product.image || ""}
                               title={product.name}
                               eyebrow={product.categoryLabel}
                               price={formatCurrencyLabel(product.price)}
@@ -678,7 +678,7 @@ export function ProductsManagementScreen() {
                   <div className="category-directory">
                     {categories.length ? (
                       categories.map((category) => (
-                        <article key={category.id} className={cx("category-card", category.image_url && "is-emphasis")}>
+                        <article key={category.id} className={cx("category-card", category.image && "is-emphasis")}>
                           <div className="category-card__copy">
                             <strong>{category.name}</strong>
                             <span>{category.description || `Created ${formatDateLabel(category.created_at)}`}</span>
@@ -910,7 +910,7 @@ export function ProductDetailScreen(props: ProductDetailProps) {
                   <span className="product-placeholder" aria-hidden="true" />
                 </div>
               </div>
-              <AttachmentItem label={props.product.image_url || "No image URL available"} helper="Primary Image" actionLabel="Preview" />
+              <AttachmentItem label={props.product.image || "No image URL available"} helper="Primary Image" actionLabel="Preview" />
             </div>
           </DetailPanel>
 
@@ -932,7 +932,7 @@ export function ProductDetailScreen(props: ProductDetailProps) {
           </DetailPanel>
 
           <DetailPanel title="Product Details Gallery or Showcase">
-            <MediaShowcase title={props.product.name} image={props.product.image_url} gallery={props.product.image_url ? [props.product.image_url] : []} />
+            <MediaShowcase title={props.product.name} image={props.product.image} gallery={props.product.image ? [props.product.image] : []} />
           </DetailPanel>
         </div>
       </Panel>
@@ -1005,7 +1005,7 @@ export function ProductFormScreen() {
           weight_kg: Number(panelWeight),
           price: Number(price),
           stock_quantity: Number(stockQuantity),
-          image_url: imageFile,
+          image: imageFile,
           specifications,
           is_active: isActive,
         }));
@@ -1019,7 +1019,7 @@ export function ProductFormScreen() {
           voltage_range: voltageRange.trim(),
           price: Number(price),
           stock_quantity: Number(stockQuantity),
-          image_url: imageFile,
+          image: imageFile,
           specifications,
           is_active: isActive,
         }));
@@ -1033,7 +1033,7 @@ export function ProductFormScreen() {
           cycle_life: Number(cycleLife),
           price: Number(price),
           stock_quantity: Number(stockQuantity),
-          image_url: imageFile,
+          image: imageFile,
           specifications,
           is_active: isActive,
         }));
