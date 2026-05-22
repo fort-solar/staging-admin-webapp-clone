@@ -518,7 +518,7 @@ export function NotificationsProvider({ children, oneSignalConfig }: { children:
   );
 
   const markRead = useCallback(async (id: string, isRead: boolean) => {
-    await updateNotification(id, { is_read: isRead });
+    await updateNotification(id, { is_read: isRead }, { confirmation: false });
     setNotifications((current) =>
       current.map((item) => (item.id === id ? { ...item, is_read: isRead, updated_at: new Date().toISOString() } : item)),
     );

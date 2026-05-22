@@ -1,4 +1,4 @@
-import { DashboardRequestError, dashboardGet, submitDashboardForm } from "@/lib/api/client";
+import { DashboardRequestError, dashboardGet, submitDashboardForm, type DashboardRequestConfirmation } from "@/lib/api/client";
 import type {
   AdminDetailApiResponse,
   AdminListApiResponse,
@@ -91,6 +91,9 @@ type ListParams = {
 };
 
 type MultipartCapable<TBody> = TBody | FormData;
+type MutationRequestOptions = {
+  confirmation?: DashboardRequestConfirmation;
+};
 
 function withQuery(path: string, params: Record<string, string | number | string[] | null | undefined>) {
   const search = new URLSearchParams();
@@ -653,8 +656,11 @@ export function createNotification(body: CreateNotificationRequest) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/notifications/", body, { method: "POST" });
 }
 
-export function updateNotification(id: string, body: UpdateNotificationRequest) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/notifications/${id}`, body, { method: "PATCH" });
+export function updateNotification(id: string, body: UpdateNotificationRequest, options: MutationRequestOptions = {}) {
+  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/notifications/${id}`, body, {
+    method: "PATCH",
+    confirmation: options.confirmation,
+  });
 }
 
 export function deleteNotification(id: string) {

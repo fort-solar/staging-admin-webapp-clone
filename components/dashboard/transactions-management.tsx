@@ -29,6 +29,7 @@ import {
   getTransactions,
   updateTransaction,
 } from "@/lib/admin-api";
+import { isDashboardActionCancelledError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { DashboardOverview, PaginationMeta, TransactionRecord } from "@/types/api.types";
@@ -323,6 +324,10 @@ export function TransactionsManagementScreen() {
       closeForm();
       setRefreshKey((current) => current + 1);
     } catch (submitError) {
+      if (isDashboardActionCancelledError(submitError)) {
+        return;
+      }
+
       toast({
         title: editingRecord ? "Update failed" : "Create failed",
         description: getErrorMessage(submitError, "The transaction could not be saved."),

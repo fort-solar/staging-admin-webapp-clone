@@ -397,6 +397,7 @@ export type PackageRecord = {
   estimated_savings_monthly: number | null;
   payback_period_years: number | null;
   image: string | null;
+  image_url: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -417,7 +418,8 @@ export type CreatePackageRequest = {
   warranty_years: number;
   estimated_savings_monthly: number;
   payback_period_years: number;
-  image: string;
+  image?: string;
+  image_url?: string;
   is_active: boolean;
 };
 export type UpdatePackageRequest = Partial<CreatePackageRequest>;
@@ -853,6 +855,7 @@ export type BlogPostRecord = {
   category: string;
   status: string;
   image: string;
+  image_url: string;
   seo_title: string;
   meta_description: string;
   read_time_minutes: number;
@@ -870,7 +873,8 @@ export type CreateBlogPostRequest = {
   body: string;
   category: string;
   status: string;
-  image: string;
+  image?: string;
+  image_url?: string;
   seo_title: string;
   meta_description: string;
   read_time_minutes: number;

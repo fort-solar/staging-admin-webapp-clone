@@ -29,7 +29,7 @@ import {
   getProductPanels,
   updateProductCategory,
 } from "@/lib/admin-api";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type {
@@ -437,7 +437,7 @@ export function ProductsManagementScreen() {
         setRefreshKey((current) => current + 1);
       }
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 
@@ -464,7 +464,7 @@ export function ProductsManagementScreen() {
         setRefreshKey((current) => current + 1);
       }
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 
@@ -516,7 +516,7 @@ export function ProductsManagementScreen() {
       setCategoryPage(1);
       setRefreshKey((current) => current + 1);
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 
@@ -871,7 +871,7 @@ export function ProductDetailScreen(props: ProductDetailProps) {
       });
       router.push("/products");
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 

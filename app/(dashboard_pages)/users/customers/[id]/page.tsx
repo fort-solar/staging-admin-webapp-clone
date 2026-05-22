@@ -7,7 +7,7 @@ import { ErrorMessage } from "@/components/dashboard/error-message";
 import { ChevronLeftIcon } from "@/components/dashboard/icons";
 import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { formatEnumLabel, formatManagedUserStatusLabel, getCustomer, normalizeManagedUserStatus, updateCustomer } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
@@ -101,7 +101,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
         variant: "success",
       });
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 

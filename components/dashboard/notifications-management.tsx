@@ -28,6 +28,7 @@ import {
   getNotifications,
   updateNotification,
 } from "@/lib/admin-api";
+import { isDashboardActionCancelledError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import { notificationRecipients, notificationTriggerEvents } from "@/lib/management-data";
@@ -328,11 +329,15 @@ export function NotificationsManagementScreen() {
 
   async function handleMarkRead(record: NotificationRecord, isRead: boolean) {
     try {
-      await updateNotification(record.id, { is_read: isRead });
+      await updateNotification(record.id, { is_read: isRead }, { confirmation: false });
       setRows((current) => current.map((item) => (item.id === record.id ? { ...item, is_read: isRead } : item)));
       await refreshHeader();
       setRefreshKey((current) => current + 1);
     } catch (updateError) {
+      if (isDashboardActionCancelledError(updateError)) {
+        return;
+      }
+
       toast({
         title: "Notification update failed",
         description: getErrorMessage(updateError, "The notification could not be updated."),
@@ -352,6 +357,10 @@ export function NotificationsManagementScreen() {
       await refreshHeader();
       setRefreshKey((current) => current + 1);
     } catch (deleteError) {
+      if (isDashboardActionCancelledError(deleteError)) {
+        return;
+      }
+
       toast({
         title: "Delete failed",
         description: getErrorMessage(deleteError, "The notification could not be deleted."),
@@ -435,6 +444,10 @@ export function NotificationsManagementScreen() {
       setActiveTab(intent === "draft" ? "Draft" : form.kind);
       setRefreshKey((current) => current + 1);
     } catch (submitError) {
+      if (isDashboardActionCancelledError(submitError)) {
+        return;
+      }
+
       toast({
         title: editingRecord ? "Update failed" : "Create failed",
         description: getErrorMessage(submitError, "The notification could not be saved."),

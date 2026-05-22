@@ -35,6 +35,7 @@ import {
   WalletIcon,
   XCircleIcon,
 } from "@/components/dashboard/icons";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type ActionItem = {
   label: string;
@@ -87,6 +88,8 @@ type PaginationProps = {
 };
 
 export type SelectOption = string | { label: string; value: string };
+
+const EMPTY_SELECT_VALUE = "__fortsolar_empty_option__";
 
 type AvatarProps = {
   src?: string;
@@ -326,6 +329,8 @@ export function SelectField({
   placeholder,
   disabled,
   required,
+  variant = "default",
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -334,25 +339,32 @@ export function SelectField({
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  variant?: "default" | "inline";
+  ariaLabel?: string;
 }) {
   const normalizedOptions = options.map((option) => (typeof option === "string" ? { label: option, value: option } : option));
+  const hasEmptyOption = normalizedOptions.some((option) => option.value === "");
+  const resolvedValue = value === "" ? (hasEmptyOption ? EMPTY_SELECT_VALUE : undefined) : value;
+  const triggerClassName = cx(className, variant === "inline" && "is-inline");
 
   return (
-    <label className={cx("select-field", className)}>
-      <select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} required={required}>
-        {placeholder ? (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        ) : null}
+    <Select
+      value={resolvedValue}
+      onValueChange={(nextValue) => onChange(nextValue === EMPTY_SELECT_VALUE ? "" : nextValue)}
+      disabled={disabled}
+      required={required}
+    >
+      <SelectTrigger className={triggerClassName} aria-label={ariaLabel}>
+        <SelectValue className="select-field__value" placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
         {normalizedOptions.map((option) => (
-          <option key={`${option.value}-${option.label}`} value={option.value}>
+          <SelectItem key={`${option.value}-${option.label}`} value={option.value === "" ? EMPTY_SELECT_VALUE : option.value}>
             {option.label}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-      <ChevronDownIcon className="field-icon" />
-    </label>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -453,16 +465,14 @@ export function MetricCardSecondary({
       <div className="metric-card__footer">
         <div className="metric-card__meta">
           {selectedPeriod ? (
-            <label className="metric-card__period-select">
-              <select value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value as MetricPeriod)} aria-label={`Select ${title} period`}>
-                {metricPeriodOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {formatMetricPeriod(option)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDownIcon className="field-icon" />
-            </label>
+            <SelectField
+              value={selectedPeriod}
+              onChange={(nextValue) => setSelectedPeriod(nextValue as MetricPeriod)}
+              options={metricPeriodOptions.map((option) => ({ label: formatMetricPeriod(option), value: option }))}
+              variant="inline"
+              className="metric-card__period-select"
+              ariaLabel={`Select ${title} period`}
+            />
           ) : subtitle ? (
             <span>{subtitle}</span>
           ) : null}

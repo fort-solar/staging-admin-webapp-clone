@@ -7,7 +7,7 @@ import { EyeIcon } from "@/components/dashboard/icons";
 import { FormField, Modal } from "@/components/dashboard/modals";
 import { Button, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, TextAreaField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { DEFAULT_PAGE_SIZE, formatDateTimeLabel, formatEnumLabel, getBundleRequests, updateBundleRequest } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
@@ -133,7 +133,7 @@ export default function BundleRequestPage() {
       setDetailId(null);
       setRefreshKey((value) => value + 1);
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 

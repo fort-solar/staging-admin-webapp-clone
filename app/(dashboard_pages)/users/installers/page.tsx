@@ -7,7 +7,7 @@ import { ErrorMessage } from "@/components/dashboard/error-message";
 import { BanIcon, EyeIcon, TrashIcon } from "@/components/dashboard/icons";
 import { Avatar, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { DEFAULT_PAGE_SIZE, deleteInstaller, formatManagedUserStatusLabel, getInstallers, updateInstaller } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
@@ -124,7 +124,7 @@ export default function InstallersPage() {
       setError(null);
       setRefreshKey((value) => value + 1);
     } catch (updateError) {
-      if (isDashboardSessionExpiredError(updateError)) {
+      if (isDashboardActionCancelledError(updateError) || isDashboardSessionExpiredError(updateError)) {
         return;
       }
 
@@ -153,7 +153,7 @@ export default function InstallersPage() {
         setRefreshKey((value) => value + 1);
       }
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 

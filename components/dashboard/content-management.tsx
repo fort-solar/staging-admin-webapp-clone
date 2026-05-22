@@ -38,6 +38,7 @@ import {
   updateBlogPost,
   updateSitePage,
 } from "@/lib/admin-api";
+import { isDashboardActionCancelledError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { BlogPostRecord, PaginationMeta, SitePageRecord, SitePageSection } from "@/types/api.types";
@@ -377,6 +378,10 @@ export function BlogManagementScreen() {
       });
       setRefreshKey((current) => current + 1);
     } catch (deleteError) {
+      if (isDashboardActionCancelledError(deleteError)) {
+        return;
+      }
+
       toast({
         title: "Delete failed",
         description: getErrorMessage(deleteError, "The blog post could not be deleted."),
@@ -400,6 +405,10 @@ export function BlogManagementScreen() {
       setPreview(null);
       setRefreshKey((current) => current + 1);
     } catch (publishError) {
+      if (isDashboardActionCancelledError(publishError)) {
+        return;
+      }
+
       toast({
         title: "Publish failed",
         description: getErrorMessage(publishError, "The blog post could not be published."),
@@ -635,6 +644,10 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
       router.push("/blog");
       router.refresh();
     } catch (submitError) {
+      if (isDashboardActionCancelledError(submitError)) {
+        return;
+      }
+
       toast({
         title: postId ? "Update failed" : "Create failed",
         description: getErrorMessage(submitError, "The blog post could not be saved."),
@@ -833,6 +846,10 @@ export function SitePagesManagementScreen() {
       });
       setRefreshKey((current) => current + 1);
     } catch (deleteError) {
+      if (isDashboardActionCancelledError(deleteError)) {
+        return;
+      }
+
       toast({
         title: "Delete failed",
         description: getErrorMessage(deleteError, "The site page could not be deleted."),
@@ -1112,6 +1129,10 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
       router.push("/site-pages");
       router.refresh();
     } catch (submitError) {
+      if (isDashboardActionCancelledError(submitError)) {
+        return;
+      }
+
       toast({
         title: pageId ? "Update failed" : "Create failed",
         description: getErrorMessage(submitError, "The site page could not be saved."),

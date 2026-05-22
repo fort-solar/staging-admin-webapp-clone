@@ -8,7 +8,7 @@ import { EyeIcon, PlusIcon, ShieldOffIcon, TrashIcon } from "@/components/dashbo
 import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextInput } from "@/components/dashboard/modals";
 import { Avatar, Button, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { createAdmin, DEFAULT_PAGE_SIZE, deleteAdmin, formatEnumLabel, formatManagedUserStatusLabel, getAdmins, updateAdmin } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
@@ -179,7 +179,7 @@ export default function AdminsPage() {
       });
       setRefreshKey((value) => value + 1);
     } catch (updateError) {
-      if (isDashboardSessionExpiredError(updateError)) {
+      if (isDashboardActionCancelledError(updateError) || isDashboardSessionExpiredError(updateError)) {
         return;
       }
 
@@ -206,7 +206,7 @@ export default function AdminsPage() {
         setRefreshKey((value) => value + 1);
       }
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 

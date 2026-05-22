@@ -11,7 +11,7 @@ import { FormSubmitter } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { createInstallation, DEFAULT_PAGE_SIZE, deleteInstallation, formatDateTimeLabel, formatEnumLabel, getInstallation, getInstallations, updateInstallation } from "@/lib/admin-api";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { InstallationRecord, PaginationMeta } from "@/types/api.types";
@@ -224,7 +224,7 @@ export function InstallationsManagementScreen() {
         setRefreshKey((current) => current + 1);
       }
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 
@@ -261,7 +261,7 @@ export function InstallationsManagementScreen() {
       closeEditModal();
       setRefreshKey((current) => current + 1);
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 

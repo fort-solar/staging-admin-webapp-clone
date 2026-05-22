@@ -12,7 +12,7 @@ import { FormSubmitter } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Panel, Pagination, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { createJob, DEFAULT_PAGE_SIZE, deleteJob, formatCurrencyLabel, formatDateLabel, formatDateTimeLabel, formatEnumLabel, getJobApplicants, getJobBySlug, getJobs, updateJob, updateJobApplicant } from "@/lib/admin-api";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { JobApiRecord, JobApplicantRecord, PaginationMeta } from "@/types/api.types";
@@ -203,7 +203,7 @@ export function JobsManagementScreen() {
         setRefreshKey((current) => current + 1);
       }
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 
@@ -510,7 +510,7 @@ export function JobDetailScreen({ slug }: { slug: string }) {
         variant: "success",
       });
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 
@@ -538,7 +538,7 @@ export function JobDetailScreen({ slug }: { slug: string }) {
       });
       router.push("/jobs");
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 
@@ -574,7 +574,7 @@ export function JobDetailScreen({ slug }: { slug: string }) {
       });
       closeReviewModal();
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 

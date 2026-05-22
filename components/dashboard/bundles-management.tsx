@@ -21,7 +21,7 @@ import {
   getProductCategories,
   updatePackage,
 } from "@/lib/admin-api";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { PackageRecord, PaginationMeta, ProductCategoryApiRecord } from "@/types/api.types";
@@ -132,7 +132,7 @@ export function BundlesManagementScreen() {
         setRefreshKey((current) => current + 1);
       }
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 
@@ -244,7 +244,7 @@ export function BundleDetailScreen({ bundle }: { bundle: PackageRecord }) {
         variant: "success",
       });
     } catch (updateError) {
-      if (isDashboardSessionExpiredError(updateError)) {
+      if (isDashboardActionCancelledError(updateError) || isDashboardSessionExpiredError(updateError)) {
         return;
       }
 
@@ -266,7 +266,7 @@ export function BundleDetailScreen({ bundle }: { bundle: PackageRecord }) {
       });
       router.push("/packages");
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 

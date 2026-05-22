@@ -10,7 +10,7 @@ import { EyeIcon, FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard
 import { Button, EmptyScaffold, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { createAppliance, DEFAULT_PAGE_SIZE, deleteAppliance, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getAppliances, getQuoteRequest, getQuoteRequests, updateAppliance, updateQuoteRequest } from "@/lib/admin-api";
-import { isDashboardSessionExpiredError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { ApplianceCatalogRecord, PaginationMeta, QuoteRequestDetailRecord, QuoteRequestRecord } from "@/types/api.types";
@@ -327,7 +327,7 @@ export function EnergyAuditManagementScreen() {
       });
       setApplianceRefreshKey((current) => current + 1);
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 
@@ -356,7 +356,7 @@ export function EnergyAuditManagementScreen() {
 
       setApplianceRefreshKey((current) => current + 1);
     } catch (deleteError) {
-      if (isDashboardSessionExpiredError(deleteError)) {
+      if (isDashboardActionCancelledError(deleteError) || isDashboardSessionExpiredError(deleteError)) {
         return;
       }
 
@@ -682,7 +682,7 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
         variant: "success",
       });
     } catch (saveError) {
-      if (isDashboardSessionExpiredError(saveError)) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
         return;
       }
 
