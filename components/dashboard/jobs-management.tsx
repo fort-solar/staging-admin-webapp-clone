@@ -11,11 +11,11 @@ import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextArea } from
 import { FormSubmitter } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Panel, Pagination, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { createJob, DEFAULT_PAGE_SIZE, deleteJob, formatCurrencyLabel, formatDateLabel, formatDateTimeLabel, formatEnumLabel, getJobApplicants, getJobBySlug, getJobs, updateJob, updateJobApplicant } from "@/lib/admin-api";
+import { createJob, DEFAULT_PAGE_SIZE, deleteJob, formatCurrencyLabel, formatDateLabel, formatDateTimeLabel, formatEnumLabel, getInstallations, getInstallers, getJobApplicants, getJobBySlug, getJobs, updateJob, updateJobApplicant } from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { JobApiRecord, JobApplicantRecord, PaginationMeta } from "@/types/api.types";
+import type { InstallationRecord, InstallerRecord, JobApiRecord, JobApplicantRecord, PaginationMeta } from "@/types/api.types";
 
 const jobStatusTabs = ["All", "Open", "Assigned", "In Progress", "Completed", "Verified"] as const;
 const jobStatusOptions = [
@@ -94,6 +94,78 @@ function jobTagItems(job: JobApiRecord) {
     `${job.required_experience_years} yrs exp`,
     job.deadline ? `Due ${formatDateLabel(job.deadline)}` : "No deadline",
   ];
+}
+
+function formatInstallerOption(installer: InstallerRecord) {
+  const name = installer.user.fullName || installer.user.name || installer.user.email;
+  const company = installer.installerProfile.companyName ? ` • ${installer.installerProfile.companyName}` : "";
+  return `${name} (${installer.user.email})${company}`;
+}
+
+function formatInstallationOption(installation: InstallationRecord) {
+  const customer = installation.customer_name || installation.customer_email || installation.user_id;
+  const location = [installation.city, installation.state].filter(Boolean).join(", ");
+  return [customer, location, formatEnumLabel(installation.status)].filter(Boolean).join(" • ");
+}
+
+function withSelectedOption(options: Array<{ label: string; value: string }>, value: string, fallbackLabel: string) {
+  if (!value || options.some((option) => option.value === value)) {
+    return options;
+  }
+
+  return [{ value, label: fallbackLabel }, ...options];
+}
+
+function useJobReferenceOptions() {
+  const [installations, setInstallations] = useState<InstallationRecord[]>([]);
+  const [installers, setInstallers] = useState<InstallerRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.allSettled([
+      getInstallations({
+        page: 1,
+        limit: 100,
+        fields: ["id", "user_id", "customer_email", "customer_name", "status", "city", "state"],
+      }),
+      getInstallers({ page: 1, limit: 100 }),
+    ])
+      .then(([installationsResult, installersResult]) => {
+        if (cancelled) {
+          return;
+        }
+
+        const errors: string[] = [];
+
+        if (installationsResult.status === "fulfilled") {
+          setInstallations(installationsResult.value.data);
+        } else if (!isDashboardSessionExpiredError(installationsResult.reason)) {
+          errors.push(getErrorMessage(installationsResult.reason, "Installations could not be loaded."));
+        }
+
+        if (installersResult.status === "fulfilled") {
+          setInstallers(installersResult.value.data);
+        } else if (!isDashboardSessionExpiredError(installersResult.reason)) {
+          errors.push(getErrorMessage(installersResult.reason, "Installers could not be loaded."));
+        }
+
+        setError(errors[0] ?? null);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { installations, installers, isLoading, error };
 }
 
 export function JobsManagementScreen() {
@@ -318,6 +390,7 @@ export function JobDetailScreen({ slug }: { slug: string }) {
   const router = useRouter();
   const { can } = useAccessControl();
   const { toast } = useToast();
+  const { installations, installers, isLoading: isLoadingReferences, error: referenceError } = useJobReferenceOptions();
   const [job, setJob] = useState<JobApiRecord | null>(null);
   const [form, setForm] = useState({
     slug: "",
@@ -441,6 +514,36 @@ export function JobDetailScreen({ slug }: { slug: string }) {
           .includes(deferredApplicantQuery.toLowerCase()),
       ),
     [applicants, deferredApplicantQuery],
+  );
+  const installationOptions = useMemo(
+    () =>
+      withSelectedOption(
+        [
+          { value: "", label: "No installation linked" },
+          ...installations.map((installation) => ({
+            value: installation.id,
+            label: formatInstallationOption(installation),
+          })),
+        ],
+        form.installationId,
+        `Selected installation (${form.installationId})`,
+      ),
+    [form.installationId, installations],
+  );
+  const installerOptions = useMemo(
+    () =>
+      withSelectedOption(
+        [
+          { value: "", label: "No installer assigned" },
+          ...installers.map((installer) => ({
+            value: installer.user.id,
+            label: formatInstallerOption(installer),
+          })),
+        ],
+        form.assignedTo,
+        `Selected installer (${form.assignedTo})`,
+      ),
+    [form.assignedTo, installers],
   );
 
   function openReviewModal(applicant: JobApplicantRecord) {
@@ -767,11 +870,11 @@ export function JobDetailScreen({ slug }: { slug: string }) {
                 <FormField label="Deadline">
                   <TextField value={form.deadline} onChange={(event) => setForm((current) => ({ ...current, deadline: event.target.value }))} placeholder="2026-05-05T19:07:37.714Z" />
                 </FormField>
-                <FormField label="Installation ID">
-                  <TextField value={form.installationId} onChange={(event) => setForm((current) => ({ ...current, installationId: event.target.value }))} placeholder="Optional installation UUID" />
+                <FormField label="Installation" hint={isLoadingReferences ? "Loading installations..." : referenceError || "Optionally link this job to an installation."}>
+                  <SelectField value={form.installationId} onChange={(value) => setForm((current) => ({ ...current, installationId: value }))} options={installationOptions} placeholder="Select installation" disabled={isLoadingReferences} />
                 </FormField>
-                <FormField label="Assigned To">
-                  <TextField value={form.assignedTo} onChange={(event) => setForm((current) => ({ ...current, assignedTo: event.target.value }))} placeholder="Optional installer UUID" />
+                <FormField label="Assigned Installer" hint={isLoadingReferences ? "Loading installers..." : "Optionally pre-assign an installer to this job."}>
+                  <SelectField value={form.assignedTo} onChange={(value) => setForm((current) => ({ ...current, assignedTo: value }))} options={installerOptions} placeholder="Select installer" disabled={isLoadingReferences} />
                 </FormField>
                 <FormField label="Description">
                   <TextAreaField value={form.description} onChange={(value) => setForm((current) => ({ ...current, description: value }))} rows={6} placeholder="Job description" />
@@ -818,6 +921,7 @@ export function JobDetailScreen({ slug }: { slug: string }) {
 export function JobFormScreen() {
   const router = useRouter();
   const { toast } = useToast();
+  const { installations, installers, isLoading: isLoadingReferences, error: referenceError } = useJobReferenceOptions();
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -829,6 +933,36 @@ export function JobFormScreen() {
   const [installationId, setInstallationId] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const installationOptions = useMemo(
+    () =>
+      withSelectedOption(
+        [
+          { value: "", label: "No installation linked" },
+          ...installations.map((installation) => ({
+            value: installation.id,
+            label: formatInstallationOption(installation),
+          })),
+        ],
+        installationId,
+        `Selected installation (${installationId})`,
+      ),
+    [installationId, installations],
+  );
+  const installerOptions = useMemo(
+    () =>
+      withSelectedOption(
+        [
+          { value: "", label: "No installer assigned" },
+          ...installers.map((installer) => ({
+            value: installer.user.id,
+            label: formatInstallerOption(installer),
+          })),
+        ],
+        assignedTo,
+        `Selected installer (${assignedTo})`,
+      ),
+    [assignedTo, installers],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -908,11 +1042,11 @@ export function JobFormScreen() {
 
             <DetailPanel title="Assignment" description="Optional installation and installer references for the job posting.">
               <div className="detail-panel__stack">
-                <FormField label="Installation ID">
-                  <TextField value={installationId} onChange={(event) => setInstallationId(event.target.value)} placeholder="Installation UUID" />
+                <FormField label="Installation" hint={isLoadingReferences ? "Loading installations..." : referenceError || "Link this job to an installation if one already exists."}>
+                  <SelectField value={installationId} onChange={setInstallationId} options={installationOptions} placeholder="Select installation" disabled={isLoadingReferences} />
                 </FormField>
-                <FormField label="Assigned To">
-                  <TextField value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)} placeholder="Installer UUID" />
+                <FormField label="Assigned Installer" hint={isLoadingReferences ? "Loading installers..." : "Assign an installer now or leave the job open."}>
+                  <SelectField value={assignedTo} onChange={setAssignedTo} options={installerOptions} placeholder="Select installer" disabled={isLoadingReferences} />
                 </FormField>
               </div>
             </DetailPanel>

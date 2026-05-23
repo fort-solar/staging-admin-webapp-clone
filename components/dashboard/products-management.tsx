@@ -156,6 +156,17 @@ function inferDocumentKind(source: string, mimeType?: string | null) {
 }
 
 function normalizeCategorySection(record: unknown, index: number): ProductCategorySectionRecord | null {
+  if (typeof record === "string" && record.trim()) {
+    const name = record.trim();
+
+    return {
+      id: `${slugify(name)}-${index}`,
+      key: slugify(name),
+      name,
+      position: index + 1,
+    };
+  }
+
   if (!isRecord(record)) {
     return null;
   }
@@ -836,7 +847,8 @@ export function ProductsManagementScreen() {
       const payload = {
         name: categoryTitle.trim(),
         sections: preparedSections.map((section, index) => ({
-          ...section,
+          ...(section.id ? { id: section.id } : {}),
+          name: section.name.trim(),
           position: index + 1,
         })),
         requires_datasheet: requiresDatasheet,
@@ -1099,7 +1111,7 @@ export function ProductsManagementScreen() {
               </Button>
             </div>
             {categorySections.map((section, index) => (
-              <div key={`${section.id || section.key || "section"}-${index}`} className="form-repeat-row">
+              <div key={`${section.id || section.key || "section"}-${index}`} className="category-section-row">
                 <TextField
                   value={section.name}
                   onChange={(event) =>
@@ -1107,16 +1119,7 @@ export function ProductsManagementScreen() {
                       current.map((item, itemIndex) => (itemIndex === index ? { ...item, name: event.target.value } : item)),
                     )
                   }
-                  placeholder="Size"
-                />
-                <TextField
-                  value={section.key || ""}
-                  onChange={(event) =>
-                    setCategorySections((current) =>
-                      current.map((item, itemIndex) => (itemIndex === index ? { ...item, key: event.target.value } : item)),
-                    )
-                  }
-                  placeholder="size"
+                  placeholder="Section name"
                 />
                 <button
                   type="button"

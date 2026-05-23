@@ -10,11 +10,11 @@ import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextArea, Modal
 import { FormSubmitter } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { createInstallation, DEFAULT_PAGE_SIZE, deleteInstallation, formatDateTimeLabel, formatEnumLabel, getInstallation, getInstallations, updateInstallation } from "@/lib/admin-api";
+import { createInstallation, DEFAULT_PAGE_SIZE, deleteInstallation, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getCustomers, getInstallation, getInstallations, getInstallers, getOrders, updateInstallation } from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { InstallationRecord, PaginationMeta } from "@/types/api.types";
+import type { CustomerRecord, InstallationRecord, InstallerRecord, OrderRecord, PaginationMeta } from "@/types/api.types";
 
 const installationStatusTabs = ["All", "Scheduled", "In Progress", "Completed", "Cancelled"] as const;
 const installationStatusOptions = [
@@ -73,6 +73,30 @@ function formatLocation(record: InstallationRecord) {
   return [record.address, record.city, record.state, record.country].filter(Boolean).join(", ");
 }
 
+function formatCustomerOption(customer: CustomerRecord) {
+  const name = customer.fullName || customer.name || customer.email;
+  return `${name} (${customer.email})`;
+}
+
+function formatInstallerOption(installer: InstallerRecord) {
+  const name = installer.user.fullName || installer.user.name || installer.user.email;
+  const company = installer.installerProfile.companyName ? ` • ${installer.installerProfile.companyName}` : "";
+  return `${name} (${installer.user.email})${company}`;
+}
+
+function formatOrderOption(order: OrderRecord) {
+  const customer = order.customer_name || order.customer_email || order.id;
+  return `${customer} • ${formatCurrencyLabel(order.total_amount, order.currency)} • ${formatEnumLabel(order.status)}`;
+}
+
+function withSelectedOption(options: Array<{ label: string; value: string }>, value: string, fallbackLabel: string) {
+  if (!value || options.some((option) => option.value === value)) {
+    return options;
+  }
+
+  return [{ value, label: fallbackLabel }, ...options];
+}
+
 export function InstallationsManagementScreen() {
   const { can } = useAccessControl();
   const { toast } = useToast();
@@ -93,6 +117,9 @@ export function InstallationsManagementScreen() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [installerOptions, setInstallerOptions] = useState<InstallerRecord[]>([]);
+  const [installerLookupError, setInstallerLookupError] = useState<string | null>(null);
+  const [isLoadingInstallerOptions, setIsLoadingInstallerOptions] = useState(true);
   const deferredQuery = useDeferredValue(query);
   const canCreateInstallations = can("installations", "create");
   const canUpdateInstallations = can("installations", "update");
@@ -154,9 +181,58 @@ export function InstallationsManagementScreen() {
     };
   }, [deferredQuery, page, refreshKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    getInstallers({ page: 1, limit: 100 })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setInstallerOptions(payload.data);
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (isDashboardSessionExpiredError(loadError)) {
+          return;
+        }
+
+        setInstallerLookupError(getErrorMessage(loadError, "Installer options could not be loaded."));
+        setInstallerOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingInstallerOptions(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredRows = useMemo(
     () => rows.filter((record) => matchesInstallationStatus(record.status, status)),
     [rows, status],
+  );
+  const installerSelectOptions = useMemo(
+    () =>
+      withSelectedOption(
+        [
+          { value: "", label: "Unassigned" },
+          ...installerOptions.map((installer) => ({
+            value: installer.user.id,
+            label: formatInstallerOption(installer),
+          })),
+        ],
+        editInstallerId,
+        `Selected installer (${editInstallerId})`,
+      ),
+    [editInstallerId, installerOptions],
   );
 
   const scheduledCount = rows.filter((record) => matchesInstallationStatus(record.status, "Scheduled")).length;
@@ -429,8 +505,15 @@ export function InstallationsManagementScreen() {
           <FormField label="Status">
             <ModalSelect value={editStatus} onChange={setEditStatus} options={buildStatusOptions(editStatus)} disabled={isLoadingEdit} />
           </FormField>
-          <FormField label="Installer ID">
-            <ModalTextInput value={editInstallerId} onChange={(event) => setEditInstallerId(event.target.value)} placeholder="Installer UUID" />
+          <FormField
+            label="Installer"
+            hint={
+              isLoadingInstallerOptions
+                ? "Loading installers..."
+                : installerLookupError || "Select the installer assigned to this installation, or leave it unassigned."
+            }
+          >
+            <ModalSelect value={editInstallerId} onChange={setEditInstallerId} options={installerSelectOptions} disabled={isLoadingEdit || isLoadingInstallerOptions} />
           </FormField>
           <FormField label="Scheduled Date">
             <ModalTextInput value={editScheduledDate} onChange={(event) => setEditScheduledDate(event.target.value)} placeholder="2026-05-05T18:59:40.002Z" />
@@ -462,12 +545,111 @@ export function InstallationFormScreen() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
+  const [installers, setInstallers] = useState<InstallerRecord[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [isLoadingReferences, setIsLoadingReferences] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.allSettled([
+      getCustomers({ page: 1, limit: 100, fields: ["id", "name", "fullName", "email"] }),
+      getInstallers({ page: 1, limit: 100 }),
+      getOrders({ page: 1, limit: 100, fields: ["id", "customer_name", "customer_email", "total_amount", "currency", "status"] }),
+    ])
+      .then(([customersResult, installersResult, ordersResult]) => {
+        if (cancelled) {
+          return;
+        }
+
+        const errors: string[] = [];
+
+        if (customersResult.status === "fulfilled") {
+          setCustomers(customersResult.value.data);
+        } else if (!isDashboardSessionExpiredError(customersResult.reason)) {
+          errors.push(getErrorMessage(customersResult.reason, "Customers could not be loaded."));
+        }
+
+        if (installersResult.status === "fulfilled") {
+          setInstallers(installersResult.value.data);
+        } else if (!isDashboardSessionExpiredError(installersResult.reason)) {
+          errors.push(getErrorMessage(installersResult.reason, "Installers could not be loaded."));
+        }
+
+        if (ordersResult.status === "fulfilled") {
+          setOrders(ordersResult.value.data);
+        } else if (!isDashboardSessionExpiredError(ordersResult.reason)) {
+          errors.push(getErrorMessage(ordersResult.reason, "Orders could not be loaded."));
+        }
+
+        setReferenceError(errors[0] ?? null);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingReferences(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const customerOptions = useMemo(
+    () =>
+      withSelectedOption(
+        customers.map((customer) => ({
+          value: customer.id,
+          label: formatCustomerOption(customer),
+        })),
+        userId,
+        `Selected customer (${userId})`,
+      ),
+    [customers, userId],
+  );
+  const installerOptions = useMemo(
+    () =>
+      withSelectedOption(
+        [
+          { value: "", label: "Assign later" },
+          ...installers.map((installer) => ({
+            value: installer.user.id,
+            label: formatInstallerOption(installer),
+          })),
+        ],
+        installerId,
+        `Selected installer (${installerId})`,
+      ),
+    [installerId, installers],
+  );
+  const orderOptions = useMemo(
+    () =>
+      withSelectedOption(
+        orders.map((order) => ({
+          value: order.id,
+          label: formatOrderOption(order),
+        })),
+        orderId,
+        `Selected order (${orderId})`,
+      ),
+    [orderId, orders],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
 
     try {
+      if (!userId.trim()) {
+        throw new Error("Select a customer.");
+      }
+
+      if (!orderId.trim()) {
+        throw new Error("Select an order.");
+      }
+
       await createInstallation({
         user_id: userId.trim(),
         installer_id: installerId.trim(),
@@ -522,15 +704,15 @@ export function InstallationFormScreen() {
           <div className="product-form-grid">
             <DetailPanel title="Basic Information" description="Reference the customer, installer, order, and initial status.">
               <div className="detail-panel__stack">
-                <FormField label="User ID">
-                  <TextField value={userId} onChange={(event) => setUserId(event.target.value)} placeholder="Customer UUID" />
+                <FormField label="Customer" hint={isLoadingReferences ? "Loading customers..." : referenceError || "Select the customer for this installation."}>
+                  <SelectField value={userId} onChange={setUserId} options={customerOptions} placeholder="Select customer" disabled={isLoadingReferences} required />
                 </FormField>
                 <div className="product-inline-row is-two">
-                  <FormField label="Installer ID">
-                    <TextField value={installerId} onChange={(event) => setInstallerId(event.target.value)} placeholder="Installer UUID" />
+                  <FormField label="Installer" hint={isLoadingReferences ? "Loading installers..." : "Select an installer now or assign one later."}>
+                    <SelectField value={installerId} onChange={setInstallerId} options={installerOptions} placeholder="Select installer" disabled={isLoadingReferences} />
                   </FormField>
-                  <FormField label="Order ID">
-                    <TextField value={orderId} onChange={(event) => setOrderId(event.target.value)} placeholder="Order UUID" />
+                  <FormField label="Order" hint={isLoadingReferences ? "Loading orders..." : "Select the order this installation belongs to."}>
+                    <SelectField value={orderId} onChange={setOrderId} options={orderOptions} placeholder="Select order" disabled={isLoadingReferences} required />
                   </FormField>
                 </div>
                 <div className="product-inline-row is-two">

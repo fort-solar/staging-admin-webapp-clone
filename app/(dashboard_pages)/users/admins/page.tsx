@@ -162,7 +162,7 @@ export default function AdminsPage() {
   }
 
   async function handleToggleStatus(admin: AdminRecord) {
-    const nextStatus = admin.status.toLowerCase() === "active" ? "deactivated" : "active";
+    const nextStatus = admin.status.toLowerCase() === "active" ? "inactive" : "active";
 
     try {
       await updateAdmin(admin.id, {

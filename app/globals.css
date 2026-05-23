@@ -3628,6 +3628,18 @@ img {
   border-radius: 10px;
 }
 
+.category-section-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.category-section-row .dashboard-input {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
 .icon-square-button {
   display: inline-flex;
   align-items: center;

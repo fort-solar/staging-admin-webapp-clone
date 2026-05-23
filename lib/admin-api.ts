@@ -196,7 +196,7 @@ export function normalizeManagedUserStatus(status: string | null | undefined) {
   const normalized = status?.trim().toLowerCase() ?? "";
 
   if (normalized === "inactive" || normalized === "deactivated" || normalized === "disactivated") {
-    return "deactivated";
+    return "inactive";
   }
 
   return normalized;
@@ -204,6 +204,10 @@ export function normalizeManagedUserStatus(status: string | null | undefined) {
 
 export function formatManagedUserStatusLabel(status: string | null | undefined, fallback = "Unknown") {
   const normalized = normalizeManagedUserStatus(status);
+  if (normalized === "inactive") {
+    return "Deactivated";
+  }
+
   return normalized ? formatEnumLabel(normalized, fallback) : fallback;
 }
 

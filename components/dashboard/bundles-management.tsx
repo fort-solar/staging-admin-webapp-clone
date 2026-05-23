@@ -637,9 +637,9 @@ export function BundleDetailScreen({ packageId }: { packageId: string }) {
               <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
                 <strong className="mb-3 block text-sm">Package Thumbnail</strong>
                 {pkg.thumbnailUrl ? (
-                  <img src={pkg.thumbnailUrl} alt={`${pkg.name} thumbnail`} className="aspect-[4/3] w-full rounded-[14px] object-cover" />
+                  <img src={pkg.thumbnailUrl} alt={`${pkg.name} thumbnail`} className="aspect-[16/9] w-full max-w-[560px] rounded-[14px] object-cover" />
                 ) : (
-                  <div className="flex aspect-[4/3] items-center justify-center rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text-soft)]">
+                  <div className="flex aspect-[16/9] w-full max-w-[560px] items-center justify-center rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text-soft)]">
                     No thumbnail uploaded.
                   </div>
                 )}
@@ -1174,9 +1174,13 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                       <span className="upload-field__value">{thumbnailFile?.name || currentThumbnailUrl?.split("/").pop() || "Upload package thumbnail"}</span>
                     </label>
                     {thumbnailPreviewUrl || currentThumbnailUrl ? (
-                      <img src={thumbnailPreviewUrl || currentThumbnailUrl || ""} alt="Package thumbnail preview" className="aspect-[4/3] w-full rounded-[18px] border border-[var(--border)] object-cover" />
+                      <img
+                        src={thumbnailPreviewUrl || currentThumbnailUrl || ""}
+                        alt="Package thumbnail preview"
+                        className="aspect-[16/9] w-full max-w-[560px] rounded-[18px] border border-[var(--border)] object-cover"
+                      />
                     ) : (
-                      <div className="flex aspect-[4/3] items-center justify-center rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] text-sm text-[var(--text-soft)]">
+                      <div className="flex aspect-[16/9] w-full max-w-[560px] items-center justify-center rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] text-sm text-[var(--text-soft)]">
                         Upload package thumbnail
                       </div>
                     )}

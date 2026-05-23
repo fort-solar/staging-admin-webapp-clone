@@ -13,7 +13,10 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { InstallerRecord } from "@/types/api.types";
 
-const statusOptions = ["active", "deactivated", "suspended"];
+const statusOptions = [
+  { label: "Active", value: "active" },
+  { label: "Deactivated", value: "inactive" },
+];
 
 export default function InstallerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

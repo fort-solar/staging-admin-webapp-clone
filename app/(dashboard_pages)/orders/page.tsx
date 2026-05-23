@@ -68,6 +68,14 @@ function createInitialOrderForm(): OrderFormState {
   };
 }
 
+function slugify(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function getCustomerLabel(customer: CustomerRecord) {
   return `${customer.fullName || customer.name} (${customer.email})`;
 }
@@ -524,15 +532,25 @@ export default function OrdersPage() {
     setIsSaving(true);
 
     try {
+      form.items.forEach((item, index) => {
+        if (!item.name.trim()) {
+          throw new Error(`Enter a name for item ${index + 1}.`);
+        }
+
+        if (item.item_type !== "custom" && !item.item_id.trim()) {
+          throw new Error(`Select a ${item.item_type} for item ${index + 1}.`);
+        }
+      });
+
       await createOrder({
         customer_user_id: form.customer_user_id,
         status: form.status,
         currency: form.currency.trim() || "NGN",
         total_amount: Number(form.total_amount),
         notes: form.notes.trim(),
-        items: form.items.map((item) => ({
+        items: form.items.map((item, index) => ({
           item_type: item.item_type,
-          item_id: item.item_id.trim(),
+          item_id: item.item_type === "custom" ? slugify(item.name) || `custom-item-${index + 1}` : item.item_id.trim(),
           name: item.name.trim(),
           quantity: Number(item.quantity),
           unit_price: Number(item.unit_price),
@@ -828,17 +846,6 @@ export default function OrdersPage() {
                       </FormField>
                     </>
                   ) : null}
-                  <FormField label="Item ID">
-                    <input
-                      className="dashboard-input"
-                      type="text"
-                      value={item.item_id}
-                      onChange={(event) => handleItemChange(item.key, "item_id", event.target.value)}
-                      placeholder="Enter item id"
-                      readOnly={item.item_type === "product" || item.item_type === "package"}
-                      required
-                    />
-                  </FormField>
                   <FormField label="Item Name">
                     <input
                       className="dashboard-input"

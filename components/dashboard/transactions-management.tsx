@@ -24,15 +24,17 @@ import {
   formatCurrencyLabel,
   formatDateTimeLabel,
   formatEnumLabel,
+  getCustomers,
   getDashboardOverview,
+  getInstallations,
   getTransaction,
   getTransactions,
   updateTransaction,
 } from "@/lib/admin-api";
-import { isDashboardActionCancelledError } from "@/lib/api/client";
+import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { DashboardOverview, PaginationMeta, TransactionRecord } from "@/types/api.types";
+import type { CustomerRecord, DashboardOverview, InstallationRecord, PaginationMeta, TransactionRecord } from "@/types/api.types";
 
 const transactionFormId = "transaction-form";
 const emptyPagination: PaginationMeta = {
@@ -71,6 +73,25 @@ const defaultFormState: TransactionFormState = {
   description: "",
   metadata: "{}",
 };
+
+function formatCustomerOption(customer: CustomerRecord) {
+  const name = customer.fullName || customer.name || customer.email;
+  return `${name} (${customer.email})`;
+}
+
+function formatInstallationOption(installation: InstallationRecord) {
+  const customer = installation.customer_name || installation.customer_email || installation.user_id;
+  const location = [installation.city, installation.state].filter(Boolean).join(", ");
+  return [customer, location, formatEnumLabel(installation.status)].filter(Boolean).join(" • ");
+}
+
+function withSelectedOption(options: Array<{ label: string; value: string }>, value: string, fallbackLabel: string) {
+  if (!value || options.some((option) => option.value === value)) {
+    return options;
+  }
+
+  return [{ value, label: fallbackLabel }, ...options];
+}
 
 function parseMetadataInput(value: string) {
   const trimmed = value.trim();
@@ -144,6 +165,10 @@ export function TransactionsManagementScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
+  const [installations, setInstallations] = useState<InstallationRecord[]>([]);
+  const [isLoadingReferences, setIsLoadingReferences] = useState(false);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
   const canCreateTransactions = can("transactions", "create");
   const canUpdateTransactions = can("transactions", "update");
@@ -219,7 +244,81 @@ export function TransactionsManagementScreen() {
     };
   }, [detailId]);
 
+  useEffect(() => {
+    if (!formOpen) {
+      return;
+    }
+
+    let cancelled = false;
+
+    Promise.allSettled([
+      getCustomers({ page: 1, limit: 100, fields: ["id", "name", "fullName", "email"] }),
+      getInstallations({
+        page: 1,
+        limit: 100,
+        fields: ["id", "user_id", "customer_email", "customer_name", "status", "city", "state"],
+      }),
+    ])
+      .then(([customersResult, installationsResult]) => {
+        if (cancelled) {
+          return;
+        }
+
+        const errors: string[] = [];
+
+        if (customersResult.status === "fulfilled") {
+          setCustomers(customersResult.value.data);
+        } else if (!isDashboardSessionExpiredError(customersResult.reason)) {
+          errors.push(getErrorMessage(customersResult.reason, "Customers could not be loaded."));
+        }
+
+        if (installationsResult.status === "fulfilled") {
+          setInstallations(installationsResult.value.data);
+        } else if (!isDashboardSessionExpiredError(installationsResult.reason)) {
+          errors.push(getErrorMessage(installationsResult.reason, "Installations could not be loaded."));
+        }
+
+        setReferenceError(errors[0] ?? null);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingReferences(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [formOpen]);
+
   const filteredRows = useMemo(() => rows.filter((record) => transactionMatchesQuery(record, deferredQuery)), [deferredQuery, rows]);
+  const customerOptions = useMemo(
+    () =>
+      withSelectedOption(
+        customers.map((customer) => ({
+          value: customer.id,
+          label: formatCustomerOption(customer),
+        })),
+        form.userId,
+        `Selected customer (${form.userId})`,
+      ),
+    [customers, form.userId],
+  );
+  const installationOptions = useMemo(
+    () =>
+      withSelectedOption(
+        [
+          { value: "", label: "No installation linked" },
+          ...installations.map((installation) => ({
+            value: installation.id,
+            label: formatInstallationOption(installation),
+          })),
+        ],
+        form.installationId,
+        `Selected installation (${form.installationId})`,
+      ),
+    [form.installationId, installations],
+  );
 
   const metrics = useMemo(
     () => [
@@ -258,12 +357,16 @@ export function TransactionsManagementScreen() {
   function openCreate() {
     setEditingRecord(null);
     setForm(defaultFormState);
+    setIsLoadingReferences(true);
+    setReferenceError(null);
     setFormOpen(true);
   }
 
   function openEdit(record: TransactionRecord) {
     setEditingRecord(record);
     setForm(createFormState(record));
+    setIsLoadingReferences(true);
+    setReferenceError(null);
     setFormOpen(true);
   }
 
@@ -284,6 +387,10 @@ export function TransactionsManagementScreen() {
 
       if (!Number.isFinite(amount)) {
         throw new Error("Amount must be a valid number.");
+      }
+
+      if (!editingRecord && !form.userId.trim()) {
+        throw new Error("Select a customer.");
       }
 
       const intent = getFormSubmitIntent(event, "submit");
@@ -539,12 +646,12 @@ export function TransactionsManagementScreen() {
         <form id={transactionFormId} onSubmit={handleSubmit}>
           <div className="notification-form-grid">
             {!editingRecord ? (
-              <FormField label="User ID">
-                <ModalTextInput value={form.userId} onChange={(event) => setForm((current) => ({ ...current, userId: event.target.value }))} placeholder="Enter user UUID" />
+              <FormField label="Customer" hint={isLoadingReferences ? "Loading customers..." : referenceError || "Select the customer for this transaction."}>
+                <ModalSelect value={form.userId} onChange={(value) => setForm((current) => ({ ...current, userId: value }))} options={customerOptions} placeholder="Select customer" disabled={isLoadingReferences} required />
               </FormField>
             ) : null}
-            <FormField label="Installation ID">
-              <ModalTextInput value={form.installationId} onChange={(event) => setForm((current) => ({ ...current, installationId: event.target.value }))} placeholder="Optional installation UUID" />
+            <FormField label="Installation" hint={isLoadingReferences ? "Loading installations..." : "Optionally link this transaction to an installation."}>
+              <ModalSelect value={form.installationId} onChange={(value) => setForm((current) => ({ ...current, installationId: value }))} options={installationOptions} placeholder="Select installation" disabled={isLoadingReferences} />
             </FormField>
             <FormField label="Type">
               <ModalSelect value={form.type} onChange={(value) => setForm((current) => ({ ...current, type: value }))} options={[...transactionTypeOptions]} />

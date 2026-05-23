@@ -13,7 +13,10 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { AdminRecord } from "@/types/api.types";
 
-const statusOptions = ["active", "deactivated"];
+const statusOptions = [
+  { label: "Active", value: "active" },
+  { label: "Deactivated", value: "inactive" },
+];
 const roleOptions = ["super_admin", "operations_manager", "content_manager", "business_manager"];
 
 export default function AdminDetailsPage({ params }: { params: Promise<{ id: string }> }) {

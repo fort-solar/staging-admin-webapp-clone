@@ -106,7 +106,7 @@ export default function InstallersPage() {
   const topRatedInstallers = rows.filter((installer) => (installer.installerProfile.rating ?? 0) >= 4).length;
 
   async function handleToggleStatus(installer: InstallerRecord) {
-    const nextStatus = installer.user.status.toLowerCase() === "active" ? "deactivated" : "active";
+    const nextStatus = installer.user.status.toLowerCase() === "active" ? "inactive" : "active";
 
     try {
       await updateInstaller(installer.user.id, {
