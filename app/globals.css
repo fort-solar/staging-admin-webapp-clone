@@ -3131,11 +3131,25 @@ img {
   transform: translateY(-1px);
 }
 
+.catalog-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .catalog-card__hero {
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: 104px minmax(0, 1fr);
   gap: 14px;
   min-width: 0;
+}
+
+.catalog-card__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: flex-end;
 }
 
 .catalog-card__media,
@@ -3187,8 +3201,6 @@ img {
 .catalog-card__title-row {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
 }
 
 .catalog-card__title-row h3 {

@@ -103,12 +103,12 @@ export function CatalogCard({
           <div className="catalog-card__copy">
             <div className="catalog-card__title-row">
               <h3>{title}</h3>
-              {actions}
             </div>
             <p className="catalog-card__eyebrow">{eyebrow}</p>
             <strong className="catalog-card__price">{price}</strong>
           </div>
         </Link>
+        {actions ? <div className="catalog-card__actions">{actions}</div> : null}
       </div>
       <div className="catalog-card__body">
         <div className="catalog-card__summary-row">
