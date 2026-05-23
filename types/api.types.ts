@@ -262,6 +262,8 @@ export type ProductPanelRecord = {
   slug: string;
   name: string;
   brand: string;
+  category_id?: string | null;
+  category_name?: string | null;
   wattage: number;
   efficiency: number;
   voltage: number;
@@ -270,6 +272,10 @@ export type ProductPanelRecord = {
   price: number;
   stock_quantity: number;
   image: string;
+  image_url?: string | null;
+  datasheet_url?: string | null;
+  overview?: string | null;
+  section_values?: ProductSectionValueRecord[];
   specifications: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -299,6 +305,8 @@ export type ProductInverterRecord = {
   slug: string;
   name: string;
   brand: string;
+  category_id?: string | null;
+  category_name?: string | null;
   type: string;
   capacity_kva: number;
   efficiency: number;
@@ -306,6 +314,10 @@ export type ProductInverterRecord = {
   price: number;
   stock_quantity: number;
   image: string;
+  image_url?: string | null;
+  datasheet_url?: string | null;
+  overview?: string | null;
+  section_values?: ProductSectionValueRecord[];
   specifications: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -334,6 +346,8 @@ export type ProductBatteryRecord = {
   slug: string;
   name: string;
   brand: string;
+  category_id?: string | null;
+  category_name?: string | null;
   capacity_ah: number;
   voltage: number;
   type: string;
@@ -341,6 +355,10 @@ export type ProductBatteryRecord = {
   price: number;
   stock_quantity: number;
   image: string;
+  image_url?: string | null;
+  datasheet_url?: string | null;
+  overview?: string | null;
+  section_values?: ProductSectionValueRecord[];
   specifications: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
@@ -369,15 +387,23 @@ export type ProductCategoryApiRecord = {
   name: string;
   description: string | null;
   image: string | null;
+  image_url?: string | null;
+  sections?: ProductCategorySectionRecord[];
+  requires_datasheet?: boolean;
+  requires_product_image?: boolean;
   created_at: string;
+  updated_at?: string;
 };
 
 export type ProductCategoryListApiResponse = ApiCollectionResponse<ProductCategoryApiRecord>;
 export type ProductCategoryDetailApiResponse = ApiDataResponse<ProductCategoryApiRecord>;
 export type CreateProductCategoryRequest = {
   name: string;
-  description: string;
-  image: string;
+  description?: string;
+  image?: string;
+  sections: ProductCategorySectionRecord[];
+  requires_datasheet: boolean;
+  requires_product_image: boolean;
 };
 export type UpdateProductCategoryRequest = Partial<CreateProductCategoryRequest>;
 
@@ -398,6 +424,16 @@ export type PackageRecord = {
   payback_period_years: number | null;
   image: string | null;
   image_url: string | null;
+  thumbnail_url?: string | null;
+  package_image_url?: string | null;
+  overview?: string | null;
+  discount_percentage?: number | null;
+  solar_finance_enabled?: boolean;
+  items?: PackageProductItemRecord[];
+  what_it_powers?: string[];
+  system_details?: PackageSystemDetailsRecord | null;
+  datasheets?: ManagedMediaAsset[];
+  product_images?: string[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -405,24 +441,118 @@ export type PackageRecord = {
 
 export type PackageListApiResponse = ApiCollectionResponse<PackageRecord>;
 export type CreatePackageRequest = {
-  slug: string;
+  slug?: string;
   name: string;
-  description: string;
-  category_id: string | null;
-  system_size_kw: number;
+  description?: string;
+  overview?: string;
+  category_id?: string | null;
+  system_size_kw?: number;
   price: number;
-  number_of_panels: number;
-  panel_type: string;
-  inverter_type: string;
-  battery_included: boolean;
-  warranty_years: number;
-  estimated_savings_monthly: number;
-  payback_period_years: number;
+  number_of_panels?: number;
+  panel_type?: string;
+  inverter_type?: string;
+  battery_included?: boolean;
+  warranty_years?: number;
+  estimated_savings_monthly?: number;
+  payback_period_years?: number;
+  discount_percentage?: number;
+  solar_finance_enabled?: boolean;
+  items?: PackageProductItemRecord[];
+  what_it_powers?: string[];
+  system_details?: PackageSystemDetailsRecord;
+  thumbnail?: string;
   image?: string;
   image_url?: string;
+  thumbnail_url?: string;
+  package_image_url?: string;
   is_active: boolean;
 };
 export type UpdatePackageRequest = Partial<CreatePackageRequest>;
+
+export type ManagedMediaAsset = {
+  id?: string;
+  name: string;
+  url: string;
+  mime_type?: string | null;
+  kind?: "image" | "pdf" | "file" | (string & {});
+};
+
+export type ProductCategorySectionRecord = {
+  id?: string;
+  key?: string;
+  name: string;
+  position?: number;
+};
+
+export type ProductSectionValueRecord = {
+  id?: string;
+  section_id?: string | null;
+  key?: string;
+  section_name: string;
+  value: string;
+  unit?: string | null;
+};
+
+export type AdminProductRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  category_id: string | null;
+  category?: ProductCategoryApiRecord | null;
+  price: number;
+  stock_quantity: number;
+  overview?: string | null;
+  section_values: ProductSectionValueRecord[];
+  product_image_url?: string | null;
+  image_url?: string | null;
+  image?: string | null;
+  datasheet_url?: string | null;
+  datasheet?: ManagedMediaAsset | null;
+  media?: {
+    image_url?: string | null;
+    image_urls?: string[];
+    datasheets?: ManagedMediaAsset[];
+  };
+  specifications: Record<string, unknown>;
+  is_active: boolean;
+  status?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminProductListApiResponse = ApiCollectionResponse<AdminProductRecord>;
+export type AdminProductDetailApiResponse = ApiDataResponse<AdminProductRecord>;
+export type CreateAdminProductRequest = {
+  name: string;
+  category_id: string | null;
+  price: number;
+  stock_quantity: number;
+  overview?: string;
+  section_values: ProductSectionValueRecord[];
+  is_active: boolean;
+  image?: string;
+  datasheet?: string;
+};
+export type UpdateAdminProductRequest = Partial<CreateAdminProductRequest>;
+
+export type PackageProductItemRecord = {
+  id?: string;
+  category_id: string;
+  category_name?: string;
+  product_id: string;
+  product_name?: string;
+  quantity: number;
+  product?: AdminProductRecord | null;
+};
+
+export type PackageSystemDetailsRecord = {
+  inverter_size: string;
+  inverter_label?: string;
+  pv_size: string;
+  pv_label?: string;
+  battery_size: string;
+  battery_label?: string;
+};
 
 export type InstallationRecord = {
   id: string;

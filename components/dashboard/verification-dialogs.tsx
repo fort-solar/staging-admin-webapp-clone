@@ -72,7 +72,9 @@ function VerificationDocumentsDialogContent({
   const selectedDocument = documents.find((document) => document.id === selectedDocumentId) ?? documents[0] ?? null;
 
   useEffect(() => {
-    setSelectedDocumentId(documents[0]?.id ?? "");
+    queueMicrotask(() => {
+      setSelectedDocumentId(documents[0]?.id ?? "");
+    });
   }, [documents]);
 
   return (

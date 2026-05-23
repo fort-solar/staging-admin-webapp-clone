@@ -3195,8 +3195,8 @@ img {
   margin: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3212,7 +3212,7 @@ img {
 
 .catalog-card__price {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .catalog-card__body {
@@ -3310,7 +3310,7 @@ img {
 
 .category-card__copy strong {
   overflow: hidden;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4878,7 +4878,6 @@ img {
   .scaffold-grid,
   .product-detail-grid,
   .bundle-detail-grid,
-  .product-form-grid,
   .content-form-grid,
   .content-form-grid.is-pages,
   .audit-appliance-layout,
@@ -4899,6 +4898,12 @@ img {
 
   .detail-panel:last-child {
     border-bottom: 0;
+  }
+}
+
+@media (max-width: 1535px) {
+  .product-form-grid {
+    grid-template-columns: 1fr;
   }
 }
 

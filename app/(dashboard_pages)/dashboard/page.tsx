@@ -5,12 +5,13 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { ApproveVerificationDialog, VerificationDocumentsDialog } from "@/components/dashboard/verification-dialogs";
-import { Avatar, Button, IconButton, MetricCard, MetricCardSecondary, Panel, PanelHeader, RevenueChart, SearchField, StatusPill, cx } from "@/components/dashboard/ui";
+import { ActivityListItem, Avatar, Button, IconButton, MetricCard, MetricCardSecondary, Panel, PanelHeader, RevenueChart, SearchField, StatusPill, cx } from "@/components/dashboard/ui";
 import { ChevronDownIcon, EyeIcon, FilterIcon } from "@/components/dashboard/icons";
-import { approveVerification, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getDashboardOverview, getOrders, getVerificationSubmission, getVerificationSubmissions } from "@/lib/admin-api";
-import { dashboardRecentActivities, revenueSeries, toneFromStatus, type ChartPeriod, type MetricIconName, type MetricPeriod } from "@/lib/dashboard-data";
+import { normalizeAdminActivity } from "@/lib/admin-activity";
+import { approveVerification, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getAdminActivity, getDashboardOverview, getOrders, getVerificationSubmission, getVerificationSubmissions } from "@/lib/admin-api";
+import { revenueSeries, toneFromStatus, type ChartPeriod, type MetricIconName, type MetricPeriod } from "@/lib/dashboard-data";
 import { getErrorMessage } from "@/lib/api/errors";
-import type { DashboardOverview, OrderRecord, VerificationSubmissionDetail, VerificationSubmissionRecord } from "@/types/api.types";
+import type { AdminActivityRecord, DashboardOverview, OrderRecord, VerificationSubmissionDetail, VerificationSubmissionRecord } from "@/types/api.types";
 
 const periodOptions = [
   { value: "all" as const, label: "All" },
@@ -47,6 +48,7 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [queue, setQueue] = useState<VerificationSubmissionRecord[]>([]);
   const [recentOrdersData, setRecentOrdersData] = useState<OrderRecord[]>([]);
+  const [recentActivityRows, setRecentActivityRows] = useState<AdminActivityRecord[]>([]);
   const [documentsId, setDocumentsId] = useState<string | null>(null);
   const [documentDetail, setDocumentDetail] = useState<VerificationSubmissionDetail | null>(null);
   const [documentsLoading, setDocumentsLoading] = useState(false);
@@ -84,8 +86,9 @@ export default function DashboardPage() {
       getDashboardOverview(),
       canReadVerificationQueue ? getVerificationSubmissions({ page: 1, limit: 8 }) : Promise.resolve(null),
       canReadOrders ? getOrders({ page: 1, limit: 8 }) : Promise.resolve(null),
+      getAdminActivity({ scope: "all", page: 1, limit: 5 }).catch(() => null),
     ])
-      .then(([overviewPayload, verificationPayload, ordersPayload]) => {
+      .then(([overviewPayload, verificationPayload, ordersPayload, activityPayload]) => {
         if (cancelled) {
           return;
         }
@@ -93,6 +96,7 @@ export default function DashboardPage() {
         setOverview(overviewPayload.data);
         setQueue(verificationPayload?.data ?? []);
         setRecentOrdersData(ordersPayload?.data ?? []);
+        setRecentActivityRows(activityPayload?.data ?? []);
       })
       .catch((loadError) => {
         if (cancelled) {
@@ -180,6 +184,7 @@ export default function DashboardPage() {
   const activeDocumentsSubmission = queue.find((item) => item.id === documentsId) ?? null;
   const activeApprovalSubmission = queue.find((item) => item.id === approveId) ?? null;
   const chart = overview?.ui.revenueByPeriod?.[period] ?? revenueSeries[period];
+  const recentActivities = recentActivityRows.map(normalizeAdminActivity);
 
   const primaryMetrics = useMemo(
     () =>
@@ -354,22 +359,17 @@ export default function DashboardPage() {
 
         <section className="dashboard-split dashboard-split--activity-orders">
           <Panel className="overflow-hidden">
-            <PanelHeader title="Recent Activity" action={<button className="text-sm font-semibold text-[var(--text-soft)] underline-offset-4 hover:underline">See All</button>} />
+            <PanelHeader title="Recent Activity" action={<Link href="/activity-history" className="text-sm font-semibold text-[var(--text-soft)] underline-offset-4 hover:underline">See All</Link>} />
             <div className="px-6 pb-4">
-              {dashboardRecentActivities.map((activity) => (
-                <article key={activity.id} className="border-b border-[var(--border)] py-4 last:border-b-0">
-                  <div className="flex items-start gap-3">
-                    <span className={`activity-item__glyph is-${activity.tone}`}>
-                      <FilterIcon className="activity-item__icon" />
-                    </span>
-                    <div className="flex-1">
-                      <h3 className="m-0 text-sm font-bold sm:text-[15px]">{activity.title}</h3>
-                      <p className="m-0 pt-1 text-sm text-[var(--text-soft)]">{activity.description}</p>
-                      <small className="text-[11px] text-[var(--text-faint)] sm:text-[12px]">{activity.meta}</small>
-                    </div>
-                  </div>
-                </article>
-              ))}
+              {recentActivities.length ? (
+                recentActivities.map((activity) => (
+                  <article key={activity.id} className="border-b border-[var(--border)] py-4 last:border-b-0">
+                    <ActivityListItem title={activity.title} description={activity.description} meta={activity.meta} tone={activity.tone} />
+                  </article>
+                ))
+              ) : (
+                <p className="py-4 text-sm text-[var(--text-soft)]">{isLoading ? "Loading recent activity..." : "No recent activity was returned by the activity log."}</p>
+              )}
             </div>
           </Panel>
 

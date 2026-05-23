@@ -52,8 +52,12 @@ export default function VerificationQueuePage() {
   useEffect(() => {
     let cancelled = false;
 
-    setIsLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setIsLoading(true);
+        setError(null);
+      }
+    });
 
     getVerificationSubmissions({ page, limit: DEFAULT_PAGE_SIZE })
       .then((payload) => {
@@ -87,15 +91,21 @@ export default function VerificationQueuePage() {
 
   useEffect(() => {
     if (!documentsId) {
-      setDocumentDetail(null);
-      setDocumentsError(null);
+      queueMicrotask(() => {
+        setDocumentDetail(null);
+        setDocumentsError(null);
+      });
       return;
     }
 
     let cancelled = false;
 
-    setDocumentsLoading(true);
-    setDocumentsError(null);
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setDocumentsLoading(true);
+        setDocumentsError(null);
+      }
+    });
 
     getVerificationSubmission(documentsId)
       .then((payload) => {

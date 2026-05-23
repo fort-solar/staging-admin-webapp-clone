@@ -2,12 +2,16 @@ import { DashboardRequestError, dashboardGet, submitDashboardForm, type Dashboar
 import type {
   AdminDetailApiResponse,
   AdminListApiResponse,
+  ApiDataResponse,
   ApiSuccessResponse,
   ApplianceDetailApiResponse,
   ApplianceListApiResponse,
   AdminActivityListApiResponse,
+  AdminProductDetailApiResponse,
+  AdminProductListApiResponse,
   BundleRequestListApiResponse,
   CreateApplianceRequest,
+  CreateAdminProductRequest,
   CreatePackageRequest,
   CreateProductBatteryRequest,
   CreateProductCategoryRequest,
@@ -26,6 +30,7 @@ import type {
   CreateInstallationRequest,
   CreateJobRequest,
   PackageListApiResponse,
+  PackageRecord,
   ProductBatteryDetailApiResponse,
   ProductBatteryListApiResponse,
   ProductCategoryDetailApiResponse,
@@ -59,6 +64,7 @@ import type {
   UpdateInstallationRequest,
   UpdateJobApplicantRequest,
   UpdateJobRequest,
+  UpdateAdminProductRequest,
   UpdateProductBatteryRequest,
   UpdateCustomerRequest,
   UpdateInstallerRequest,
@@ -422,6 +428,35 @@ export function getProductCategories(params: ListParams = {}) {
   );
 }
 
+export function getProducts(params: ListParams = {}) {
+  return dashboardGet<AdminProductListApiResponse>(
+    withQuery("/api/v1/admin/products/", {
+      page: params.page ?? 1,
+      limit: params.limit ?? DEFAULT_PAGE_SIZE,
+      category: params.category,
+      search: params.search,
+      q: params.q,
+      fields: params.fields,
+    }),
+  );
+}
+
+export function getProduct(id: string) {
+  return dashboardGet<AdminProductDetailApiResponse>(`/api/v1/admin/products/${id}`);
+}
+
+export function createProduct(body: MultipartCapable<CreateAdminProductRequest>) {
+  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/", body, { method: "POST" });
+}
+
+export function updateProduct(id: string, body: MultipartCapable<UpdateAdminProductRequest>) {
+  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/${id}`, body, { method: "PATCH" });
+}
+
+export function deleteProduct(id: string) {
+  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/${id}`, null, { method: "DELETE" });
+}
+
 export function getProductCategory(id: string) {
   return dashboardGet<ProductCategoryDetailApiResponse>(`/api/v1/admin/product-categories/${id}`);
 }
@@ -524,11 +559,15 @@ export async function getPackageBySlug(slug: string) {
   return payload.data.find((pkg) => pkg.slug.trim().toLowerCase() === normalizedSlug) ?? null;
 }
 
+export function getPackage(id: string) {
+  return dashboardGet<ApiDataResponse<PackageRecord>>(`/api/v1/admin/packages/${id}`);
+}
+
 export function createPackage(body: MultipartCapable<CreatePackageRequest>) {
   return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/packages/", body, { method: "POST" });
 }
 
-export function updatePackage(id: string, body: UpdatePackageRequest) {
+export function updatePackage(id: string, body: MultipartCapable<UpdatePackageRequest>) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/packages/${id}`, body, { method: "PATCH" });
 }
 

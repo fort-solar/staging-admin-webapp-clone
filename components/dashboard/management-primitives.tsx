@@ -74,6 +74,7 @@ export function DirectoryToolbar({
 
 export function CatalogCard({
   href,
+  image,
   title,
   eyebrow,
   price,
@@ -97,7 +98,7 @@ export function CatalogCard({
       <div className="catalog-card__header">
         <Link href={href} className="catalog-card__hero" aria-label={`Open ${title}`}>
           <span className="catalog-card__media" aria-hidden="true">
-            <span className="product-placeholder" />
+            {image ? <img src={image} alt={title} /> : <span className="product-placeholder" />}
           </span>
           <div className="catalog-card__copy">
             <div className="catalog-card__title-row">
@@ -186,21 +187,25 @@ export function KeyValueList({
 }
 
 export function MediaShowcase({
+  title,
+  image,
   gallery,
 }: {
   title: string;
   image: string;
   gallery: string[];
 }) {
+  const assets = gallery.length ? gallery : image ? [image] : [];
+
   return (
     <div className="media-showcase">
       <div className="media-showcase__main">
-        <span className="product-placeholder" aria-hidden="true" />
+        {image ? <img src={image} alt={title} /> : <span className="product-placeholder" aria-hidden="true" />}
       </div>
       <div className="media-showcase__thumbs">
-        {gallery.map((asset, index) => (
+        {assets.map((asset, index) => (
           <span key={`${asset}-${index}`} className="media-showcase__thumb" aria-hidden="true">
-            <span className="product-placeholder" />
+            {asset ? <img src={asset} alt={`${title} ${index + 1}`} /> : <span className="product-placeholder" />}
           </span>
         ))}
       </div>
