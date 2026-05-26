@@ -10,10 +10,10 @@ import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextArea, Modal
 import { Button, Checkbox, EmptyScaffold, IconButton, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardSessionExpiredError } from "@/lib/api/client";
-import { createOrder, DEFAULT_PAGE_SIZE, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getCustomers, getDashboardOverview, getOrders, getPackages, getProductPanels } from "@/lib/admin-api";
+import { createOrder, DEFAULT_PAGE_SIZE, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getCustomers, getDashboardOverview, getOrders, getPackages, getProducts } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { CreateCustomerRequest, CustomerRecord, DashboardOverview, OrderRecord, PackageRecord, PaginationMeta, ProductPanelRecord } from "@/types/api.types";
+import type { AdminProductRecord, CreateCustomerRequest, CustomerRecord, DashboardOverview, OrderRecord, PackageRecord, PaginationMeta } from "@/types/api.types";
 
 const orderFormId = "order-create-form";
 const orderStatusOptions = ["pending", "processing", "completed", "cancelled"];
@@ -80,9 +80,9 @@ function getCustomerLabel(customer: CustomerRecord) {
   return `${customer.fullName || customer.name} (${customer.email})`;
 }
 
-function getProductPanelLabel(panel: ProductPanelRecord, currency = "NGN") {
-  const brand = panel.brand ? ` - ${panel.brand}` : "";
-  return `${panel.name}${brand} - ${formatCurrencyLabel(panel.price, currency)}`;
+function getProductLabel(product: AdminProductRecord, currency = "NGN") {
+  const category = product.category?.name ? ` - ${product.category.name}` : "";
+  return `${product.name}${category} - ${formatCurrencyLabel(product.price, currency)}`;
 }
 
 function getPackageLabel(pkg: PackageRecord, currency = "NGN") {
@@ -113,9 +113,9 @@ export default function OrdersPage() {
   const [packageResults, setPackageResults] = useState<Record<string, PackageRecord[]>>({});
   const [packageLoading, setPackageLoading] = useState<Record<string, boolean>>({});
   const [packageErrors, setPackageErrors] = useState<Record<string, string | null>>({});
-  const [productPanelResults, setProductPanelResults] = useState<Record<string, ProductPanelRecord[]>>({});
-  const [productPanelLoading, setProductPanelLoading] = useState<Record<string, boolean>>({});
-  const [productPanelErrors, setProductPanelErrors] = useState<Record<string, string | null>>({});
+  const [productResults, setProductResults] = useState<Record<string, AdminProductRecord[]>>({});
+  const [productLoading, setProductLoading] = useState<Record<string, boolean>>({});
+  const [productErrors, setProductErrors] = useState<Record<string, string | null>>({});
   const deferredQuery = useDeferredValue(query);
   const deferredCustomerQuery = useDeferredValue(customerQuery);
   const canCreateCustomers = can("customers", "create");
@@ -279,31 +279,31 @@ export default function OrdersPage() {
     const productItems = form.items.filter((item) => item.item_type === "product");
 
     if (!productItems.length) {
-      setProductPanelResults({});
-      setProductPanelLoading({});
-      setProductPanelErrors({});
+      setProductResults({});
+      setProductLoading({});
+      setProductErrors({});
       return;
     }
 
     let cancelled = false;
 
-    setProductPanelLoading(Object.fromEntries(productItems.map((item) => [item.key, true])));
-    setProductPanelErrors(Object.fromEntries(productItems.map((item) => [item.key, null])));
+    setProductLoading(Object.fromEntries(productItems.map((item) => [item.key, true])));
+    setProductErrors(Object.fromEntries(productItems.map((item) => [item.key, null])));
 
     Promise.all(
       productItems.map(async (item) => {
         try {
-          const payload = await getProductPanels({
+          const payload = await getProducts({
             page: 1,
             limit: 10,
             search: item.catalog_search.trim() || undefined,
             q: item.catalog_search.trim() || undefined,
-            fields: ["id", "name", "brand", "price", "is_active"],
+            fields: ["id", "name", "price", "is_active", "category_id"],
           });
 
           return {
             key: item.key,
-            data: payload.data.filter((panel) => panel.is_active),
+            data: payload.data.filter((product) => product.is_active),
             error: null,
           };
         } catch (loadError) {
@@ -323,9 +323,9 @@ export default function OrdersPage() {
         return;
       }
 
-      setProductPanelResults(Object.fromEntries(responses.map((response) => [response.key, response.data])));
-      setProductPanelErrors(Object.fromEntries(responses.map((response) => [response.key, response.error])));
-      setProductPanelLoading(Object.fromEntries(responses.map((response) => [response.key, false])));
+      setProductResults(Object.fromEntries(responses.map((response) => [response.key, response.data])));
+      setProductErrors(Object.fromEntries(responses.map((response) => [response.key, response.error])));
+      setProductLoading(Object.fromEntries(responses.map((response) => [response.key, false])));
     });
 
     return () => {
@@ -389,9 +389,9 @@ export default function OrdersPage() {
     setPackageResults({});
     setPackageLoading({});
     setPackageErrors({});
-    setProductPanelResults({});
-    setProductPanelLoading({});
-    setProductPanelErrors({});
+    setProductResults({});
+    setProductLoading({});
+    setProductErrors({});
   }
 
   function openCreateOrderModal() {
@@ -468,11 +468,11 @@ export default function OrdersPage() {
     }));
   }
 
-  function handleProductPanelSelect(key: string, panelId: string) {
-    const panel = (productPanelResults[key] ?? []).find((record) => record.id === panelId);
+  function handleProductSelect(key: string, productId: string) {
+    const product = (productResults[key] ?? []).find((record) => record.id === productId);
 
-    if (!panel) {
-      handleItemChange(key, "item_id", panelId);
+    if (!product) {
+      handleItemChange(key, "item_id", productId);
       return;
     }
 
@@ -482,10 +482,10 @@ export default function OrdersPage() {
         item.key === key
           ? {
               ...item,
-              item_id: panel.id,
-              name: panel.name,
-              unit_price: String(panel.price ?? ""),
-              catalog_search: item.catalog_search || panel.name,
+              item_id: product.id,
+              name: product.name,
+              unit_price: String(product.price ?? ""),
+              catalog_search: item.catalog_search || product.name,
             }
           : item,
       ),
@@ -778,34 +778,34 @@ export default function OrdersPage() {
                   </FormField>
                   {item.item_type === "product" ? (
                     <>
-                      <FormField label="Search Products" hint="Query active product panels by name or brand.">
-                        <SearchField value={item.catalog_search} onChange={(value) => handleItemChange(item.key, "catalog_search", value)} placeholder="Search product panels..." />
+                      <FormField label="Search Products" hint="Query active catalog products by name.">
+                        <SearchField value={item.catalog_search} onChange={(value) => handleItemChange(item.key, "catalog_search", value)} placeholder="Search products..." />
                       </FormField>
                       <FormField
-                        label="Product Panel"
+                        label="Product"
                         hint={
-                          productPanelLoading[item.key]
-                            ? "Loading product panels..."
-                            : productPanelErrors[item.key]
-                              ? productPanelErrors[item.key] || undefined
-                              : !(productPanelResults[item.key] ?? []).length
-                                ? "No matching product panels found."
-                                : "Select the product panel to attach to this order item."
+                          productLoading[item.key]
+                            ? "Loading products..."
+                            : productErrors[item.key]
+                              ? productErrors[item.key] || undefined
+                              : !(productResults[item.key] ?? []).length
+                                ? "No matching products found."
+                                : "Select the product to attach to this order item."
                         }
                       >
                         <ModalSelect
                           value={item.item_id}
-                          onChange={(value) => handleProductPanelSelect(item.key, value)}
+                          onChange={(value) => handleProductSelect(item.key, value)}
                           options={[
-                            ...(!item.item_id || (productPanelResults[item.key] ?? []).some((panel) => panel.id === item.item_id)
+                            ...(!item.item_id || (productResults[item.key] ?? []).some((product) => product.id === item.item_id)
                               ? []
                               : [{ value: item.item_id, label: `${item.name || "Selected product"}${item.unit_price ? ` - ${formatCurrencyLabel(item.unit_price, form.currency || "NGN")}` : ""}` }]),
-                            ...(productPanelResults[item.key] ?? []).map((panel) => ({
-                              value: panel.id,
-                              label: getProductPanelLabel(panel, form.currency || "NGN"),
+                            ...(productResults[item.key] ?? []).map((product) => ({
+                              value: product.id,
+                              label: getProductLabel(product, form.currency || "NGN"),
                             })),
                           ]}
-                          placeholder="Select a product panel"
+                          placeholder="Select a product"
                           required
                         />
                       </FormField>

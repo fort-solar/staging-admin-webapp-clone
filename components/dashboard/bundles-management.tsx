@@ -26,7 +26,7 @@ import {
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import type { ManagedMediaAsset, PackageProductItemRecord, PackageRecord, PackageSystemDetailsRecord, PaginationMeta, ProductCategoryApiRecord } from "@/types/api.types";
-import { loadProductsWithFallback, normalizeCategoryRecord, type ManagedProductRow } from "@/components/dashboard/products-management";
+import { loadProducts, normalizeCategoryRecord, type ManagedProductRow } from "@/components/dashboard/products-management";
 
 const packageCreateFormId = "package-create-form";
 const appliancePresetOptions = ["Laptops", "Phones", "Fridge", "Microwave", "Led Bulbs", "Outlets", "TVs", "Standing Fan", "Washing Machine"];
@@ -763,7 +763,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
 
         setCategories(categoryRows);
         const categoryLookup = new Map(categoryRows.map((item) => [item.id, item]));
-        const productsPayload = await loadProductsWithFallback({
+        const productsPayload = await loadProducts({
           page: 1,
           limit: 100,
           query: "",

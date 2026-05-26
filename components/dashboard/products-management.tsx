@@ -16,27 +16,18 @@ import {
   createProductCategory,
   DEFAULT_PAGE_SIZE,
   deleteProduct,
-  deleteProductBattery,
   deleteProductCategory,
-  deleteProductInverter,
-  deleteProductPanel,
   formatCurrencyLabel,
   formatDateLabel,
   getProduct,
-  getProductBattery,
-  getProductBatteries,
   getProductCategories,
-  getProductInverter,
-  getProductInverters,
-  getProductPanel,
-  getProductPanels,
   getProducts,
   updateProduct,
   updateProductCategory,
 } from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
-import type { AdminProductRecord, PaginationMeta, ProductBatteryRecord, ProductCategoryApiRecord, ProductCategorySectionRecord, ProductInverterRecord, ProductPanelRecord, ProductSectionValueRecord } from "@/types/api.types";
+import type { AdminProductRecord, PaginationMeta, ProductCategoryApiRecord, ProductCategorySectionRecord, ProductSectionValueRecord } from "@/types/api.types";
 
 const productViewTabs = ["Products", "Categories"] as const;
 const productStatusTabs = ["All", "Published", "Draft"] as const;
@@ -45,12 +36,10 @@ const productCreateFormId = "product-create-form";
 
 type ProductView = (typeof productViewTabs)[number];
 type ProductStatusFilter = (typeof productStatusTabs)[number];
-type LegacyKind = "panels" | "inverters" | "batteries";
 type SectionDraft = ProductSectionValueRecord & { key: string };
 export type ManagedProductRow = AdminProductRecord & {
   categoryKey: string;
   categoryLabel: string;
-  legacyKind?: LegacyKind;
 };
 
 const emptyPagination: PaginationMeta = {
@@ -300,104 +289,7 @@ function formatSectionValue(item: ProductSectionValueRecord) {
   return `${item.value}${item.unit ? ` ${item.unit}` : ""}`;
 }
 
-function normalizeLegacyPanelRecord(record: ProductPanelRecord): ManagedProductRow {
-  const typedRecord = record as ProductPanelRecord & { category_id?: string | null };
-
-  return {
-    id: record.id,
-    slug: record.slug,
-    name: record.name,
-    category_id: typedRecord.category_id ?? null,
-    categoryKey: typedRecord.category_id || "legacy:panels",
-    categoryLabel: "Panels",
-    price: record.price,
-    stock_quantity: record.stock_quantity,
-    overview: record.brand || "Solar panel",
-    section_values: [
-      { section_name: "Brand", value: record.brand, key: "brand" },
-      { section_name: "Wattage", value: String(record.wattage), unit: "W", key: "wattage" },
-      { section_name: "Efficiency", value: String(record.efficiency), unit: "%", key: "efficiency" },
-      { section_name: "Voltage", value: String(record.voltage), unit: "V", key: "voltage" },
-      { section_name: "Dimensions", value: record.dimensions || "N/A", key: "dimensions" },
-      { section_name: "Weight", value: String(record.weight_kg), unit: "kg", key: "weight_kg" },
-    ],
-    product_image_url: record.image_url || record.image || null,
-    image_url: record.image_url || record.image || null,
-    image: record.image || record.image_url || null,
-    datasheet_url: null,
-    specifications: record.specifications ?? {},
-    is_active: record.is_active,
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-    legacyKind: "panels",
-  };
-}
-
-function normalizeLegacyInverterRecord(record: ProductInverterRecord): ManagedProductRow {
-  const typedRecord = record as ProductInverterRecord & { category_id?: string | null };
-
-  return {
-    id: record.id,
-    slug: record.slug,
-    name: record.name,
-    category_id: typedRecord.category_id ?? null,
-    categoryKey: typedRecord.category_id || "legacy:inverters",
-    categoryLabel: "Inverters",
-    price: record.price,
-    stock_quantity: record.stock_quantity,
-    overview: record.brand || record.type || "Solar inverter",
-    section_values: [
-      { section_name: "Brand", value: record.brand, key: "brand" },
-      { section_name: "Type", value: record.type || "N/A", key: "type" },
-      { section_name: "Size", value: String(record.capacity_kva), unit: "kVA", key: "capacity_kva" },
-      { section_name: "Efficiency", value: String(record.efficiency), unit: "%", key: "efficiency" },
-      { section_name: "Voltage Range", value: record.voltage_range || "N/A", key: "voltage_range" },
-    ],
-    product_image_url: record.image_url || record.image || null,
-    image_url: record.image_url || record.image || null,
-    image: record.image || record.image_url || null,
-    datasheet_url: null,
-    specifications: record.specifications ?? {},
-    is_active: record.is_active,
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-    legacyKind: "inverters",
-  };
-}
-
-function normalizeLegacyBatteryRecord(record: ProductBatteryRecord): ManagedProductRow {
-  const typedRecord = record as ProductBatteryRecord & { category_id?: string | null };
-
-  return {
-    id: record.id,
-    slug: record.slug,
-    name: record.name,
-    category_id: typedRecord.category_id ?? null,
-    categoryKey: typedRecord.category_id || "legacy:batteries",
-    categoryLabel: "Batteries",
-    price: record.price,
-    stock_quantity: record.stock_quantity,
-    overview: record.brand || record.type || "Solar battery",
-    section_values: [
-      { section_name: "Brand", value: record.brand, key: "brand" },
-      { section_name: "Type", value: record.type || "N/A", key: "type" },
-      { section_name: "Size", value: String(record.capacity_ah), unit: "Ah", key: "capacity_ah" },
-      { section_name: "Voltage", value: String(record.voltage), unit: "V", key: "voltage" },
-      { section_name: "Cycle Life", value: String(record.cycle_life), key: "cycle_life" },
-    ],
-    product_image_url: record.image_url || record.image || null,
-    image_url: record.image_url || record.image || null,
-    image: record.image || record.image_url || null,
-    datasheet_url: null,
-    specifications: record.specifications ?? {},
-    is_active: record.is_active,
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-    legacyKind: "batteries",
-  };
-}
-
-function normalizeManagedProductRecord(record: AdminProductRecord | Record<string, unknown>, categories: Map<string, ProductCategoryApiRecord>) {
+export function normalizeManagedProductRecord(record: AdminProductRecord | Record<string, unknown>, categories: Map<string, ProductCategoryApiRecord>) {
   const raw = record as Record<string, unknown>;
   const categoryId = readString(raw, ["category_id"]);
   const embeddedCategory = isRecord(raw.category) ? normalizeCategoryRecord(raw.category) : null;
@@ -433,99 +325,30 @@ function normalizeManagedProductRecord(record: AdminProductRecord | Record<strin
   } satisfies ManagedProductRow;
 }
 
-export async function loadProductsWithFallback(params: { page: number; query: string; categories: Map<string, ProductCategoryApiRecord>; limit?: number }) {
+export async function loadProducts(params: { page: number; query: string; categories: Map<string, ProductCategoryApiRecord>; limit?: number }) {
   const trimmedQuery = params.query.trim();
   const limit = params.limit ?? DEFAULT_PAGE_SIZE;
 
-  try {
-    const payload = await getProducts({
-      page: params.page,
-      limit,
-      search: trimmedQuery || undefined,
-      q: trimmedQuery || undefined,
-    });
+  const payload = await getProducts({
+    page: params.page,
+    limit,
+    search: trimmedQuery || undefined,
+    q: trimmedQuery || undefined,
+  });
 
-    return {
-      data: payload.data.map((item) => normalizeManagedProductRecord(item, params.categories)),
-      pagination: payload.pagination ?? emptyPagination,
-    };
-  } catch {
-    const [panelsPayload, invertersPayload, batteriesPayload] = await Promise.all([
-      getProductPanels({ page: 1, limit: Math.max(limit, 100), search: trimmedQuery || undefined, q: trimmedQuery || undefined }),
-      getProductInverters({ page: 1, limit: Math.max(limit, 100), search: trimmedQuery || undefined, q: trimmedQuery || undefined }),
-      getProductBatteries({ page: 1, limit: Math.max(limit, 100), search: trimmedQuery || undefined, q: trimmedQuery || undefined }),
-    ]);
-
-    const merged = [
-      ...panelsPayload.data.map(normalizeLegacyPanelRecord),
-      ...invertersPayload.data.map(normalizeLegacyInverterRecord),
-      ...batteriesPayload.data.map(normalizeLegacyBatteryRecord),
-    ];
-
-    const total = merged.length;
-    const start = (params.page - 1) * limit;
-    const end = start + limit;
-
-    return {
-      data: merged.slice(start, end),
-      pagination: {
-        page: params.page,
-        limit,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / limit)),
-      },
-    };
-  }
+  return {
+    data: payload.data.map((item) => normalizeManagedProductRecord(item, params.categories)),
+    pagination: payload.pagination ?? emptyPagination,
+  };
 }
 
-async function loadProductWithFallback(id: string, categories: Map<string, ProductCategoryApiRecord>) {
-  try {
-    const payload = await getProduct(id);
-    return normalizeManagedProductRecord(payload.data, categories);
-  } catch {
-    const [panelPayload, inverterPayload, batteryPayload] = await Promise.allSettled([
-      getProductPanel(id),
-      getProductInverter(id),
-      getProductBattery(id),
-    ]);
-
-    if (panelPayload.status === "fulfilled") {
-      return normalizeLegacyPanelRecord(panelPayload.value.data);
-    }
-
-    if (inverterPayload.status === "fulfilled") {
-      return normalizeLegacyInverterRecord(inverterPayload.value.data);
-    }
-
-    if (batteryPayload.status === "fulfilled") {
-      return normalizeLegacyBatteryRecord(batteryPayload.value.data);
-    }
-
-    return null;
-  }
+async function loadProductRecord(id: string, categories: Map<string, ProductCategoryApiRecord>) {
+  const payload = await getProduct(id);
+  return normalizeManagedProductRecord(payload.data, categories);
 }
 
-async function deleteProductWithFallback(product: ManagedProductRow) {
-  try {
-    await deleteProduct(product.id);
-  } catch (error) {
-    if (product.legacyKind === "panels") {
-      await deleteProductPanel(product.id);
-      return;
-    }
-
-    if (product.legacyKind === "inverters") {
-      await deleteProductInverter(product.id);
-      return;
-    }
-
-    if (product.legacyKind === "batteries") {
-      await deleteProductBattery(product.id);
-      return;
-    }
-
-    throw error;
-  }
+async function deleteProductRecord(product: ManagedProductRow) {
+  await deleteProduct(product.id);
 }
 
 function DocumentSelectField({
@@ -679,7 +502,7 @@ export function ProductsManagementScreen() {
     setProductsLoading(true);
     setProductsError(null);
 
-    loadProductsWithFallback({
+    loadProducts({
       page: productPage,
       query: deferredQuery,
       categories: categoriesMap,
@@ -785,7 +608,7 @@ export function ProductsManagementScreen() {
 
   async function handleDeleteProduct(product: ManagedProductRow) {
     try {
-      await deleteProductWithFallback(product);
+      await deleteProductRecord(product);
       toast({
         title: "Product deleted",
         description: `${product.name} was removed successfully.`,
@@ -1176,7 +999,7 @@ export function ProductDetailScreen({ productId }: { productId: string }) {
         }
 
         setCategories(categoryRows);
-        return loadProductWithFallback(productId, new Map(categoryRows.map((item) => [item.id, item])));
+        return loadProductRecord(productId, new Map(categoryRows.map((item) => [item.id, item])));
       })
       .then((resolvedProduct) => {
         if (cancelled) {
@@ -1211,7 +1034,7 @@ export function ProductDetailScreen({ productId }: { productId: string }) {
     }
 
     try {
-      await deleteProductWithFallback(product);
+      await deleteProductRecord(product);
       toast({
         title: "Product deleted",
         description: `${product.name} was removed successfully.`,
@@ -1401,7 +1224,7 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
     let cancelled = false;
     setLoadingProduct(true);
 
-    loadProductWithFallback(productId, categoriesMap)
+    loadProductRecord(productId, categoriesMap)
       .then((product) => {
         if (cancelled || !product) {
           return;
