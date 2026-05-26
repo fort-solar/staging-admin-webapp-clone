@@ -588,11 +588,11 @@ export function BundleDetailScreen({ packageId }: { packageId: string }) {
                 { label: "Status", value: <StatusPill label={pkg.is_active ? "Published" : "Draft"} tone={pkg.is_active ? "success" : "warning"} /> },
               ]}
             />
-            <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+            <div className="rounded-[18px] border border-(--border) bg-(--surface-muted) p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <strong className="block text-sm">Solar Finance</strong>
-                  <p className="mt-1 text-sm text-[var(--text-soft)]">{pkg.solarFinanceEnabled ? "Enabled for customers who need installment or credit options." : "Disabled for this package."}</p>
+                  <p className="mt-1 text-sm text-(--text-soft)">{pkg.solarFinanceEnabled ? "Enabled for customers who need installment or credit options." : "Disabled for this package."}</p>
                 </div>
                 <Checkbox checked={pkg.solarFinanceEnabled} onChange={() => undefined} />
               </div>
@@ -630,11 +630,11 @@ export function BundleDetailScreen({ packageId }: { packageId: string }) {
                       </span>
                     ))
                   ) : (
-                    <span className="text-sm text-[var(--text-soft)]">No power capacity tags were added for this package.</span>
+                    <span className="text-sm text-(--text-soft)">No power capacity tags were added for this package.</span>
                   )}
                 </div>
               </div>
-              <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+              <div className="rounded-[18px] border border-(--border) bg-[var(--surface-muted)] p-3">
                 <strong className="mb-3 block text-sm">Package Thumbnail</strong>
                 {pkg.thumbnailUrl ? (
                   <img src={pkg.thumbnailUrl} alt={`${pkg.name} thumbnail`} className="aspect-[16/9] w-full max-w-[560px] rounded-[14px] object-cover" />
