@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type ComponentType, type ReactNode, type SVGProps, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type ComponentType, type ReactNode, type SVGProps, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useNotifications } from "@/components/dashboard/notifications-provider";
 import {
@@ -91,6 +91,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [ordersOpen, setOrdersOpen] = useState(() => pathname.startsWith("/orders"));
   const [headerSearch, setHeaderSearch] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [headerOffset, setHeaderOffset] = useState(70);
+  const headerRef = useRef<HTMLElement | null>(null);
 
   const role = normalizeAdminRole(session?.session.adminRole ?? session?.user.adminRole);
   const permissions = session?.permissions ?? emptyPermissions;
@@ -138,6 +140,29 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [mobileOpen]);
 
+  useEffect(() => {
+    const header = headerRef.current;
+
+    if (!header) {
+      return;
+    }
+
+    const updateHeaderOffset = () => {
+      setHeaderOffset(Math.round(header.getBoundingClientRect().height));
+    };
+
+    updateHeaderOffset();
+
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateHeaderOffset);
+    resizeObserver?.observe(header);
+    window.addEventListener("resize", updateHeaderOffset);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateHeaderOffset);
+    };
+  }, [collapsed, mobileOpen, pageTitle]);
+
   const usersMenuOpen = pathname.startsWith("/users") || usersOpen;
   const ordersMenuOpen = pathname.startsWith("/orders") || ordersOpen;
   const displayName = session?.user.fullName || session?.user.name || "Admin";
@@ -163,6 +188,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (!session) {
     return null;
   }
+
+  const dashboardMainStyle = {
+    "--dashboard-header-offset": `${headerOffset}px`,
+  } as CSSProperties;
 
   return (
     <div className={cx("dashboard-app", collapsed && "is-collapsed", mobileOpen && "is-mobile-open")}>
@@ -267,8 +296,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="dashboard-main">
-        <header className="dashboard-header">
+      <div className="dashboard-main" style={dashboardMainStyle}>
+        <header ref={headerRef} className="dashboard-header">
           <div className="dashboard-header__title-wrap">
             <IconButton
               label={mobileOpen ? "Close sidebar" : "Open sidebar"}

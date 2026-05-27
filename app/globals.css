@@ -3372,6 +3372,10 @@ img {
   overflow: hidden;
 }
 
+.product-form-shell {
+  overflow: visible;
+}
+
 .product-detail-shell__header,
 .product-form-shell__header {
   justify-content: space-between;
@@ -3591,6 +3595,11 @@ img {
 
 .product-form-shell__header {
   align-items: flex-start;
+  position: sticky;
+  top: calc(var(--dashboard-header-offset, var(--header-height)) + 12px);
+  z-index: 20;
+  background: var(--surface);
+  box-shadow: 0 18px 30px -30px rgba(16, 24, 40, 0.42);
 }
 
 .product-form-grid {
