@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useDeferredValue, useEffect, useMemo, useState, startTransition } from "react";
+import { type FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
@@ -712,8 +712,10 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const [categories, setCategories] = useState<ProductCategoryApiRecord[]>([]);
-  const [products, setProducts] = useState<ManagedProductRow[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [productsByCategory, setProductsByCategory] = useState<Record<string, ManagedProductRow[]>>({});
+  const [loadingProductsByCategory, setLoadingProductsByCategory] = useState<Record<string, boolean>>({});
   const [loadingPackage, setLoadingPackage] = useState(Boolean(packageId));
   const [currentPackage, setCurrentPackage] = useState<ManagedPackageRow | null>(null);
   const [name, setName] = useState("");
@@ -732,52 +734,81 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
   const [currentThumbnailUrl, setCurrentThumbnailUrl] = useState<string | null>(null);
   const [currentPackageImageUrl, setCurrentPackageImageUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const productsByCategory = useMemo(() => {
-    return products.reduce<Map<string, ManagedProductRow[]>>((acc, product) => {
-      const bucket = acc.get(product.categoryKey) ?? [];
-      bucket.push(product);
-      acc.set(product.categoryKey, bucket);
-      return acc;
-    }, new Map());
-  }, [products]);
+  const categoryProductsRef = useRef<Record<string, ManagedProductRow[]>>({});
+  const loadingCategoryRequestsRef = useRef<Set<string>>(new Set());
+  const categoriesMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
+  const selectedCategoryIds = useMemo(
+    () => Array.from(new Set(items.map((item) => item.category_id).filter((value): value is string => Boolean(value)))),
+    [items],
+  );
+  const products = useMemo(() => Object.values(productsByCategory).flat(), [productsByCategory]);
+  const productLookup = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const selectedProducts = useMemo(
     () =>
       items
-        .map((item) => products.find((product) => product.id === item.product_id))
+        .map((item) => productLookup.get(item.product_id))
         .filter((product): product is ManagedProductRow => Boolean(product)),
-    [items, products],
+    [items, productLookup],
   );
   const thumbnailPreviewUrl = useObjectUrl(thumbnailFile);
   const packageImagePreviewUrl = useObjectUrl(packageImageFile);
+  const isPublishedPackage = currentPackage?.is_active ?? false;
+  const primaryPackageIntent = isPublishedPackage ? "finish" : "finish-publish";
+  const primaryPackageLabel = isSubmitting ? "Saving..." : isPublishedPackage ? "Save Changes" : "Publish";
+  const packageSecondaryActions = isPublishedPackage
+    ? [{ label: "Move to Draft", intent: "draft" as const, variant: "secondary" as const, disabled: isSubmitting }]
+    : [{ label: "Save Draft", intent: "draft" as const, variant: "secondary" as const, disabled: isSubmitting }];
+
+  async function fetchProductsForCategory(categoryId: string) {
+    if (!categoryId || !categoriesMap.size) {
+      return;
+    }
+
+    if (categoryProductsRef.current[categoryId] || loadingCategoryRequestsRef.current.has(categoryId)) {
+      return;
+    }
+
+    loadingCategoryRequestsRef.current.add(categoryId);
+    setLoadingProductsByCategory((current) => ({ ...current, [categoryId]: true }));
+
+    try {
+      const productsPayload = await loadProducts({
+        page: 1,
+        limit: 100,
+        query: "",
+        categories: categoriesMap,
+        categoryId,
+      });
+
+      setProductsByCategory((current) => {
+        const next = { ...current, [categoryId]: productsPayload.data };
+        categoryProductsRef.current = next;
+        return next;
+      });
+      setCatalogError(null);
+    } catch (loadError) {
+      setCatalogError(getErrorMessage(loadError, "Products could not be loaded for the selected category."));
+    } finally {
+      loadingCategoryRequestsRef.current.delete(categoryId);
+      setLoadingProductsByCategory((current) => ({ ...current, [categoryId]: false }));
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([
-      getProductCategories({ page: 1, limit: 100 }).then((payload) => payload.data.map(normalizeCategoryRecord)).catch(() => []),
-    ])
-      .then(async ([categoryRows]) => {
-        if (cancelled) {
-          return;
-        }
+    setCatalogError(null);
 
-        setCategories(categoryRows);
-        const categoryLookup = new Map(categoryRows.map((item) => [item.id, item]));
-        const productsPayload = await loadProducts({
-          page: 1,
-          limit: 100,
-          query: "",
-          categories: categoryLookup,
-        });
-
+    getProductCategories({ page: 1, limit: 100 })
+      .then((payload) => {
         if (!cancelled) {
-          setProducts(productsPayload.data);
+          setCategories(payload.data.map(normalizeCategoryRecord));
         }
       })
-      .catch(() => {
+      .catch((loadError) => {
         if (!cancelled) {
           setCategories([]);
-          setProducts([]);
+          setCatalogError(getErrorMessage(loadError, "Product categories could not be loaded."));
         }
       })
       .finally(() => {
@@ -790,6 +821,16 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (loadingCatalog || !selectedCategoryIds.length) {
+      return;
+    }
+
+    selectedCategoryIds.forEach((categoryId) => {
+      void fetchProductsForCategory(categoryId);
+    });
+  }, [categoriesMap, loadingCatalog, selectedCategoryIds]);
 
   useEffect(() => {
     if (!packageId || loadingCatalog) {
@@ -879,7 +920,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const intent = getFormSubmitIntent(event, "finish");
+    const intent = getFormSubmitIntent(event, primaryPackageIntent);
     const isDraft = intent === "draft";
     const shouldPublish = intent === "finish-publish";
     const nextIsActive = isDraft ? false : shouldPublish ? true : currentPackage?.is_active ?? false;
@@ -989,13 +1030,10 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
               formId={packageCreateFormId}
               cancelLabel="Cancel"
               onCancel={() => router.push(packageId ? `/packages/${packageId}` : "/packages")}
-              primaryLabel={isSubmitting ? "Saving..." : "Finish"}
-              primaryIntent="finish"
+              primaryLabel={primaryPackageLabel}
+              primaryIntent={primaryPackageIntent}
               disabled={isSubmitting}
-              secondaryActions={[
-                { label: "Save to Draft", intent: "draft", variant: "secondary", disabled: isSubmitting },
-                { label: "Finish & Publish", intent: "finish-publish", variant: "primary", disabled: isSubmitting },
-              ]}
+              secondaryActions={packageSecondaryActions}
             />
           </div>
 
@@ -1034,8 +1072,10 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
 
             <DetailPanel title="What This Package Includes" description="Pick a category, then pick the product within that category and the quantity.">
               <div className="detail-panel__stack">
+                <ErrorMessage title="Catalog load failed" message={catalogError} />
                 {items.map((item, index) => {
-                  const categoryProducts = productsByCategory.get(item.category_id) ?? [];
+                  const categoryProducts = item.category_id ? productsByCategory[item.category_id] ?? [] : [];
+                  const isLoadingCategoryProducts = item.category_id ? Boolean(loadingProductsByCategory[item.category_id]) : false;
 
                   return (
                     <div key={item.key} className="grid gap-3 rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
@@ -1043,15 +1083,19 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                         <FormField label="Category">
                           <SelectField
                             value={item.category_id}
-                            onChange={(value) =>
+                            onChange={(value) => {
                               setItems((current) =>
                                 current.map((currentItem, currentIndex) =>
                                   currentIndex === index ? { ...currentItem, category_id: value, product_id: "" } : currentItem,
                                 ),
-                              )
-                            }
+                              );
+
+                              if (value) {
+                                void fetchProductsForCategory(value);
+                              }
+                            }}
                             options={[
-                              { label: loadingCatalog ? "Loading categories..." : "Select category", value: "" },
+                              { label: loadingCatalog ? "Loading categories..." : categories.length ? "Select category" : "No categories available", value: "" },
                               ...categories.map((category) => ({ label: category.name, value: category.id })),
                             ]}
                           />
@@ -1067,7 +1111,16 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                               )
                             }
                             options={[
-                              { label: item.category_id ? "Select product" : "Choose a category first", value: "" },
+                              {
+                                label: item.category_id
+                                  ? isLoadingCategoryProducts
+                                    ? "Loading products..."
+                                    : categoryProducts.length
+                                      ? "Select product"
+                                      : "No products in this category"
+                                  : "Choose a category first",
+                                value: "",
+                              },
                               ...categoryProducts.map((product) => ({ label: product.name, value: product.id })),
                             ]}
                           />

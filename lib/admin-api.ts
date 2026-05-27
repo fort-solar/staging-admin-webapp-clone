@@ -90,10 +90,12 @@ type ListParams = {
   page?: number;
   limit?: number;
   category?: string;
+  category_id?: string;
   search?: string;
   q?: string;
   scope?: string;
   fields?: string | string[];
+  is_active?: boolean | "true" | "false";
 };
 
 type MultipartCapable<TBody> = TBody | FormData;
@@ -101,7 +103,7 @@ type MutationRequestOptions = {
   confirmation?: DashboardRequestConfirmation;
 };
 
-function withQuery(path: string, params: Record<string, string | number | string[] | null | undefined>) {
+function withQuery(path: string, params: Record<string, string | number | boolean | string[] | null | undefined>) {
   const search = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -437,10 +439,11 @@ export function getProducts(params: ListParams = {}) {
     withQuery("/api/v1/admin/products", {
       page: params.page ?? 1,
       limit: params.limit ?? DEFAULT_PAGE_SIZE,
-      category: params.category,
+      category_id: params.category_id ?? params.category,
       search: params.search,
       q: params.q,
       fields: params.fields,
+      is_active: params.is_active,
     }),
   );
 }

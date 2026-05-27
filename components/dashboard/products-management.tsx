@@ -183,7 +183,7 @@ export function normalizeCategoryRecord(record: ProductCategoryApiRecord | Recor
   return {
     ...(record as ProductCategoryApiRecord),
     id: readString(raw, ["id"]),
-    name: readString(raw, ["name", "title"]),
+    name: readString(raw, ["name", "title", "category_name", "category"]),
     description: readString(raw, ["description"], "") || null,
     image: readString(raw, ["image", "image_url"], "") || null,
     image_url: readString(raw, ["image_url", "image"], "") || null,
@@ -325,7 +325,14 @@ export function normalizeManagedProductRecord(record: AdminProductRecord | Recor
   } satisfies ManagedProductRow;
 }
 
-export async function loadProducts(params: { page: number; query: string; categories: Map<string, ProductCategoryApiRecord>; limit?: number }) {
+export async function loadProducts(params: {
+  page: number;
+  query: string;
+  categories: Map<string, ProductCategoryApiRecord>;
+  limit?: number;
+  categoryId?: string;
+  isActive?: boolean;
+}) {
   const trimmedQuery = params.query.trim();
   const limit = params.limit ?? DEFAULT_PAGE_SIZE;
 
@@ -334,6 +341,8 @@ export async function loadProducts(params: { page: number; query: string; catego
     limit,
     search: trimmedQuery || undefined,
     q: trimmedQuery || undefined,
+    category_id: params.categoryId,
+    is_active: params.isActive,
   });
 
   return {
@@ -1186,6 +1195,12 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
   const categoriesMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
   const selectedCategory = categories.find((category) => category.id === categoryId) || null;
   const imagePreviewUrl = useObjectUrl(imageFile);
+  const isPublishedProduct = currentProduct?.is_active ?? false;
+  const primaryProductIntent = isPublishedProduct ? "finish" : "finish-publish";
+  const primaryProductLabel = isSubmitting ? "Saving..." : isPublishedProduct ? "Save Changes" : "Publish";
+  const productSecondaryActions = isPublishedProduct
+    ? [{ label: "Move to Draft", intent: "draft" as const, variant: "secondary" as const, disabled: isSubmitting }]
+    : [{ label: "Save Draft", intent: "draft" as const, variant: "secondary" as const, disabled: isSubmitting }];
 
   useEffect(() => {
     let cancelled = false;
@@ -1282,7 +1297,7 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const intent = getFormSubmitIntent(event, "finish");
+    const intent = getFormSubmitIntent(event, primaryProductIntent);
     const isDraft = intent === "draft";
     const shouldPublish = intent === "finish-publish";
     const nextIsActive = isDraft ? false : shouldPublish ? true : currentProduct?.is_active ?? false;
@@ -1370,13 +1385,10 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
               formId={productCreateFormId}
               cancelLabel="Cancel"
               onCancel={() => router.push(productId ? `/products/${productId}` : "/products")}
-              primaryLabel={isSubmitting ? "Saving..." : "Finish"}
-              primaryIntent="finish"
+              primaryLabel={primaryProductLabel}
+              primaryIntent={primaryProductIntent}
               disabled={isSubmitting}
-              secondaryActions={[
-                { label: "Save to Draft", intent: "draft", variant: "secondary", disabled: isSubmitting },
-                { label: "Finish & Publish", intent: "finish-publish", variant: "primary", disabled: isSubmitting },
-              ]}
+              secondaryActions={productSecondaryActions}
             />
           </div>
 
