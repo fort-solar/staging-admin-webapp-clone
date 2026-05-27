@@ -434,7 +434,7 @@ export function getProductCategories(params: ListParams = {}) {
 
 export function getProducts(params: ListParams = {}) {
   return dashboardGet<AdminProductListApiResponse>(
-    withQuery("/api/v1/admin/products/", {
+    withQuery("/api/v1/admin/products", {
       page: params.page ?? 1,
       limit: params.limit ?? DEFAULT_PAGE_SIZE,
       category: params.category,
@@ -450,7 +450,7 @@ export function getProduct(id: string) {
 }
 
 export function createProduct(body: MultipartCapable<CreateAdminProductRequest>) {
-  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/", body, { method: "POST" });
+  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products", body, { method: "POST" });
 }
 
 export function updateProduct(id: string, body: MultipartCapable<UpdateAdminProductRequest>) {
@@ -479,7 +479,7 @@ export function deleteProductCategory(id: string) {
 
 export function getPackages(params: ListParams = {}) {
   return dashboardGet<PackageListApiResponse>(
-    withQuery("/api/v1/admin/packages/", {
+    withQuery("/api/v1/admin/packages", {
       page: params.page ?? 1,
       limit: params.limit ?? DEFAULT_PAGE_SIZE,
       category: params.category,
@@ -568,7 +568,7 @@ export function getPackage(id: string) {
 }
 
 export function createPackage(body: MultipartCapable<CreatePackageRequest>) {
-  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/packages/", body, { method: "POST" });
+  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/packages", body, { method: "POST" });
 }
 
 export function updatePackage(id: string, body: MultipartCapable<UpdatePackageRequest>) {
