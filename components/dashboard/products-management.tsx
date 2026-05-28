@@ -33,6 +33,7 @@ const productViewTabs = ["Products", "Categories"] as const;
 const productStatusTabs = ["All", "Published", "Draft"] as const;
 const categoryFormId = "product-category-form";
 const productCreateFormId = "product-create-form";
+const productFormCategoryLimit = 100;
 
 type ProductView = (typeof productViewTabs)[number];
 type ProductStatusFilter = (typeof productStatusTabs)[number];
@@ -356,6 +357,11 @@ async function loadProductRecord(id: string, categories: Map<string, ProductCate
   return normalizeManagedProductRecord(payload.data, categories);
 }
 
+async function loadProductFormCategories(limit = productFormCategoryLimit) {
+  const payload = await getProductCategories({ page: 1, limit });
+  return payload.data.map(normalizeCategoryRecord);
+}
+
 async function deleteProductRecord(product: ManagedProductRow) {
   await deleteProduct(product.id);
 }
@@ -423,6 +429,196 @@ function DocumentSelectField({
   );
 }
 
+function ProductCategoryEditorModal({
+  open,
+  onClose,
+  category,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  category?: ProductCategoryApiRecord | null;
+  onSaved?: (result: { name: string; mode: "create" | "edit" }) => Promise<void> | void;
+}) {
+  const { toast } = useToast();
+  const [categoryTitle, setCategoryTitle] = useState("");
+  const [categorySections, setCategorySections] = useState<ProductCategorySectionRecord[]>([{ name: "" }]);
+  const [requiresDatasheet, setRequiresDatasheet] = useState(false);
+  const [requiresProductImage, setRequiresProductImage] = useState(true);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const isEditing = Boolean(category);
+
+  useEffect(() => {
+    if (!open) {
+      setCategoryTitle("");
+      setCategorySections([{ name: "" }]);
+      setRequiresDatasheet(false);
+      setRequiresProductImage(true);
+      return;
+    }
+
+    setCategoryTitle(category?.name ?? "");
+    setCategorySections(category?.sections?.length ? category.sections : [{ name: "" }]);
+    setRequiresDatasheet(Boolean(category?.requires_datasheet));
+    setRequiresProductImage(category ? Boolean(category.requires_product_image) : true);
+  }, [category, open]);
+
+  function handleClose() {
+    if (isSavingCategory) {
+      return;
+    }
+
+    onClose();
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSavingCategory(true);
+
+    try {
+      const preparedSections = categorySections
+        .map((section, index) => normalizeCategorySection(section, index))
+        .filter((section): section is ProductCategorySectionRecord => Boolean(section));
+
+      if (!categoryTitle.trim()) {
+        throw new Error("Enter a category title.");
+      }
+
+      if (!preparedSections.length) {
+        throw new Error("Add at least one category section.");
+      }
+
+      const payload = {
+        name: categoryTitle.trim(),
+        sections: preparedSections.map((section, index) => ({
+          ...(section.id ? { id: section.id } : {}),
+          name: section.name.trim(),
+          position: index + 1,
+        })),
+        requires_datasheet: requiresDatasheet,
+        requires_product_image: requiresProductImage,
+      };
+
+      if (category) {
+        await updateProductCategory(category.id, payload);
+      } else {
+        await createProductCategory(payload);
+      }
+
+      toast({
+        title: isEditing ? "Category updated" : "Category created",
+        description: `${payload.name} was ${isEditing ? "updated" : "added"} successfully.`,
+        variant: "success",
+      });
+
+      if (onSaved) {
+        try {
+          await onSaved({ name: payload.name, mode: isEditing ? "edit" : "create" });
+        } catch (refreshError) {
+          toast({
+            title: "Refresh failed",
+            description: getErrorMessage(
+              refreshError,
+              "The category was saved, but the category list could not refresh.",
+            ),
+            variant: "error",
+          });
+        }
+      }
+
+      onClose();
+    } catch (saveError) {
+      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
+        return;
+      }
+
+      toast({
+        title: isEditing ? "Update failed" : "Create category failed",
+        description: getErrorMessage(saveError, "The category could not be saved."),
+        variant: "error",
+      });
+    } finally {
+      setIsSavingCategory(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title={isEditing ? "Edit Category" : "Create Category"}
+      footer={
+        <ModalFooterActions
+          formId={categoryFormId}
+          cancelLabel="Cancel"
+          onCancel={handleClose}
+          submitLabel={isSavingCategory ? "Saving..." : isEditing ? "Save Changes" : "Create Category"}
+          disabled={isSavingCategory}
+        />
+      }
+    >
+      <form id={categoryFormId} className="flex flex-col gap-5" onSubmit={handleSubmit}>
+        <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
+          Add the category title, define the dynamic sections for products in this category, then decide whether the category requires a datasheet and product image.
+        </div>
+
+        <FormField label="Category Title">
+          <TextField value={categoryTitle} onChange={(event) => setCategoryTitle(event.target.value)} placeholder="Inverter" />
+        </FormField>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <strong className="text-sm">Category Sections</strong>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCategorySections((current) => [...current, { name: "" }])}
+            >
+              Add Another Section
+            </Button>
+          </div>
+          {categorySections.map((section, index) => (
+            <div key={`${section.id || section.key || "section"}-${index}`} className="category-section-row">
+              <TextField
+                value={section.name}
+                onChange={(event) =>
+                  setCategorySections((current) =>
+                    current.map((item, itemIndex) => (itemIndex === index ? { ...item, name: event.target.value } : item)),
+                  )
+                }
+                placeholder="Section name"
+              />
+              <button
+                type="button"
+                className="icon-square-button is-danger"
+                onClick={() =>
+                  setCategorySections((current) =>
+                    current.length > 1 ? current.filter((_, itemIndex) => itemIndex !== index) : [{ name: "" }],
+                  )
+                }
+                aria-label="Remove section"
+              >
+                <TrashIcon className="mini-icon" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+          <label className="flex items-center justify-between gap-4">
+            <span className="text-sm font-semibold">Require datasheet upload</span>
+            <Checkbox checked={requiresDatasheet} onChange={setRequiresDatasheet} />
+          </label>
+          <label className="flex items-center justify-between gap-4">
+            <span className="text-sm font-semibold">Require product image upload</span>
+            <Checkbox checked={requiresProductImage} onChange={setRequiresProductImage} />
+          </label>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function ProductsManagementScreen() {
   const { can } = useAccessControl();
   const { toast } = useToast();
@@ -443,11 +639,6 @@ export function ProductsManagementScreen() {
   const [categoryPage, setCategoryPage] = useState(1);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ProductCategoryApiRecord | null>(null);
-  const [categoryTitle, setCategoryTitle] = useState("");
-  const [categorySections, setCategorySections] = useState<ProductCategorySectionRecord[]>([{ name: "" }]);
-  const [requiresDatasheet, setRequiresDatasheet] = useState(false);
-  const [requiresProductImage, setRequiresProductImage] = useState(true);
-  const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const deferredQuery = useDeferredValue(query);
   const canCreateProducts = can("products", "create");
@@ -463,16 +654,18 @@ export function ProductsManagementScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    setCategoriesLoading(true);
-    setCategoriesError(null);
+    void (async () => {
+      setCategoriesLoading(true);
+      setCategoriesError(null);
 
-    getProductCategories({
-      page: categoryPage,
-      limit: DEFAULT_PAGE_SIZE,
-      search: deferredQuery.trim() || undefined,
-      q: deferredQuery.trim() || undefined,
-    })
-      .then((payload) => {
+      try {
+        const payload = await getProductCategories({
+          page: categoryPage,
+          limit: DEFAULT_PAGE_SIZE,
+          search: deferredQuery.trim() || undefined,
+          q: deferredQuery.trim() || undefined,
+        });
+
         if (cancelled) {
           return;
         }
@@ -480,8 +673,7 @@ export function ProductsManagementScreen() {
         const normalized = payload.data.map(normalizeCategoryRecord);
         setCategories(normalized);
         setCategoriesPagination(payload.pagination ?? emptyPagination);
-      })
-      .catch((loadError) => {
+      } catch (loadError) {
         if (cancelled) {
           return;
         }
@@ -489,12 +681,12 @@ export function ProductsManagementScreen() {
         setCategories([]);
         setCategoriesPagination(emptyPagination);
         setCategoriesError(getErrorMessage(loadError, "Product categories could not be loaded."));
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setCategoriesLoading(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -508,23 +700,24 @@ export function ProductsManagementScreen() {
 
     let cancelled = false;
 
-    setProductsLoading(true);
-    setProductsError(null);
+    void (async () => {
+      setProductsLoading(true);
+      setProductsError(null);
 
-    loadProducts({
-      page: productPage,
-      query: deferredQuery,
-      categories: categoriesMap,
-    })
-      .then((payload) => {
+      try {
+        const payload = await loadProducts({
+          page: productPage,
+          query: deferredQuery,
+          categories: categoriesMap,
+        });
+
         if (cancelled) {
           return;
         }
 
         setRows(payload.data);
         setProductsPagination(payload.pagination);
-      })
-      .catch((loadError) => {
+      } catch (loadError) {
         if (cancelled) {
           return;
         }
@@ -532,12 +725,12 @@ export function ProductsManagementScreen() {
         setRows([]);
         setProductsPagination(emptyPagination);
         setProductsError(getErrorMessage(loadError, "Products could not be loaded."));
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setProductsLoading(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -584,35 +777,19 @@ export function ProductsManagementScreen() {
   const activeProducts = rows.filter((product) => product.is_active).length;
   const totalStock = rows.reduce((sum, product) => sum + product.stock_quantity, 0);
 
-  function resetCategoryForm() {
-    setEditingCategory(null);
-    setCategoryTitle("");
-    setCategorySections([{ name: "" }]);
-    setRequiresDatasheet(false);
-    setRequiresProductImage(true);
-  }
-
   function openCreateCategoryModal() {
-    resetCategoryForm();
+    setEditingCategory(null);
     setCategoryModalOpen(true);
   }
 
   function openEditCategoryModal(category: ProductCategoryApiRecord) {
     setEditingCategory(category);
-    setCategoryTitle(category.name);
-    setCategorySections(category.sections?.length ? category.sections : [{ name: "" }]);
-    setRequiresDatasheet(Boolean(category.requires_datasheet));
-    setRequiresProductImage(Boolean(category.requires_product_image));
     setCategoryModalOpen(true);
   }
 
   function closeCategoryModal() {
-    if (isSavingCategory) {
-      return;
-    }
-
     setCategoryModalOpen(false);
-    resetCategoryForm();
+    setEditingCategory(null);
   }
 
   async function handleDeleteProduct(product: ManagedProductRow) {
@@ -656,63 +833,6 @@ export function ProductsManagementScreen() {
         description: getErrorMessage(deleteError, "The category could not be deleted."),
         variant: "error",
       });
-    }
-  }
-
-  async function handleCategorySubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSavingCategory(true);
-
-    try {
-      const preparedSections = categorySections
-        .map((section, index) => normalizeCategorySection(section, index))
-        .filter((section): section is ProductCategorySectionRecord => Boolean(section));
-
-      if (!categoryTitle.trim()) {
-        throw new Error("Enter a category title.");
-      }
-
-      if (!preparedSections.length) {
-        throw new Error("Add at least one category section.");
-      }
-
-      const payload = {
-        name: categoryTitle.trim(),
-        sections: preparedSections.map((section, index) => ({
-          ...(section.id ? { id: section.id } : {}),
-          name: section.name.trim(),
-          position: index + 1,
-        })),
-        requires_datasheet: requiresDatasheet,
-        requires_product_image: requiresProductImage,
-      };
-
-      if (editingCategory) {
-        await updateProductCategory(editingCategory.id, payload);
-      } else {
-        await createProductCategory(payload);
-      }
-
-      toast({
-        title: editingCategory ? "Category updated" : "Category created",
-        description: `${payload.name} was ${editingCategory ? "updated" : "added"} successfully.`,
-        variant: "success",
-      });
-      setCategoryModalOpen(false);
-      resetCategoryForm();
-      setRefreshKey((current) => current + 1);
-    } catch (saveError) {
-      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
-        return;
-      }
-
-      toast({
-        title: editingCategory ? "Update failed" : "Create category failed",
-        description: getErrorMessage(saveError, "The category could not be saved."),
-        variant: "error",
-      });
-    } finally {
-      setIsSavingCategory(false);
     }
   }
 
@@ -908,79 +1028,14 @@ export function ProductsManagementScreen() {
         </Panel>
       </div>
 
-      <Modal
+      <ProductCategoryEditorModal
         open={categoryModalOpen}
         onClose={closeCategoryModal}
-        title={editingCategory ? "Edit Category" : "Create Category"}
-        footer={
-          <ModalFooterActions
-            formId={categoryFormId}
-            cancelLabel="Cancel"
-            onCancel={closeCategoryModal}
-            submitLabel={isSavingCategory ? "Saving..." : editingCategory ? "Save Changes" : "Create Category"}
-            disabled={isSavingCategory}
-          />
-        }
-      >
-        <form id={categoryFormId} className="flex flex-col gap-5" onSubmit={handleCategorySubmit}>
-          <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
-            Add the category title, define the dynamic sections for products in this category, then decide whether the category requires a datasheet and product image.
-          </div>
-
-          <FormField label="Category Title">
-            <TextField value={categoryTitle} onChange={(event) => setCategoryTitle(event.target.value)} placeholder="Inverter" />
-          </FormField>
-
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <strong className="text-sm">Category Sections</strong>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setCategorySections((current) => [...current, { name: "" }])}
-              >
-                Add Another Section
-              </Button>
-            </div>
-            {categorySections.map((section, index) => (
-              <div key={`${section.id || section.key || "section"}-${index}`} className="category-section-row">
-                <TextField
-                  value={section.name}
-                  onChange={(event) =>
-                    setCategorySections((current) =>
-                      current.map((item, itemIndex) => (itemIndex === index ? { ...item, name: event.target.value } : item)),
-                    )
-                  }
-                  placeholder="Section name"
-                />
-                <button
-                  type="button"
-                  className="icon-square-button is-danger"
-                  onClick={() =>
-                    setCategorySections((current) =>
-                      current.length > 1 ? current.filter((_, itemIndex) => itemIndex !== index) : [{ name: "" }],
-                    )
-                  }
-                  aria-label="Remove section"
-                >
-                  <TrashIcon className="mini-icon" />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-4 rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-            <label className="flex items-center justify-between gap-4">
-              <span className="text-sm font-semibold">Require datasheet upload</span>
-              <Checkbox checked={requiresDatasheet} onChange={setRequiresDatasheet} />
-            </label>
-            <label className="flex items-center justify-between gap-4">
-              <span className="text-sm font-semibold">Require product image upload</span>
-              <Checkbox checked={requiresProductImage} onChange={setRequiresProductImage} />
-            </label>
-          </div>
-        </form>
-      </Modal>
+        category={editingCategory}
+        onSaved={() => {
+          setRefreshKey((current) => current + 1);
+        }}
+      />
     </>
   );
 }
@@ -1179,6 +1234,7 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
   const { toast } = useToast();
   const [categories, setCategories] = useState<ProductCategoryApiRecord[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [loadingProduct, setLoadingProduct] = useState(Boolean(productId));
   const [currentProduct, setCurrentProduct] = useState<ManagedProductRow | null>(null);
   const [name, setName] = useState("");
@@ -1205,22 +1261,25 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
   useEffect(() => {
     let cancelled = false;
 
-    getProductCategories({ page: 1, limit: 100 })
-      .then((payload) => {
+    void (async () => {
+      setCategoriesLoading(true);
+
+      try {
+        const nextCategories = await loadProductFormCategories();
+
         if (!cancelled) {
-          setCategories(payload.data.map(normalizeCategoryRecord));
+          setCategories(nextCategories);
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setCategories([]);
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setCategoriesLoading(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -1236,11 +1295,18 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
       return;
     }
 
-    let cancelled = false;
-    setLoadingProduct(true);
+    if (currentProduct) {
+      return;
+    }
 
-    loadProductRecord(productId, categoriesMap)
-      .then((product) => {
+    let cancelled = false;
+
+    void (async () => {
+      setLoadingProduct(true);
+
+      try {
+        const product = await loadProductRecord(productId, categoriesMap);
+
         if (cancelled || !product) {
           return;
         }
@@ -1254,8 +1320,7 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         setSectionValues(product.section_values.map((item, index) => ({ ...item, key: item.key || `${slugify(item.section_name)}-${index}` })));
         setCurrentImageUrl(product.product_image_url || product.image_url || null);
         setCurrentDatasheetUrl(product.datasheet_url || null);
-      })
-      .catch((loadError) => {
+      } catch (loadError) {
         if (!cancelled) {
           toast({
             title: "Product load failed",
@@ -1263,17 +1328,17 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
             variant: "error",
           });
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setLoadingProduct(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [categoriesLoading, categoriesMap, productId, toast]);
+  }, [categoriesLoading, categoriesMap, currentProduct, productId, toast]);
 
   useEffect(() => {
     if (!selectedCategory) {
@@ -1289,10 +1354,34 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
     });
   }
 
-  function handleCategoryChange(nextCategoryId: string) {
+  function handleCategoryChange(nextCategoryId: string, categoryRows = categories) {
     setCategoryId(nextCategoryId);
-    const nextCategory = categories.find((category) => category.id === nextCategoryId);
+    const nextCategory = categoryRows.find((category) => category.id === nextCategoryId);
     setSectionValues((current) => buildSectionDrafts(nextCategory?.sections ?? [], current));
+  }
+
+  async function refreshProductCategories(preferredCategoryName?: string) {
+    setCategoriesLoading(true);
+
+    try {
+      const nextCategories = await loadProductFormCategories();
+      setCategories(nextCategories);
+
+      if (!preferredCategoryName?.trim()) {
+        return;
+      }
+
+      const normalizedName = preferredCategoryName.trim().toLowerCase();
+      const createdCategory = nextCategories.find(
+        (category) => category.name.trim().toLowerCase() === normalizedName,
+      );
+
+      if (createdCategory) {
+        handleCategoryChange(createdCategory.id, nextCategories);
+      }
+    } finally {
+      setCategoriesLoading(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1395,16 +1484,27 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
           <div className="product-form-grid">
             <DetailPanel title="Basic Information" description="Every product keeps these default fields regardless of category.">
               <div className="detail-panel__stack">
-                <FormField label="Product Category">
-                  <SelectField
-                    value={categoryId}
-                    onChange={handleCategoryChange}
-                    options={[
-                      { label: categoriesLoading ? "Loading categories..." : "Select category", value: "" },
-                      ...categories.map((category) => ({ label: category.name, value: category.id })),
-                    ]}
-                  />
-                </FormField>
+                <div className="product-inline-row">
+                  <FormField label="Product Category">
+                    <SelectField
+                      value={categoryId}
+                      onChange={handleCategoryChange}
+                      options={[
+                        { label: categoriesLoading ? "Loading categories..." : "Select category", value: "" },
+                        ...categories.map((category) => ({ label: category.name, value: category.id })),
+                      ]}
+                    />
+                  </FormField>
+                  <button
+                    type="button"
+                    className="icon-square-button"
+                    onClick={() => setCategoryModalOpen(true)}
+                    aria-label="Add product category"
+                    title="Add product category"
+                  >
+                    <PlusIcon className="mini-icon" />
+                  </button>
+                </div>
                 <FormField label="Product Name">
                   <TextField value={name} onChange={(event) => setName(event.target.value)} placeholder="Product Name" />
                 </FormField>
@@ -1512,6 +1612,12 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
           </div>
         </form>
       </Panel>
+
+      <ProductCategoryEditorModal
+        open={categoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
+        onSaved={({ name }) => refreshProductCategories(name)}
+      />
     </div>
   );
 }
