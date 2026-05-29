@@ -1079,7 +1079,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
 
                   return (
                     <div key={item.key} className="grid gap-3 rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-                      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_88px_44px]">
+                      <div className="grid gap-3">
                         <FormField label="Category">
                           <SelectField
                             value={item.category_id}
