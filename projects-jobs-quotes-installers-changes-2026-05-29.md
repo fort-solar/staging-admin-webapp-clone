@@ -527,13 +527,3 @@ When status becomes `reviewed`, the backend should accept a generated package-re
 }
 ```
 
-## 5. Installer Onboarding
-
-### Purpose
-
-Google sign-up currently returns only the installer name reliably. The onboarding flow should therefore continue from step 1 unless the first-step requirements are actually complete.
-
-### Backend notes
-
-- A partially populated profile should not be treated as completion of onboarding step 1.
-- `primaryLocation`, `specializations`, and `serviceAreas` should accept free-text values, not only predefined options.
