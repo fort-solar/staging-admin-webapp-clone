@@ -538,7 +538,6 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
   const { toast } = useToast();
   const [postId, setPostId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [slugValue, setSlugValue] = useState("");
   const [summary, setSummary] = useState("");
   const [category, setCategory] = useState("Solar Installation");
   const [imageUrl, setImageUrl] = useState("");
@@ -571,7 +570,6 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
 
         setPostId(post.id);
         setTitle(post.title);
-        setSlugValue(post.slug);
         setSummary(post.summary);
         setCategory(post.category);
         setImageUrl(post.image_url);
@@ -609,7 +607,7 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
 
       const intent = getFormSubmitIntent(event, "publish");
       const payload = {
-        slug: slugify(slugValue || title),
+        slug: slugify(title),
         title,
         summary,
         body: normalizeRichTextHtml(body),
@@ -665,7 +663,7 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
         metrics={[
           { title: "Editorial Status", value: postId ? "Editing" : "New Draft", icon: "products", spark: [12, 18, 22, 30, 34, 38] },
           { title: "Read Time", value: `${readTimeMinutes || 0} mins`, icon: "calendar", spark: [10, 14, 20, 24, 28, 32] },
-          { title: "Slug", value: slugify(slugValue || title) || "pending", icon: "verification", spark: [16, 18, 24, 28, 30, 34] },
+          { title: "Slug", value: slugify(title) || "pending", icon: "verification", spark: [16, 18, 24, 28, 30, 34] },
           { title: "SEO Ready", value: seoTitle || title ? "Yes" : "No", icon: "bundles", spark: [18, 22, 28, 32, 38, 44] },
         ]}
       />
@@ -695,9 +693,6 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
               <div className="detail-panel__stack">
                 <FormField label="Blog Title">
                   <TextField value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Enter post title" />
-                </FormField>
-                <FormField label="Slug">
-                  <TextField value={slugValue} onChange={(event) => setSlugValue(event.target.value)} placeholder="how-solar-energy-can-save-you-money" />
                 </FormField>
                 <FormField label="Post Summary / Description" hint="A brief summary of your post (20-200 characters)">
                   <TextAreaField value={summary} onChange={setSummary} placeholder="Electricity costs keep rising..." rows={5} />
@@ -948,7 +943,6 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
   const { toast } = useToast();
   const [pageId, setPageId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [slugValue, setSlugValue] = useState("");
   const [pageType, setPageType] = useState("content");
   const [seoTitle, setSeoTitle] = useState("");
   const [metaDescription, setMetaDescription] = useState("");
@@ -989,7 +983,6 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
 
         setPageId(pageRecord.id);
         setTitle(pageRecord.title);
-        setSlugValue(pageRecord.slug);
         setPageType(pageRecord.page_type);
         setSeoTitle(pageRecord.seo_title);
         setMetaDescription(pageRecord.meta_description);
@@ -1104,7 +1097,7 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
       }
 
       const payload = {
-        slug: slugify(slugValue || title),
+        slug: slugify(title),
         title,
         page_type: pageType.trim() || "content",
         seo_title: seoTitle || title,
@@ -1150,7 +1143,7 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
         metrics={[
           { title: "Workflow", value: pageId ? "Editing" : "New Draft", icon: "products", spark: [12, 16, 22, 30, 34, 40] },
           { title: "SEO Score", value: `${computedSeoScore}%`, icon: "verification", spark: [10, 14, 18, 24, 28, 34] },
-          { title: "Slug", value: slugify(slugValue || title) || "pending", icon: "calendar", spark: [18, 20, 22, 26, 30, 34] },
+          { title: "Slug", value: slugify(title) || "pending", icon: "calendar", spark: [18, 20, 22, 26, 30, 34] },
           { title: "Sections", value: `${preparedSections.length}`, icon: "bundles", spark: [16, 18, 24, 28, 34, 40] },
         ]}
       />
@@ -1181,16 +1174,13 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
                 <FormField label="Page Title">
                   <TextField value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Homepage" />
                 </FormField>
-                <FormField label="Slug">
-                  <TextField value={slugValue} onChange={(event) => setSlugValue(event.target.value)} placeholder="home" />
-                </FormField>
                 <FormField label="Page Type" hint="Use values like content, landing, legal, or support.">
                   <TextField value={pageType} onChange={(event) => setPageType(event.target.value)} placeholder="content" />
                 </FormField>
                 <div className="summary-card">
                   <div className="summary-card__top">
                     <span>Route preview</span>
-                    <strong>/{slugify(slugValue || title) || "pending"}</strong>
+                    <strong>/{slugify(title) || "pending"}</strong>
                   </div>
                   <div className="summary-card__items">
                     <div className="summary-item">

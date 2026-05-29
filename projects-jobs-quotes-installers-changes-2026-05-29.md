@@ -1,6 +1,6 @@
 # Fortsolar Projects, Products, Package Lifecycle, Quote and Installer Changes
 
-Date: May 28, 2026
+Date: May 29, 2026
 
 Frontend sources:
 
@@ -20,7 +20,7 @@ Frontend sources:
 The current round of frontend changes introduces four backend-facing updates:
 
 1. Products now support multiple images.
-2. The old installation-content surface is now treated as Projects content.
+2. The old installation-content surface is now treated as Projects content, with a reduced project form and auto-generated title/summary/slug fields.
 3. Package requests and jobs now represent one connected installation lifecycle.
 4. Quote review now has a structured quoted -> reviewed -> closed workflow.
 
@@ -186,23 +186,17 @@ The frontend currently falls back to the legacy installation endpoints:
 
 ### Create/update request body
 
-Logical payload:
+Admin-captured fields:
 
 ```json
 {
   "package_id": "pkg_123",
-  "slug": "10kva-commercial-solar-installation-lagos-office",
-  "title": "10kVA Commercial Solar Installation - Lagos Office",
-  "summary": "A mid-size corporate office in Ikeja now runs 24/7 on solar, reducing diesel costs by over 70%.",
   "overview": "This commercial deployment was tailored for stable daytime operations and battery-supported backup.",
-  "client_name": "Fortsolar Commercial Client",
-  "customer_name": "Fortsolar Commercial Client",
   "address": "Ikeja business district",
   "city": "Lagos",
   "state": "Lagos",
   "country": "Nigeria",
   "installation_time_label": "48 hrs",
-  "scheduled_date": "2026-05-29T09:00:00.000Z",
   "highlights": [
     "Reduced diesel generator usage by over 70%",
     "Optimized solar production for daytime office load"
@@ -219,22 +213,32 @@ Logical payload:
     "Office lighting",
     "Desktop computers",
     "Routers and networking devices"
-  ],
+  ]
+}
+```
+
+Derived fields still appended by the frontend before submit:
+
+```json
+{
+  "slug": "business-solar-package-installation-lagos",
+  "title": "Business Solar Package Installation - Lagos",
+  "summary": "This commercial deployment was tailored for stable daytime operations and battery-supported backup.",
   "status": "published",
-  "notes": "Project completed after weekend commissioning."
+  "scheduled_date": "2026-05-29T20:40:00.000Z"
 }
 ```
 
 Actual multipart fields:
 
 - scalar fields as normal form-data values
+- derived `slug`, `title`, `summary`, and hidden compatibility `status` / `scheduled_date`
 - `highlights` as a JSON string
 - `system_details` as a JSON string
 - `what_it_powers` as a JSON string
 - optional repeated `media` file fields
 - optional repeated `images` file fields for the image subset
 - optional legacy single `image` file field using the first image
-- optional `datasheet` file
 
 Supported media types:
 
@@ -243,19 +247,26 @@ Supported media types:
 
 ### Validation and behavior
 
-- `title` is required.
-- `summary` is required for card/listing copy.
 - `overview` is required for detail pages.
-- `client_name` is required in the admin form.
-- `customer_name` currently mirrors `client_name` for compatibility.
+- The admin form only exposes:
+  - package select
+  - project overview
+  - location
+  - installation time
+  - highlights
+  - system details
+  - what it powers
+  - project media
 - `package_id` is nullable and should accept `"none"` from the UI as null.
+- The frontend auto-generates `title`, `summary`, and `slug` from the selected package, location, and overview.
+- Datasheet upload was removed from the project form and is no longer submitted.
 - Multiple media files are allowed.
 - The frontend image slider uses only image media.
 - The frontend slider uses at most the first 4 image media items.
 - Videos should be stored and returned, but should not be included in the homepage/admin image slider.
 - The frontend expects ordered media.
 - The frontend currently uses `published`, `draft`, and `archived` as the project-content statuses.
-- The frontend still sends compatibility fields such as `system_size_kw`, `number_of_panels`, `panel_type`, and `inverter_type` so older handlers do not break while the new project content endpoint is being finalized.
+- The frontend still sends compatibility fields such as `scheduled_date`, `status`, `system_size_kw`, `number_of_panels`, `panel_type`, and `inverter_type` so older handlers do not break while the new project content endpoint is being finalized.
 - `system_details`, `highlights`, and `what_it_powers` should be returned in structured form.
 
 ### Canonical response shape
@@ -269,8 +280,6 @@ Supported media types:
   "title": "10kVA Commercial Solar Installation - Lagos Office",
   "summary": "A mid-size corporate office in Ikeja now runs 24/7 on solar, reducing diesel costs by over 70%.",
   "overview": "This commercial deployment was tailored for stable daytime operations and battery-supported backup.",
-  "client_name": "Fortsolar Commercial Client",
-  "customer_name": "Fortsolar Commercial Client",
   "address": "Ikeja business district",
   "city": "Lagos",
   "state": "Lagos",
@@ -317,9 +326,7 @@ Supported media types:
   "video_urls": [
     "https://cdn.example.com/projects/proj_123/walkthrough.mp4"
   ],
-  "datasheet_url": "https://cdn.example.com/projects/proj_123/datasheet.pdf",
   "status": "published",
-  "notes": "Project completed after weekend commissioning.",
   "created_at": "2026-05-29T09:00:00.000Z",
   "updated_at": "2026-05-29T09:30:00.000Z"
 }
@@ -332,7 +339,8 @@ The frontend currently sends all of the following during project create/update:
 - repeated `media`
 - repeated `images` for only image uploads
 - legacy single `image` using the first uploaded image
-- `customer_name` mirrored from `client_name`
+- derived `slug`, `title`, and `summary`
+- hidden compatibility `scheduled_date` and `status`
 
 The legacy single-image fallback should be removed once the backend fully adopts ordered project media.
 
@@ -400,6 +408,8 @@ Logical payload:
   "notes": "Coordinate installer arrival with estate access desk."
 }
 ```
+
+The dashboard no longer exposes a manual slug input for jobs. The frontend generates `slug` from the final title using a trimmed lowercase hyphenated format before submit and on edit.
 
 Compatibility fields still tolerated:
 
@@ -526,4 +536,3 @@ When status becomes `reviewed`, the backend should accept a generated package-re
   "is_closed": false
 }
 ```
-

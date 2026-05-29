@@ -28,22 +28,12 @@ import { toneFromStatus } from "@/lib/dashboard-data";
 import type { InstallationRecord, ManagedMediaAsset, PackageRecord, PaginationMeta } from "@/types/api.types";
 
 const projectStatusTabs = ["All", "Published", "Draft", "Archived"] as const;
-const projectStatusOptions = [
-  { label: "Published", value: "published" },
-  { label: "Draft", value: "draft" },
-  { label: "Archived", value: "archived" },
-] as const;
 const projectFormId = "project-form";
 
 type ProjectStatusFilter = (typeof projectStatusTabs)[number];
 type ProjectValidationErrors = Partial<Record<
-  | "title"
-  | "summary"
   | "overview"
-  | "clientName"
-  | "city"
-  | "state"
-  | "country"
+  | "location"
   | "highlights"
   | "systemDetails"
   | "whatItPowers"
@@ -157,15 +147,11 @@ function projectImages(record: InstallationRecord | Record<string, unknown>) {
 }
 
 function projectLocation(record: InstallationRecord) {
-  return [record.city, record.state, record.country].filter(Boolean).join(", ") || "Nigeria";
-}
-
-function projectClient(record: InstallationRecord) {
-  return record.client_name || record.customer_name || record.customer_email || "Unnamed client";
+  return [record.address, record.city, record.state, record.country].filter(Boolean).join(", ") || "Nigeria";
 }
 
 function projectTitle(record: InstallationRecord) {
-  return record.title || record.package_name || projectClient(record);
+  return record.title || record.package_name || record.address || record.customer_name || record.customer_email || "Untitled project";
 }
 
 function projectSummary(record: InstallationRecord) {
@@ -194,22 +180,58 @@ function matchesProjectStatus(status: string, filter: ProjectStatusFilter) {
   return normalized === "archived" || normalized === "cancelled";
 }
 
-function buildProjectStatusOptions(current?: string) {
-  const normalizedCurrent = current?.trim().toLowerCase();
-
-  if (!normalizedCurrent || projectStatusOptions.some((option) => option.value === normalizedCurrent)) {
-    return [...projectStatusOptions];
-  }
-
-  return [{ label: formatEnumLabel(normalizedCurrent), value: normalizedCurrent }, ...projectStatusOptions];
-}
-
 function withSelectedOption(options: Array<{ label: string; value: string }>, value: string, fallbackLabel: string) {
   if (!value || options.some((option) => option.value === value)) {
     return options;
   }
 
   return [{ value, label: fallbackLabel }, ...options];
+}
+
+function buildProjectTitle({
+  packageName,
+  address,
+  city,
+  state,
+  country,
+  fallbackTitle,
+}: {
+  packageName?: string | null;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  fallbackTitle?: string;
+}) {
+  const normalizedPackageName = packageName?.trim() ?? "";
+  const normalizedFallbackTitle = fallbackTitle?.trim() ?? "";
+  const primaryLocation = [city.trim(), state.trim(), address.trim(), country.trim()].find(Boolean) || "";
+
+  if (normalizedPackageName) {
+    return primaryLocation ? `${normalizedPackageName} Installation - ${primaryLocation}` : `${normalizedPackageName} Installation`;
+  }
+
+  if (normalizedFallbackTitle) {
+    return normalizedFallbackTitle;
+  }
+
+  return primaryLocation ? `Solar Installation - ${primaryLocation}` : "Solar Installation";
+}
+
+function buildProjectSummary(overview: string, fallbackSummary?: string) {
+  const normalizedOverview = overview.trim();
+
+  if (!normalizedOverview) {
+    return fallbackSummary?.trim() ?? "";
+  }
+
+  if (normalizedOverview.length <= 180) {
+    return normalizedOverview;
+  }
+
+  const shortened = normalizedOverview.slice(0, 177);
+  const boundary = shortened.lastIndexOf(" ");
+  return `${(boundary > 120 ? shortened.slice(0, boundary) : shortened).trim()}...`;
 }
 
 function ProjectCard({
@@ -538,10 +560,9 @@ export function InstallationFormScreen() {
   const [isLoadingReferences, setIsLoadingReferences] = useState(true);
   const [isLoadingProject, setIsLoadingProject] = useState(Boolean(projectId));
   const [packageId, setPackageId] = useState("none");
-  const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
+  const [existingTitle, setExistingTitle] = useState("");
+  const [existingSummary, setExistingSummary] = useState("");
   const [overview, setOverview] = useState("");
-  const [clientName, setClientName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -555,11 +576,8 @@ export function InstallationFormScreen() {
   const [inverterSize, setInverterSize] = useState("");
   const [pvSize, setPvSize] = useState("");
   const [batterySize, setBatterySize] = useState("");
-  const [notes, setNotes] = useState("");
   const [existingMedia, setExistingMedia] = useState<ManagedMediaAsset[]>([]);
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
-  const [existingDatasheetUrl, setExistingDatasheetUrl] = useState<string | null>(null);
-  const [datasheetFile, setDatasheetFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<ProjectValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const mediaPreviewUrls = useObjectUrls(mediaFiles);
@@ -570,7 +588,7 @@ export function InstallationFormScreen() {
     getPackages({
       page: 1,
       limit: 100,
-      fields: ["id", "name", "description", "system_details", "what_it_powers", "system_size_kw"],
+      fields: ["id", "name", "description", "overview", "system_details", "what_it_powers", "system_size_kw"],
     })
       .then((payload) => {
         if (!cancelled) {
@@ -617,25 +635,22 @@ export function InstallationFormScreen() {
         const detail = payload.data;
         const systemDetails = detail.system_details;
         setPackageId(detail.package_id || "none");
-        setTitle(detail.title || "");
-        setSummary(detail.summary || "");
+        setExistingTitle(detail.title || "");
+        setExistingSummary(detail.summary || "");
         setOverview(detail.overview || "");
-        setClientName(detail.client_name || detail.customer_name || "");
         setAddress(detail.address || "");
         setCity(detail.city || "");
         setState(detail.state || "");
         setCountry(detail.country || "Nigeria");
         setInstallationTimeLabel(detail.installation_time_label || "");
-        setScheduledDate(detail.scheduled_date ? detail.scheduled_date.slice(0, 16) : "");
+        setScheduledDate(detail.scheduled_date || "");
         setStatus(detail.status || "published");
         setHighlightsText((detail.highlights ?? []).join("\n"));
         setWhatItPowers(detail.what_it_powers ?? []);
         setInverterSize(systemDetails?.inverter_size || detail.inverter_type || "");
         setPvSize(systemDetails?.pv_size || (detail.system_size_kw ? String(detail.system_size_kw) : ""));
         setBatterySize(systemDetails?.battery_size || "");
-        setNotes(detail.notes || "");
         setExistingMedia(normalizeProjectMedia(detail));
-        setExistingDatasheetUrl(detail.datasheet_url || null);
       })
       .catch((loadError) => {
         if (cancelled) {
@@ -723,8 +738,7 @@ export function InstallationFormScreen() {
       return;
     }
 
-    setTitle((current) => current || `${nextPackage.name} Installation`);
-    setSummary((current) => current || nextPackage.description || "");
+    setOverview((current) => current || nextPackage.overview || nextPackage.description || "");
     setHighlightsText((current) => current);
     setWhatItPowers((current) => (current.length ? current : nextPackage.what_it_powers ?? []));
     setInverterSize((current) => current || nextPackage.system_details?.inverter_size || "");
@@ -741,10 +755,6 @@ export function InstallationFormScreen() {
     setMediaFiles((current) => [...current, ...nextFiles]);
     clearFieldError("media");
     event.target.value = "";
-  }
-
-  function handleDatasheetChange(event: ChangeEvent<HTMLInputElement>) {
-    setDatasheetFile(event.target.files?.[0] ?? null);
   }
 
   function removeMediaFile(index: number) {
@@ -778,32 +788,12 @@ export function InstallationFormScreen() {
       .filter(Boolean);
     const hasMedia = combinedMediaPreview.some((media) => media.kind === "image" || media.kind === "video");
 
-    if (!title.trim()) {
-      nextErrors.title = "Enter the project title.";
-    }
-
-    if (!summary.trim()) {
-      nextErrors.summary = "Enter the short listing summary.";
-    }
-
     if (!overview.trim()) {
       nextErrors.overview = "Enter the project overview.";
     }
 
-    if (!clientName.trim()) {
-      nextErrors.clientName = "Enter the client or business name.";
-    }
-
-    if (!city.trim()) {
-      nextErrors.city = "Enter the project city.";
-    }
-
-    if (!state.trim()) {
-      nextErrors.state = "Enter the project state.";
-    }
-
-    if (!country.trim()) {
-      nextErrors.country = "Enter the project country.";
+    if (![address.trim(), city.trim(), state.trim()].some(Boolean)) {
+      nextErrors.location = "Add the project location.";
     }
 
     if (!highlights.length) {
@@ -843,6 +833,19 @@ export function InstallationFormScreen() {
 
     try {
       const normalizedPackageId = packageId === "none" ? null : packageId.trim() || null;
+      const derivedTitle = buildProjectTitle({
+        packageName: selectedPackage?.name,
+        address,
+        city,
+        state,
+        country,
+        fallbackTitle: existingTitle,
+      });
+      const derivedSummary = buildProjectSummary(overview, existingSummary);
+      const normalizedAddress = address.trim() || [city.trim(), state.trim()].filter(Boolean).join(", ") || country.trim() || "Nigeria";
+      const normalizedCity = city.trim();
+      const normalizedState = state.trim();
+      const normalizedCountry = country.trim() || "Nigeria";
       const systemDetails = {
         inverter_size: inverterSize.trim(),
         inverter_label: inverterSize.trim() ? `${inverterSize.trim()}kVA` : "",
@@ -853,18 +856,16 @@ export function InstallationFormScreen() {
       };
       const payload = buildMultipartFormData({
         package_id: normalizedPackageId,
-        title: title.trim(),
-        slug: slugify(title),
-        summary: summary.trim(),
+        title: derivedTitle,
+        slug: slugify(derivedTitle),
+        summary: derivedSummary,
         overview: overview.trim(),
-        client_name: clientName.trim(),
-        customer_name: clientName.trim(),
-        address: address.trim(),
-        city: city.trim(),
-        state: state.trim(),
-        country: country.trim(),
+        address: normalizedAddress,
+        city: normalizedCity,
+        state: normalizedState,
+        country: normalizedCountry,
         installation_time_label: installationTimeLabel.trim() || undefined,
-        scheduled_date: scheduledDate.trim() || undefined,
+        scheduled_date: scheduledDate.trim() || new Date().toISOString(),
         highlights: validation.highlights,
         what_it_powers: whatItPowers,
         system_details: systemDetails,
@@ -873,12 +874,7 @@ export function InstallationFormScreen() {
         number_of_panels: 0,
         panel_type: "",
         inverter_type: inverterSize.trim() ? `${inverterSize.trim()}kVA` : "",
-        notes: notes.trim() || undefined,
       });
-
-      if (datasheetFile) {
-        payload.append("datasheet", datasheetFile, datasheetFile.name);
-      }
 
       mediaFiles.forEach((file) => {
         payload.append("media", file, file.name);
@@ -933,7 +929,7 @@ export function InstallationFormScreen() {
           </div>
 
           <div className="product-form-grid">
-            <DetailPanel title="Project Information" description="Set the package source, public copy, client label, location, and publishing state.">
+            <DetailPanel title="Project Information" description="Set the package source, overview, location, and installation timing for this project.">
               <div className="detail-panel__stack">
                 <FormField
                   label="Project Package"
@@ -945,31 +941,6 @@ export function InstallationFormScreen() {
                     options={packageOptions}
                     placeholder="Select package"
                     disabled={isLoadingReferences || isLoadingProject}
-                  />
-                </FormField>
-
-                <FormField label="Project Title" error={errors.title}>
-                  <TextField
-                    value={title}
-                    onChange={(event) => {
-                      setTitle(event.target.value);
-                      clearFieldError("title");
-                    }}
-                    placeholder="10kVA Commercial Solar Installation - Lagos Office"
-                    invalid={Boolean(errors.title)}
-                  />
-                </FormField>
-
-                <FormField label="Project Summary" error={errors.summary}>
-                  <TextAreaField
-                    value={summary}
-                    onChange={(value) => {
-                      setSummary(value);
-                      clearFieldError("summary");
-                    }}
-                    placeholder="A short listing summary for the card and public projects page."
-                    rows={4}
-                    invalid={Boolean(errors.summary)}
                   />
                 </FormField>
 
@@ -986,84 +957,59 @@ export function InstallationFormScreen() {
                   />
                 </FormField>
 
-                <FormField label="Client / Business Name" error={errors.clientName}>
-                  <TextField
-                    value={clientName}
-                    onChange={(event) => {
-                      setClientName(event.target.value);
-                      clearFieldError("clientName");
-                    }}
-                    placeholder="Fortsolar Commercial Client"
-                    invalid={Boolean(errors.clientName)}
-                  />
-                </FormField>
-
-                <div className="product-inline-row is-three">
-                  <FormField label="City" error={errors.city}>
-                    <TextField
-                      value={city}
-                      onChange={(event) => {
-                        setCity(event.target.value);
-                        clearFieldError("city");
+                <FormField label="Location" error={errors.location}>
+                  <div className="detail-panel__stack">
+                    <TextAreaField
+                      value={address}
+                      onChange={(value) => {
+                        setAddress(value);
+                        clearFieldError("location");
                       }}
-                      placeholder="Lagos"
-                      invalid={Boolean(errors.city)}
+                      placeholder="Community, estate, street, or site address"
+                      rows={4}
+                      invalid={Boolean(errors.location)}
                     />
-                  </FormField>
-                  <FormField label="State" error={errors.state}>
-                    <TextField
-                      value={state}
-                      onChange={(event) => {
-                        setState(event.target.value);
-                        clearFieldError("state");
-                      }}
-                      placeholder="Lagos"
-                      invalid={Boolean(errors.state)}
-                    />
-                  </FormField>
-                  <FormField label="Country" error={errors.country}>
-                    <TextField
-                      value={country}
-                      onChange={(event) => {
-                        setCountry(event.target.value);
-                        clearFieldError("country");
-                      }}
-                      placeholder="Nigeria"
-                      invalid={Boolean(errors.country)}
-                    />
-                  </FormField>
-                </div>
-
-                <FormField label="Address / Community">
-                  <TextAreaField value={address} onChange={setAddress} placeholder="Ikeja business district" rows={4} />
+                    <div className="product-inline-row is-three">
+                      <TextField
+                        value={city}
+                        onChange={(event) => {
+                          setCity(event.target.value);
+                          clearFieldError("location");
+                        }}
+                        placeholder="City"
+                        invalid={Boolean(errors.location)}
+                      />
+                      <TextField
+                        value={state}
+                        onChange={(event) => {
+                          setState(event.target.value);
+                          clearFieldError("location");
+                        }}
+                        placeholder="State"
+                        invalid={Boolean(errors.location)}
+                      />
+                      <TextField
+                        value={country}
+                        onChange={(event) => {
+                          setCountry(event.target.value);
+                          clearFieldError("location");
+                        }}
+                        placeholder="Country"
+                        invalid={Boolean(errors.location)}
+                      />
+                    </div>
+                  </div>
                 </FormField>
 
                 <div className="product-inline-row is-two">
-                  <FormField label="Installation Time Label">
+                  <FormField label="Installation Time">
                     <TextField
                       value={installationTimeLabel}
                       onChange={(event) => setInstallationTimeLabel(event.target.value)}
                       placeholder="48 hrs"
                     />
                   </FormField>
-                  <FormField label="Project Status">
-                    <SelectField
-                      value={status}
-                      onChange={setStatus}
-                      options={buildProjectStatusOptions(status)}
-                      disabled={isLoadingProject}
-                    />
-                  </FormField>
                 </div>
-
-                <FormField label="Scheduled Date">
-                  <TextField
-                    value={scheduledDate}
-                    onChange={(event) => setScheduledDate(event.target.value)}
-                    placeholder="2026-05-29T09:00"
-                    type="datetime-local"
-                  />
-                </FormField>
               </div>
             </DetailPanel>
 
@@ -1146,10 +1092,6 @@ export function InstallationFormScreen() {
                     )}
                   </div>
                 </FormField>
-
-                <FormField label="Internal Notes">
-                  <TextAreaField value={notes} onChange={setNotes} placeholder="Add context for the team if needed." rows={6} />
-                </FormField>
               </div>
             </DetailPanel>
 
@@ -1198,25 +1140,6 @@ export function InstallationFormScreen() {
                     <p>No media uploaded yet. Add at least one image or video for this project.</p>
                   </div>
                 )}
-
-                <FormField label="Datasheet / Attachment">
-                  <div className="project-upload-inline">
-                    <label className="upload-field">
-                      <input type="file" accept=".pdf,application/pdf" onChange={handleDatasheetChange} />
-                      <span className="upload-field__button">
-                        <span>Upload file</span>
-                      </span>
-                      <span className="upload-field__value">
-                        {datasheetFile?.name || existingDatasheetUrl?.split("/").pop() || "No file chosen"}
-                      </span>
-                    </label>
-                    {existingDatasheetUrl ? (
-                      <a className="action-button is-secondary is-sm" href={existingDatasheetUrl} target="_blank" rel="noreferrer">
-                        <span>Preview</span>
-                      </a>
-                    ) : null}
-                  </div>
-                </FormField>
 
                 {selectedPackage ? (
                   <InlineCallout>

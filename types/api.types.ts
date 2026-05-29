@@ -600,6 +600,7 @@ export type CreateInstallationRequest = {
   installer_id?: string | null;
   order_id?: string | null;
   package_id?: string | null;
+  slug?: string;
   title?: string;
   summary?: string;
   overview?: string;
@@ -618,12 +619,12 @@ export type CreateInstallationRequest = {
   number_of_panels: number;
   panel_type: string;
   inverter_type: string;
-  scheduled_date: string;
+  scheduled_date?: string;
   notes?: string;
-  datasheet?: string;
 };
 export type UpdateInstallationRequest = Partial<{
   package_id: string | null;
+  slug: string;
   title: string;
   summary: string;
   overview: string;
@@ -637,7 +638,6 @@ export type UpdateInstallationRequest = Partial<{
   notes: string;
   scheduled_date: string;
   installer_id: string;
-  datasheet: string;
 }>;
 
 export type JobApiRecord = {

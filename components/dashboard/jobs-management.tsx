@@ -63,7 +63,6 @@ const applicantReviewFormId = "job-applicant-review-form";
 
 type JobStatusFilter = (typeof jobStatusTabs)[number];
 type JobFormState = {
-  slug: string;
   title: string;
   description: string;
   status: string;
@@ -103,7 +102,6 @@ const emptyPagination: PaginationMeta = {
 };
 
 const emptyJobForm: JobFormState = {
-  slug: "",
   title: "",
   description: "",
   status: "open",
@@ -279,7 +277,6 @@ function mapJobStatusToPackageStatus(status: string, currentStatus?: string | nu
 
 function jobFormFromRecord(job: JobApiRecord): JobFormState {
   return {
-    slug: job.slug || "",
     title: job.title || "",
     description: job.description || "",
     status: job.status?.trim().toLowerCase() || "open",
@@ -340,7 +337,7 @@ function validateJobForm(form: JobFormState) {
 }
 
 function buildJobPayload(form: JobFormState, selectedPackageRequest: BundleRequestRecord | null) {
-  const slug = slugify(form.slug || form.title || selectedPackageRequest?.bundle_name || "job");
+  const slug = slugify(form.title || selectedPackageRequest?.bundle_name || "job");
 
   return {
     slug,
@@ -492,10 +489,6 @@ function JobEditor({
               placeholder="Select customer"
               disabled={isLoadingReferences}
             />
-          </FormField>
-
-          <FormField label="Slug">
-            <TextField value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} placeholder="business-solar-package-lagos-installation" />
           </FormField>
 
           <FormField label="Job Title" error={errors.title}>
