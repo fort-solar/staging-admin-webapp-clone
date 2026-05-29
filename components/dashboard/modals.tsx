@@ -41,21 +41,24 @@ export function FormField({
   label,
   icon,
   hint,
+  error,
   children,
 }: {
   label: string;
   icon?: ReactNode;
   hint?: string;
+  error?: string | null;
   children: ReactNode;
 }) {
   return (
-    <label className="form-field">
+    <label className={cx("form-field", error && "is-invalid")}>
       <span className="form-field__label">
         {icon}
         <span>{label}</span>
       </span>
       {children}
       {hint ? <small className="form-field__hint">{hint}</small> : null}
+      {error ? <small className="form-field__error">{error}</small> : null}
     </label>
   );
 }

@@ -474,7 +474,7 @@ export type ManagedMediaAsset = {
   name: string;
   url: string;
   mime_type?: string | null;
-  kind?: "image" | "pdf" | "file" | (string & {});
+  kind?: "image" | "video" | "pdf" | "file" | (string & {});
 };
 
 export type ProductCategorySectionRecord = {
@@ -504,7 +504,9 @@ export type AdminProductRecord = {
   overview?: string | null;
   section_values: ProductSectionValueRecord[];
   product_image_url?: string | null;
+  product_image_urls?: string[];
   image_url?: string | null;
+  image_urls?: string[];
   image?: string | null;
   datasheet_url?: string | null;
   datasheet?: ManagedMediaAsset | null;
@@ -559,8 +561,23 @@ export type InstallationRecord = {
   user_id: string;
   customer_email: string | null;
   customer_name: string | null;
+  client_name?: string | null;
   installer_id: string | null;
   order_id?: string | null;
+  package_id?: string | null;
+  package_name?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  overview?: string | null;
+  highlights?: string[];
+  what_it_powers?: string[];
+  system_details?: PackageSystemDetailsRecord | null;
+  media?: ManagedMediaAsset[];
+  image_urls?: string[];
+  video_urls?: string[];
+  datasheet_url?: string | null;
+  installation_time_label?: string | null;
+  views?: number | null;
   status: string;
   address: string;
   city: string;
@@ -579,9 +596,19 @@ export type InstallationRecord = {
 export type InstallationListApiResponse = ApiCollectionResponse<InstallationRecord>;
 export type InstallationDetailApiResponse = ApiDataResponse<InstallationRecord>;
 export type CreateInstallationRequest = {
-  user_id: string;
-  installer_id: string;
-  order_id: string;
+  user_id?: string;
+  installer_id?: string | null;
+  order_id?: string | null;
+  package_id?: string | null;
+  title?: string;
+  summary?: string;
+  overview?: string;
+  client_name?: string;
+  customer_name?: string;
+  highlights?: string[];
+  what_it_powers?: string[];
+  system_details?: PackageSystemDetailsRecord;
+  installation_time_label?: string;
   status: string;
   address: string;
   city: string;
@@ -592,13 +619,25 @@ export type CreateInstallationRequest = {
   panel_type: string;
   inverter_type: string;
   scheduled_date: string;
-  notes: string;
+  notes?: string;
+  datasheet?: string;
 };
 export type UpdateInstallationRequest = Partial<{
+  package_id: string | null;
+  title: string;
+  summary: string;
+  overview: string;
+  client_name: string;
+  customer_name: string;
+  highlights: string[];
+  what_it_powers: string[];
+  system_details: PackageSystemDetailsRecord;
+  installation_time_label: string;
   status: string;
   notes: string;
   scheduled_date: string;
   installer_id: string;
+  datasheet: string;
 }>;
 
 export type JobApiRecord = {
@@ -610,10 +649,24 @@ export type JobApiRecord = {
   status: string;
   budget: string | number;
   deadline: string | null;
+  scheduled_date?: string | null;
   created_at: string;
   required_experience_years: number;
   installation_id?: string | null;
+  package_request_id?: string | null;
+  package_request_name?: string | null;
+  package_request_status?: string | null;
   assigned_to?: string | null;
+  customer_user_id?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  system_size_kw?: number | null;
+  notes?: string | null;
 };
 
 export type JobListApiResponse = ApiCollectionResponse<JobApiRecord>;
@@ -622,13 +675,27 @@ export type CreateJobRequest = {
   slug: string;
   title: string;
   description: string;
-  location: string;
   status: string;
   required_experience_years: number;
   budget: number;
-  deadline: string;
-  installation_id: string;
-  assigned_to: string;
+  scheduled_date?: string;
+  deadline?: string;
+  location?: string;
+  installation_id?: string;
+  package_request_id?: string;
+  package_request_status?: string;
+  package_request_name?: string;
+  assigned_to?: string;
+  customer_user_id?: string;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  system_size_kw?: number;
+  notes?: string;
 };
 export type UpdateJobRequest = Partial<CreateJobRequest>;
 
@@ -674,6 +741,10 @@ export type QuoteRequestRecord = {
   payback_period_years: number | null;
   status: string;
   admin_notes: string | null;
+  quote_asset_url?: string | null;
+  quote_asset_kind?: "image" | "pdf" | "file" | (string & {}) | null;
+  converted_package_request_id?: string | null;
+  is_closed?: boolean;
   responded_at: string | null;
   form_extras: Record<string, unknown>;
   created_at: string;
@@ -697,6 +768,9 @@ export type QuoteRequestDetailApiResponse = ApiDataResponse<QuoteRequestDetailRe
 export type UpdateQuoteRequestRequest = {
   status: string;
   adminNotes: string;
+  quote_asset_kind?: string;
+  package_request_payload?: Record<string, unknown>;
+  close_confirmed?: boolean;
 };
 
 export type VerificationSubmissionRecord = {
@@ -798,12 +872,29 @@ export type BundleRequestRecord = {
   updated_at: string;
   bundle_name: string;
   order_status: string;
+  customer_user_id?: string | null;
+  customer_email?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  system_size_kw?: number | null;
+  number_of_panels?: number | null;
+  panel_type?: string | null;
+  inverter_type?: string | null;
+  notes?: string | null;
+  job_id?: string | null;
+  job_slug?: string | null;
+  job_status?: string | null;
 };
 
 export type BundleRequestListApiResponse = ApiCollectionResponse<BundleRequestRecord>;
 export type UpdateBundleRequestRequest = {
   status: string;
   admin_note: string;
+  job_status?: string;
 };
 
 export type OrderDetail = {

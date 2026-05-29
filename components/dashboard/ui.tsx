@@ -290,13 +290,15 @@ export function TextField({
   onChange,
   placeholder,
   type = "text",
+  invalid = false,
 }: {
   value: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   type?: "text" | "email" | "password" | "date" | "time" | "datetime-local";
+  invalid?: boolean;
 }) {
-  return <input className="dashboard-input" type={type} value={value} onChange={onChange} placeholder={placeholder} />;
+  return <input className="dashboard-input" type={type} value={value} onChange={onChange} placeholder={placeholder} aria-invalid={invalid || undefined} />;
 }
 
 export function TextAreaField({
@@ -304,11 +306,13 @@ export function TextAreaField({
   onChange,
   placeholder,
   rows = 4,
+  invalid = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  invalid?: boolean;
 }) {
   return (
     <textarea
@@ -317,6 +321,7 @@ export function TextAreaField({
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
       rows={rows}
+      aria-invalid={invalid || undefined}
     />
   );
 }
@@ -331,6 +336,8 @@ export function SelectField({
   required,
   variant = "default",
   ariaLabel,
+  invalid = false,
+  searchable = true,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -341,9 +348,22 @@ export function SelectField({
   required?: boolean;
   variant?: "default" | "inline";
   ariaLabel?: string;
+  invalid?: boolean;
+  searchable?: boolean;
 }) {
   const normalizedOptions = options.map((option) => (typeof option === "string" ? { label: option, value: option } : option));
-  const hasEmptyOption = normalizedOptions.some((option) => option.value === "");
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const filteredOptions = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return normalizedOptions;
+    }
+
+    return normalizedOptions.filter((option) => option.label.toLowerCase().includes(normalizedSearch));
+  }, [normalizedOptions, search]);
+  const hasEmptyOption = filteredOptions.some((option) => option.value === "");
   const resolvedValue = value === "" ? (hasEmptyOption ? EMPTY_SELECT_VALUE : undefined) : value;
   const triggerClassName = cx(className, variant === "inline" && "is-inline");
 
@@ -351,18 +371,37 @@ export function SelectField({
     <Select
       value={resolvedValue}
       onValueChange={(nextValue) => onChange(nextValue === EMPTY_SELECT_VALUE ? "" : nextValue)}
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          setSearch("");
+        }
+      }}
       disabled={disabled}
       required={required}
     >
-      <SelectTrigger className={triggerClassName} aria-label={ariaLabel}>
+      <SelectTrigger className={triggerClassName} aria-label={ariaLabel} aria-invalid={invalid || undefined}>
         <SelectValue className="select-field__value" placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
-        {normalizedOptions.map((option) => (
+        {searchable ? (
+          <div className="dashboard-select__search" onPointerDown={(event) => event.stopPropagation()}>
+            <SearchIcon className="field-icon" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search options"
+              aria-label="Search options"
+            />
+          </div>
+        ) : null}
+        {filteredOptions.map((option) => (
           <SelectItem key={`${option.value}-${option.label}`} value={option.value === "" ? EMPTY_SELECT_VALUE : option.value}>
             {option.label}
           </SelectItem>
         ))}
+        {!filteredOptions.length ? <div className="dashboard-select__empty">No options match your search.</div> : null}
       </SelectContent>
     </Select>
   );

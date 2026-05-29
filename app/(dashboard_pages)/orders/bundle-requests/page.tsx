@@ -8,10 +8,21 @@ import { FormField, Modal } from "@/components/dashboard/modals";
 import { Button, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, TextAreaField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
-import { DEFAULT_PAGE_SIZE, formatDateTimeLabel, formatEnumLabel, getBundleRequests, updateBundleRequest } from "@/lib/admin-api";
+import { DEFAULT_PAGE_SIZE, formatDateTimeLabel, formatEnumLabel, getBundleRequests, updateBundleRequest, updateJob } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { BundleRequestRecord, PaginationMeta } from "@/types/api.types";
+
+const packageLifecycleStatuses = [
+  "processing",
+  "packed",
+  "installer_assigned",
+  "installer_in_transit",
+  "system_installed",
+  "installation_verified",
+  "closed",
+  "cancelled",
+] as const;
 
 const emptyPagination: PaginationMeta = {
   page: 1,
@@ -19,6 +30,30 @@ const emptyPagination: PaginationMeta = {
   total: 0,
   totalPages: 1,
 };
+
+function mapPackageStatusToJobStatus(status: string) {
+  const normalized = status.trim().toLowerCase();
+
+  switch (normalized) {
+    case "processing":
+    case "packed":
+      return "open";
+    case "installer_assigned":
+      return "assigned";
+    case "installer_in_transit":
+      return "in_progress";
+    case "system_installed":
+      return "completed";
+    case "installation_verified":
+      return "verified";
+    case "closed":
+      return "closed";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return null;
+  }
+}
 
 export default function BundleRequestPage() {
   const { can } = useAccessControl();
@@ -78,7 +113,20 @@ export default function BundleRequestPage() {
       rows.filter((row) => {
         const statusLabel = formatEnumLabel(row.status);
         const orderStatusLabel = formatEnumLabel(row.order_status);
-        const haystack = [row.id, row.order_id, row.bundle_id, row.bundle_name, row.admin_note ?? "", statusLabel, orderStatusLabel]
+        const haystack = [
+          row.id,
+          row.order_id,
+          row.bundle_id,
+          row.bundle_name,
+          row.customer_name ?? "",
+          row.customer_email ?? "",
+          row.city ?? "",
+          row.state ?? "",
+          row.job_status ?? "",
+          row.admin_note ?? "",
+          statusLabel,
+          orderStatusLabel,
+        ]
           .join(" ")
           .toLowerCase();
         const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
@@ -91,7 +139,7 @@ export default function BundleRequestPage() {
   const activeRequest = rows.find((row) => row.id === detailId) ?? null;
   const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((row) => formatEnumLabel(row.status))))], [rows]);
   const detailStatusOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.status).concat(["pending", "approved", "rejected"]))),
+    () => Array.from(new Set(rows.map((row) => row.status).concat([...packageLifecycleStatuses]))),
     [rows],
   );
 
@@ -106,9 +154,9 @@ export default function BundleRequestPage() {
     setDetailAdminNote(activeRequest.admin_note ?? "");
   }, [activeRequest]);
 
-  const pendingCount = rows.filter((row) => row.status.toLowerCase() === "pending").length;
-  const approvedCount = rows.filter((row) => row.status.toLowerCase() === "approved").length;
-  const completedOrdersCount = rows.filter((row) => row.order_status.toLowerCase() === "completed").length;
+  const processingCount = rows.filter((row) => row.status.toLowerCase() === "processing").length;
+  const inTransitCount = rows.filter((row) => row.status.toLowerCase() === "installer_in_transit").length;
+  const verifiedCount = rows.filter((row) => row.status.toLowerCase() === "installation_verified").length;
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,6 +172,14 @@ export default function BundleRequestPage() {
         status: detailStatus,
         admin_note: detailAdminNote,
       });
+
+      const nextJobStatus = mapPackageStatusToJobStatus(detailStatus);
+      if (activeRequest.job_id && nextJobStatus && nextJobStatus !== activeRequest.job_status) {
+        await updateJob(activeRequest.job_id, {
+          status: nextJobStatus,
+          package_request_id: activeRequest.id,
+        });
+      }
 
       toast({
         title: "Package request updated",
@@ -152,9 +208,9 @@ export default function BundleRequestPage() {
       <div className="dashboard-stack">
         <section className="stats-grid--four">
           <MetricCardSecondary title="Total Requests" value={pagination.total.toLocaleString()} icon="bundles" spark={[18, 24, 32, 44, 52, 60]} />
-          <MetricCardSecondary title="Pending On This Page" value={pendingCount.toLocaleString()} icon="orders" spark={[30, 26, 22, 18, 16, 14]} />
-          <MetricCardSecondary title="Approved On This Page" value={approvedCount.toLocaleString()} icon="verification" spark={[12, 18, 24, 34, 44, 54]} />
-          <MetricCardSecondary title="Completed Parent Orders" value={completedOrdersCount.toLocaleString()} icon="installers" spark={[24, 26, 32, 40, 48, 54]} />
+          <MetricCardSecondary title="Processing" value={processingCount.toLocaleString()} icon="orders" spark={[30, 26, 22, 18, 16, 14]} />
+          <MetricCardSecondary title="In Transit" value={inTransitCount.toLocaleString()} icon="verification" spark={[12, 18, 24, 34, 44, 54]} />
+          <MetricCardSecondary title="Verified" value={verifiedCount.toLocaleString()} icon="installers" spark={[24, 26, 32, 40, 48, 54]} />
         </section>
 
         <Panel className="overflow-hidden">
@@ -261,7 +317,7 @@ export default function BundleRequestPage() {
             <div className="rounded-[20px] bg-(--surface-soft) p-5">
               <p className="m-0 text-sm font-semibold text-(--brand)">Package Request</p>
               <h3 className="m-0 pt-2 text-2xl font-extrabold sm:text-[28px]">{activeRequest.bundle_name}</h3>
-              <p className="m-0 pt-2 text-sm text-(--text-soft)">Review the linked order state and update the package request status or admin note.</p>
+              <p className="m-0 pt-2 text-sm text-(--text-soft)">Review the linked order state and update the package request lifecycle status or admin note.</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -288,6 +344,26 @@ export default function BundleRequestPage() {
               <div>
                 <p className="cell-subtle">Updated</p>
                 <strong>{formatDateTimeLabel(activeRequest.updated_at)}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Customer</p>
+                <strong>{activeRequest.customer_name || activeRequest.customer_email || "N/A"}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Location</p>
+                <strong>{[activeRequest.city, activeRequest.state, activeRequest.country].filter(Boolean).join(", ") || "N/A"}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">System Size</p>
+                <strong>{activeRequest.system_size_kw ? `${activeRequest.system_size_kw} kW` : "N/A"}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Linked Job</p>
+                <strong>{activeRequest.job_slug || activeRequest.job_id || "No job linked"}</strong>
+              </div>
+              <div>
+                <p className="cell-subtle">Job Status</p>
+                <strong>{activeRequest.job_status ? formatEnumLabel(activeRequest.job_status) : "N/A"}</strong>
               </div>
             </div>
 

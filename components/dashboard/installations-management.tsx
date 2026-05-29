@@ -1,32 +1,55 @@
 "use client";
 
-import { type FormEvent, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
-import { FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
+import { CalendarIcon, FilterIcon, LocationIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
 import { ActionLink, DetailPanel, DirectoryToolbar, InlineCallout } from "@/components/dashboard/management-primitives";
-import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextArea, ModalTextInput } from "@/components/dashboard/modals";
+import { FormField } from "@/components/dashboard/modals";
 import { FormSubmitter } from "@/components/dashboard/form-submitter";
-import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
+import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField, cx } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { createInstallation, DEFAULT_PAGE_SIZE, deleteInstallation, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getCustomers, getInstallation, getInstallations, getInstallers, getOrders, updateInstallation } from "@/lib/admin-api";
+import {
+  buildMultipartFormData,
+  createInstallation,
+  DEFAULT_PAGE_SIZE,
+  deleteInstallation,
+  formatDateLabel,
+  formatEnumLabel,
+  getInstallation,
+  getInstallations,
+  getPackages,
+  updateInstallation,
+} from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
-import type { CustomerRecord, InstallationRecord, InstallerRecord, OrderRecord, PaginationMeta } from "@/types/api.types";
+import type { InstallationRecord, ManagedMediaAsset, PackageRecord, PaginationMeta } from "@/types/api.types";
 
-const installationStatusTabs = ["All", "Scheduled", "In Progress", "Completed", "Cancelled"] as const;
-const installationStatusOptions = [
-  { label: "Scheduled", value: "scheduled" },
-  { label: "In Progress", value: "in_progress" },
-  { label: "Completed", value: "completed" },
-  { label: "Cancelled", value: "cancelled" },
+const projectStatusTabs = ["All", "Published", "Draft", "Archived"] as const;
+const projectStatusOptions = [
+  { label: "Published", value: "published" },
+  { label: "Draft", value: "draft" },
+  { label: "Archived", value: "archived" },
 ] as const;
-const installationFormId = "installation-form";
-const installationEditFormId = "installation-edit-form";
+const projectFormId = "project-form";
 
-type InstallationStatusFilter = (typeof installationStatusTabs)[number];
+type ProjectStatusFilter = (typeof projectStatusTabs)[number];
+type ProjectValidationErrors = Partial<Record<
+  | "title"
+  | "summary"
+  | "overview"
+  | "clientName"
+  | "city"
+  | "state"
+  | "country"
+  | "highlights"
+  | "systemDetails"
+  | "whatItPowers"
+  | "media",
+  string
+>>;
 
 const emptyPagination: PaginationMeta = {
   page: 1,
@@ -35,58 +58,150 @@ const emptyPagination: PaginationMeta = {
   totalPages: 1,
 };
 
-function matchesInstallationStatus(status: string, filter: InstallationStatusFilter) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readStringArray(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function slugify(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function inferMediaKind(source: string, mimeType?: string | null) {
+  const normalizedSource = source.toLowerCase();
+  const normalizedMime = mimeType?.toLowerCase() ?? "";
+
+  if (normalizedMime.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg)$/i.test(normalizedSource)) {
+    return "image" as const;
+  }
+
+  if (normalizedMime.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(normalizedSource)) {
+    return "video" as const;
+  }
+
+  if (normalizedMime.includes("pdf") || normalizedSource.endsWith(".pdf")) {
+    return "pdf" as const;
+  }
+
+  return "file" as const;
+}
+
+function fileMediaKind(file: File) {
+  return inferMediaKind(file.name, file.type);
+}
+
+function useObjectUrls(files: File[]) {
+  const urls = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
+
+  useEffect(() => () => urls.forEach((url) => URL.revokeObjectURL(url)), [urls]);
+  return urls;
+}
+
+function normalizeProjectMedia(record: InstallationRecord | Record<string, unknown>) {
+  const raw = record as Record<string, unknown>;
+  const mediaRecord = isRecord(raw.media) ? raw.media : null;
+  const sourceMedia = Array.isArray(raw.media) ? raw.media : [];
+  const normalizedMedia = sourceMedia
+    .filter((item): item is ManagedMediaAsset => isRecord(item) && typeof item.url === "string" && item.url.trim().length > 0)
+    .map((item, index) => ({
+      id: item.id ?? `${item.url}-${index}`,
+      name: item.name || item.url.split("/").pop() || `Media ${index + 1}`,
+      url: item.url.trim(),
+      mime_type: item.mime_type ?? null,
+      kind: item.kind ?? inferMediaKind(item.url, item.mime_type),
+    }));
+
+  const fallbackImages = [
+    ...readStringArray(raw, ["image_urls"]),
+    ...(mediaRecord ? readStringArray(mediaRecord, ["image_urls"]) : []),
+  ].map((url, index) => ({
+    id: `image-${index}-${url}`,
+    name: url.split("/").pop() || `Image ${index + 1}`,
+    url,
+    kind: "image" as const,
+  }));
+
+  const fallbackVideos = readStringArray(raw, ["video_urls"]).map((url, index) => ({
+    id: `video-${index}-${url}`,
+    name: url.split("/").pop() || `Video ${index + 1}`,
+    url,
+    kind: "video" as const,
+  }));
+
+  const combined = [...normalizedMedia, ...fallbackImages, ...fallbackVideos];
+
+  return combined.filter((item, index, all) => all.findIndex((entry) => entry.url === item.url) === index);
+}
+
+function projectImages(record: InstallationRecord | Record<string, unknown>) {
+  return normalizeProjectMedia(record)
+    .filter((asset) => asset.kind === "image")
+    .map((asset) => asset.url)
+    .slice(0, 4);
+}
+
+function projectLocation(record: InstallationRecord) {
+  return [record.city, record.state, record.country].filter(Boolean).join(", ") || "Nigeria";
+}
+
+function projectClient(record: InstallationRecord) {
+  return record.client_name || record.customer_name || record.customer_email || "Unnamed client";
+}
+
+function projectTitle(record: InstallationRecord) {
+  return record.title || record.package_name || projectClient(record);
+}
+
+function projectSummary(record: InstallationRecord) {
+  return record.summary || record.overview || "Project summary coming soon.";
+}
+
+function projectDate(record: InstallationRecord) {
+  return record.scheduled_date || record.created_at;
+}
+
+function matchesProjectStatus(status: string, filter: ProjectStatusFilter) {
   if (filter === "All") {
     return true;
   }
 
   const normalized = status.trim().toLowerCase();
 
-  switch (filter) {
-    case "Scheduled":
-      return normalized === "scheduled";
-    case "In Progress":
-      return normalized === "in_progress" || normalized === "in progress";
-    case "Completed":
-      return normalized === "completed";
-    case "Cancelled":
-      return normalized === "cancelled" || normalized === "canceled";
-    default:
-      return true;
+  if (filter === "Published") {
+    return normalized !== "draft" && normalized !== "archived" && normalized !== "cancelled";
   }
+
+  if (filter === "Draft") {
+    return normalized === "draft";
+  }
+
+  return normalized === "archived" || normalized === "cancelled";
 }
 
-function buildStatusOptions(current?: string) {
+function buildProjectStatusOptions(current?: string) {
   const normalizedCurrent = current?.trim().toLowerCase();
 
-  if (!normalizedCurrent || installationStatusOptions.some((option) => option.value === normalizedCurrent)) {
-    return [...installationStatusOptions];
+  if (!normalizedCurrent || projectStatusOptions.some((option) => option.value === normalizedCurrent)) {
+    return [...projectStatusOptions];
   }
 
-  return [
-    { label: formatEnumLabel(normalizedCurrent), value: normalizedCurrent },
-    ...installationStatusOptions,
-  ];
-}
-
-function formatLocation(record: InstallationRecord) {
-  return [record.address, record.city, record.state, record.country].filter(Boolean).join(", ");
-}
-
-function formatCustomerOption(customer: CustomerRecord) {
-  const name = customer.fullName || customer.name || customer.email;
-  return `${name} (${customer.email})`;
-}
-
-function formatInstallerOption(installer: InstallerRecord) {
-  const name = installer.user.fullName || installer.user.name || installer.user.email;
-  const company = installer.installerProfile.companyName ? ` • ${installer.installerProfile.companyName}` : "";
-  return `${name} (${installer.user.email})${company}`;
-}
-
-function formatOrderOption(order: OrderRecord) {
-  const customer = order.customer_name || order.customer_email || order.id;
-  return `${customer} • ${formatCurrencyLabel(order.total_amount, order.currency)} • ${formatEnumLabel(order.status)}`;
+  return [{ label: formatEnumLabel(normalizedCurrent), value: normalizedCurrent }, ...projectStatusOptions];
 }
 
 function withSelectedOption(options: Array<{ label: string; value: string }>, value: string, fallbackLabel: string) {
@@ -95,6 +210,102 @@ function withSelectedOption(options: Array<{ label: string; value: string }>, va
   }
 
   return [{ value, label: fallbackLabel }, ...options];
+}
+
+function ProjectCard({
+  record,
+  canDelete,
+  onDelete,
+}: {
+  record: InstallationRecord;
+  canDelete: boolean;
+  onDelete: (record: InstallationRecord) => Promise<void>;
+}) {
+  const slides = projectImages(record);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const resolvedActiveIndex = slides.length ? activeIndex % slides.length : 0;
+
+  useEffect(() => {
+    if (slides.length <= 1) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % slides.length);
+    }, 3200);
+
+    return () => window.clearInterval(timer);
+  }, [slides.length]);
+
+  return (
+    <article className="installation-card">
+      <div className="installation-card__actions">
+        <TableActionsMenu
+          items={[
+            { label: "Edit Project", href: `/projects/new?projectId=${record.id}` },
+            ...(canDelete
+              ? [
+                  {
+                    label: "Delete Project",
+                    tone: "danger" as const,
+                    icon: <TrashIcon className="menu-icon" />,
+                    onSelect: () => void onDelete(record),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </div>
+
+      {slides.length ? (
+        <div className="installation-card__media">
+          {slides.map((image, index) => (
+            <img
+              key={`${record.id}-slide-${index}`}
+              src={image}
+              alt={projectTitle(record)}
+              className={cx("installation-card__image", resolvedActiveIndex === index && "is-active")}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="installation-card__placeholder">
+          <strong>{normalizeProjectMedia(record).some((asset) => asset.kind === "video") ? "Video project" : "No project image"}</strong>
+          <span>{normalizeProjectMedia(record).some((asset) => asset.kind === "video") ? "Videos are kept out of the card slider until image media is added." : "Upload at least one image to power the project slider."}</span>
+        </div>
+      )}
+
+      <div className="installation-card__shade" />
+
+      <div className="installation-card__top">
+        <span>
+          <CalendarIcon className="mini-icon" />
+          {formatDateLabel(projectDate(record))}
+        </span>
+        <span>
+          <LocationIcon className="mini-icon" />
+          {projectLocation(record)}
+        </span>
+      </div>
+
+      {slides.length ? (
+        <div className="installation-card__dots" aria-hidden="true">
+          {slides.map((_, index) => (
+            <span key={`${record.id}-dot-${index}`} className={cx(resolvedActiveIndex === index && "is-active")} />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="installation-card__copy">
+        <h3>{projectTitle(record)}</h3>
+        <p>{projectSummary(record)}</p>
+        <div className="installation-card__meta">
+          <StatusPill label={formatEnumLabel(record.status)} tone={toneFromStatus(record.status)} solid={false} />
+          <span>{record.package_name ? `Package • ${record.package_name}` : "Package • None"}</span>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export function InstallationsManagementScreen() {
@@ -106,30 +317,15 @@ export function InstallationsManagementScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<InstallationStatusFilter>("All");
+  const [status, setStatus] = useState<ProjectStatusFilter>("All");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [editingInstallation, setEditingInstallation] = useState<InstallationRecord | null>(null);
-  const [editStatus, setEditStatus] = useState("scheduled");
-  const [editInstallerId, setEditInstallerId] = useState("");
-  const [editScheduledDate, setEditScheduledDate] = useState("");
-  const [editNotes, setEditNotes] = useState("");
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isLoadingEdit, setIsLoadingEdit] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [installerOptions, setInstallerOptions] = useState<InstallerRecord[]>([]);
-  const [installerLookupError, setInstallerLookupError] = useState<string | null>(null);
-  const [isLoadingInstallerOptions, setIsLoadingInstallerOptions] = useState(true);
   const deferredQuery = useDeferredValue(query);
-  const canCreateInstallations = can("installations", "create");
-  const canUpdateInstallations = can("installations", "update");
-  const canDeleteInstallations = can("installations", "delete");
+  const canCreateProjects = can("installations", "create");
+  const canDeleteProjects = can("installations", "delete");
 
   useEffect(() => {
     let cancelled = false;
-
-    setIsLoading(true);
-    setError(null);
 
     getInstallations({
       page,
@@ -138,19 +334,24 @@ export function InstallationsManagementScreen() {
       q: deferredQuery.trim() || undefined,
       fields: [
         "id",
-        "user_id",
-        "customer_email",
+        "title",
+        "summary",
+        "overview",
+        "package_id",
+        "package_name",
+        "client_name",
         "customer_name",
-        "installer_id",
+        "customer_email",
         "status",
-        "address",
+        "scheduled_date",
+        "created_at",
         "city",
         "state",
         "country",
-        "system_size_kw",
-        "scheduled_date",
-        "completed_date",
-        "created_at",
+        "views",
+        "media",
+        "image_urls",
+        "video_urls",
       ],
     })
       .then((payload) => {
@@ -166,7 +367,7 @@ export function InstallationsManagementScreen() {
           return;
         }
 
-        setError(getErrorMessage(loadError, "Installations could not be loaded."));
+        setError(getErrorMessage(loadError, "Projects could not be loaded."));
         setRows([]);
         setPagination(emptyPagination);
       })
@@ -181,122 +382,56 @@ export function InstallationsManagementScreen() {
     };
   }, [deferredQuery, page, refreshKey]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    getInstallers({ page: 1, limit: 100 })
-      .then((payload) => {
-        if (cancelled) {
-          return;
-        }
-
-        setInstallerOptions(payload.data);
-      })
-      .catch((loadError) => {
-        if (cancelled) {
-          return;
-        }
-
-        if (isDashboardSessionExpiredError(loadError)) {
-          return;
-        }
-
-        setInstallerLookupError(getErrorMessage(loadError, "Installer options could not be loaded."));
-        setInstallerOptions([]);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingInstallerOptions(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const filteredRows = useMemo(
-    () => rows.filter((record) => matchesInstallationStatus(record.status, status)),
+    () => rows.filter((record) => matchesProjectStatus(record.status, status)),
     [rows, status],
   );
-  const installerSelectOptions = useMemo(
-    () =>
-      withSelectedOption(
-        [
-          { value: "", label: "Unassigned" },
-          ...installerOptions.map((installer) => ({
-            value: installer.user.id,
-            label: formatInstallerOption(installer),
-          })),
-        ],
-        editInstallerId,
-        `Selected installer (${editInstallerId})`,
-      ),
-    [editInstallerId, installerOptions],
-  );
+  const mostUsedPackage = useMemo(() => {
+    const counts = new Map<string, number>();
 
-  const scheduledCount = rows.filter((record) => matchesInstallationStatus(record.status, "Scheduled")).length;
-  const inProgressCount = rows.filter((record) => matchesInstallationStatus(record.status, "In Progress")).length;
-  const completedCount = rows.filter((record) => matchesInstallationStatus(record.status, "Completed")).length;
-  const notice = searchParams.get("created") ? "Installation created successfully." : null;
+    rows.forEach((record) => {
+      const key = record.package_name?.trim() || "Independent Project";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
 
-  async function openEditModal(record: InstallationRecord) {
-    setIsEditOpen(true);
-    setIsLoadingEdit(true);
-    setEditingInstallation(record);
-    setEditStatus(record.status?.trim().toLowerCase() || "scheduled");
-    setEditInstallerId(record.installer_id ?? "");
-    setEditScheduledDate(record.scheduled_date ?? "");
-    setEditNotes(record.notes ?? "");
+    return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? "No package yet";
+  }, [rows]);
+  const publishedCount = rows.filter((record) => matchesProjectStatus(record.status, "Published")).length;
+  const draftCount = rows.filter((record) => matchesProjectStatus(record.status, "Draft")).length;
+  const mediaCount = rows.reduce((sum, record) => sum + normalizeProjectMedia(record).length, 0);
+  const notice = searchParams.get("created")
+    ? "Project created successfully."
+    : searchParams.get("updated")
+      ? "Project updated successfully."
+      : null;
 
-    try {
-      const payload = await getInstallation(record.id);
-      const detail = payload.data;
-      setEditingInstallation(detail);
-      setEditStatus(detail.status?.trim().toLowerCase() || "scheduled");
-      setEditInstallerId(detail.installer_id ?? "");
-      setEditScheduledDate(detail.scheduled_date ?? "");
-      setEditNotes(detail.notes ?? "");
-    } catch (loadError) {
-      if (isDashboardSessionExpiredError(loadError)) {
-        return;
-      }
-
-      toast({
-        title: "Installation load failed",
-        description: getErrorMessage(loadError, "The installation details could not be loaded."),
-        variant: "error",
-      });
-    } finally {
-      setIsLoadingEdit(false);
-    }
+  function handleSearchChange(value: string) {
+    setIsLoading(true);
+    setError(null);
+    setPage(1);
+    setQuery(value);
   }
 
-  function closeEditModal() {
-    if (isSavingEdit) {
-      return;
-    }
-
-    setIsEditOpen(false);
-    setEditingInstallation(null);
-    setEditStatus("scheduled");
-    setEditInstallerId("");
-    setEditScheduledDate("");
-    setEditNotes("");
+  function handlePageChange(nextPage: number) {
+    setIsLoading(true);
+    setError(null);
+    setPage(nextPage);
   }
 
   async function handleDelete(record: InstallationRecord) {
     try {
       await deleteInstallation(record.id);
       toast({
-        title: "Installation deleted",
-        description: `${record.customer_name || record.id} was removed successfully.`,
+        title: "Project deleted",
+        description: `${projectTitle(record)} was removed successfully.`,
         variant: "success",
       });
 
       if (rows.length === 1 && page > 1) {
+        setIsLoading(true);
         setPage((current) => current - 1);
       } else {
+        setIsLoading(true);
         setRefreshKey((current) => current + 1);
       }
     } catch (deleteError) {
@@ -306,285 +441,151 @@ export function InstallationsManagementScreen() {
 
       toast({
         title: "Delete failed",
-        description: getErrorMessage(deleteError, "The installation could not be deleted."),
+        description: getErrorMessage(deleteError, "The project could not be deleted."),
         variant: "error",
       });
-    }
-  }
-
-  async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!editingInstallation) {
-      return;
-    }
-
-    setIsSavingEdit(true);
-
-    try {
-      await updateInstallation(editingInstallation.id, {
-        status: editStatus,
-        installer_id: editInstallerId.trim() || undefined,
-        scheduled_date: editScheduledDate.trim() || undefined,
-        notes: editNotes.trim() || undefined,
-      });
-
-      toast({
-        title: "Installation updated",
-        description: `${editingInstallation.customer_name || editingInstallation.id} was updated successfully.`,
-        variant: "success",
-      });
-      closeEditModal();
-      setRefreshKey((current) => current + 1);
-    } catch (saveError) {
-      if (isDashboardActionCancelledError(saveError) || isDashboardSessionExpiredError(saveError)) {
-        return;
-      }
-
-      toast({
-        title: "Update failed",
-        description: getErrorMessage(saveError, "The installation could not be updated."),
-        variant: "error",
-      });
-    } finally {
-      setIsSavingEdit(false);
     }
   }
 
   return (
-    <>
-      <div className="dashboard-stack">
-        <section className="stats-grid--four">
-          <MetricCardSecondary title="Total Installations" value={pagination.total.toLocaleString()} icon="products" spark={[12, 18, 24, 30, 36, 42]} />
-          <MetricCardSecondary title="Scheduled On This Page" value={scheduledCount.toLocaleString()} icon="calendar" spark={[10, 14, 18, 24, 30, 36]} />
-          <MetricCardSecondary title="In Progress On This Page" value={inProgressCount.toLocaleString()} icon="sales" spark={[8, 14, 20, 26, 32, 38]} />
-          <MetricCardSecondary title="Completed On This Page" value={completedCount.toLocaleString()} icon="verification" spark={[8, 12, 20, 28, 34, 40]} />
-        </section>
+    <div className="dashboard-stack">
+      <section className="stats-grid--four">
+        <MetricCardSecondary title="Total Projects" value={pagination.total.toLocaleString()} icon="products" spark={[12, 18, 24, 30, 36, 42]} />
+        <MetricCardSecondary title="Most Used Package" value={mostUsedPackage} icon="bundles" spark={[10, 18, 22, 30, 36, 44]} />
+        <MetricCardSecondary title="Published On This Page" value={publishedCount.toLocaleString()} icon="verification" spark={[12, 16, 22, 28, 36, 40]} />
+        <MetricCardSecondary title="Media Assets" value={mediaCount.toLocaleString()} icon="calendar" spark={[8, 14, 18, 24, 30, 34]} />
+      </section>
 
-        {notice ? <InlineCallout>{notice}</InlineCallout> : null}
+      {notice ? <InlineCallout>{notice}</InlineCallout> : null}
 
-        <Panel className="overflow-hidden">
-          <div className="management-surface__body">
-            <div className="section-header content-section-header">
-              <div>
-                <h2 className="section-title">Installations</h2>
-                <p className="section-description">Manage installation records returned by the admin installation endpoints.</p>
-              </div>
-              {canCreateInstallations ? (
-                <ActionLink href="/installations/new" leadingIcon={<PlusIcon className="mini-icon" />}>
-                  Add New Installation
-                </ActionLink>
-              ) : null}
+      <Panel className="overflow-hidden">
+        <div className="management-surface__body">
+          <div className="section-header content-section-header">
+            <div>
+              <h2 className="section-title">Projects</h2>
+              <p className="section-description">Manage the portfolio content that powers the public Projects pages and homepage cards.</p>
             </div>
-            <DirectoryToolbar
-              searchValue={query}
-              onSearchChange={setQuery}
-              searchPlaceholder="Search installations..."
-              filters={
-                <Button variant="secondary" size="sm" leadingIcon={<FilterIcon className="mini-icon" />}>
-                  Filter
-                </Button>
-              }
-            />
-            <div className="management-surface__filters is-inline">
-              <Tabs value={status} onChange={setStatus} options={installationStatusTabs} compact />
-            </div>
+            {canCreateProjects ? (
+              <ActionLink href="/projects/new" leadingIcon={<PlusIcon className="mini-icon" />}>
+                Add New Project
+              </ActionLink>
+            ) : null}
           </div>
 
-          <ErrorMessage title="Installation load failed" message={error} />
-
-          {isLoading && !rows.length ? (
-            <div className="p-6">
-              <p className="section-description">Loading installations...</p>
-            </div>
-          ) : !isLoading && !rows.length && !error ? (
-            <div className="p-6">
-              <EmptyScaffold title="No installations found" description="No record found on the database" />
-            </div>
-          ) : (
-            <>
-              <div className="table-scroll pt-2">
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Customer</th>
-                      <th>Installer</th>
-                      <th>Location</th>
-                      <th>System Size</th>
-                      <th>Schedule</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRows.length ? (
-                      filteredRows.map((record) => (
-                        <tr key={record.id}>
-                          <td>
-                            <div className="product-cell__text">
-                              <strong>{record.customer_name || "Unknown customer"}</strong>
-                              <span>{record.customer_email || "No email"}</span>
-                              <span>{record.user_id}</span>
-                            </div>
-                          </td>
-                          <td>{record.installer_id || "Unassigned"}</td>
-                          <td>{formatLocation(record) || "N/A"}</td>
-                          <td>{record.system_size_kw ? `${record.system_size_kw} kW` : "N/A"}</td>
-                          <td>
-                            <div className="product-cell__text">
-                              <strong>{formatDateTimeLabel(record.scheduled_date)}</strong>
-                              <span>Created {formatDateTimeLabel(record.created_at)}</span>
-                              <span>{record.completed_date ? `Completed ${formatDateTimeLabel(record.completed_date)}` : "Not completed"}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <StatusPill label={formatEnumLabel(record.status)} tone={toneFromStatus(record.status)} solid={false} />
-                          </td>
-                          <td>
-                            <TableActionsMenu
-                              items={[
-                                ...(canUpdateInstallations
-                                  ? [
-                                      {
-                                        label: "Edit Installation",
-                                        onSelect: () => void openEditModal(record),
-                                      },
-                                    ]
-                                  : []),
-                                ...(canDeleteInstallations
-                                  ? [
-                                      {
-                                        label: "Delete Installation",
-                                        tone: "danger" as const,
-                                        icon: <TrashIcon className="menu-icon" />,
-                                        onSelect: () => void handleDelete(record),
-                                      },
-                                    ]
-                                  : []),
-                              ]}
-                            />
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={7}>
-                          <div className="p-6">
-                            <EmptyScaffold title="No installations matched" description="No record found on the database" />
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
-            </>
-          )}
-        </Panel>
-      </div>
-
-      <Modal
-        open={isEditOpen}
-        onClose={closeEditModal}
-        title={editingInstallation ? `Update ${editingInstallation.customer_name || editingInstallation.id}` : "Update Installation"}
-        footer={
-          <ModalFooterActions
-            formId={installationEditFormId}
-            cancelLabel="Cancel"
-            submitLabel={isSavingEdit ? "Saving..." : "Save Changes"}
-            onCancel={closeEditModal}
-            disabled={isSavingEdit || isLoadingEdit}
-          />
-        }
-      >
-        <form id={installationEditFormId} className="notification-wizard" onSubmit={handleEditSubmit}>
-          <div className="notification-wizard__heading">
-            <span>Update the installer assignment, schedule, and internal notes for this installation.</span>
-          </div>
-          <FormField label="Status">
-            <ModalSelect value={editStatus} onChange={setEditStatus} options={buildStatusOptions(editStatus)} disabled={isLoadingEdit} />
-          </FormField>
-          <FormField
-            label="Installer"
-            hint={
-              isLoadingInstallerOptions
-                ? "Loading installers..."
-                : installerLookupError || "Select the installer assigned to this installation, or leave it unassigned."
+          <DirectoryToolbar
+            searchValue={query}
+            onSearchChange={handleSearchChange}
+            searchPlaceholder="Search projects..."
+            filters={
+              <Button variant="secondary" size="sm" leadingIcon={<FilterIcon className="mini-icon" />}>
+                Filter
+              </Button>
             }
-          >
-            <ModalSelect value={editInstallerId} onChange={setEditInstallerId} options={installerSelectOptions} disabled={isLoadingEdit || isLoadingInstallerOptions} />
-          </FormField>
-          <FormField label="Scheduled Date">
-            <ModalTextInput value={editScheduledDate} onChange={(event) => setEditScheduledDate(event.target.value)} placeholder="2026-05-05T18:59:40.002Z" />
-          </FormField>
-          <FormField label="Notes">
-            <ModalTextArea value={editNotes} onChange={setEditNotes} placeholder="Internal notes for the installation" />
-          </FormField>
-        </form>
-      </Modal>
-    </>
+          />
+
+          <div className="management-surface__filters is-inline">
+            <Tabs value={status} onChange={setStatus} options={projectStatusTabs} compact />
+          </div>
+        </div>
+
+        <ErrorMessage title="Project load failed" message={error} />
+
+        {isLoading && !rows.length ? (
+          <div className="p-6">
+            <p className="section-description">Loading projects...</p>
+          </div>
+        ) : !isLoading && !rows.length && !error ? (
+          <div className="p-6">
+            <EmptyScaffold title="No projects found" description="No record found on the database" />
+          </div>
+        ) : (
+          <>
+            <div className="installation-grid">
+              {filteredRows.length ? (
+                filteredRows.map((record) => (
+                  <ProjectCard key={record.id} record={record} canDelete={canDeleteProjects} onDelete={handleDelete} />
+                ))
+              ) : (
+                <div className="p-6">
+                  <EmptyScaffold title="No projects matched" description="No record found on the database" />
+                </div>
+              )}
+            </div>
+            <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={handlePageChange} />
+          </>
+        )}
+
+        {!isLoading && rows.length ? (
+          <div className="px-6 pb-6">
+            <InlineCallout tone="warning">
+              Draft projects currently visible here: {draftCount.toLocaleString()}.
+            </InlineCallout>
+          </div>
+        ) : null}
+      </Panel>
+    </div>
   );
 }
 
 export function InstallationFormScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [userId, setUserId] = useState("");
-  const [installerId, setInstallerId] = useState("");
-  const [orderId, setOrderId] = useState("");
-  const [status, setStatus] = useState("scheduled");
+  const projectId = searchParams.get("projectId");
+  const isEditing = Boolean(projectId);
+  const [packages, setPackages] = useState<PackageRecord[]>([]);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [isLoadingReferences, setIsLoadingReferences] = useState(true);
+  const [isLoadingProject, setIsLoadingProject] = useState(Boolean(projectId));
+  const [packageId, setPackageId] = useState("none");
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [overview, setOverview] = useState("");
+  const [clientName, setClientName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
-  const [country, setCountry] = useState("");
-  const [systemSizeKw, setSystemSizeKw] = useState("");
-  const [numberOfPanels, setNumberOfPanels] = useState("");
-  const [panelType, setPanelType] = useState("");
-  const [inverterType, setInverterType] = useState("");
+  const [country, setCountry] = useState("Nigeria");
+  const [installationTimeLabel, setInstallationTimeLabel] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
+  const [status, setStatus] = useState("published");
+  const [highlightsText, setHighlightsText] = useState("");
+  const [whatItPowers, setWhatItPowers] = useState<string[]>([]);
+  const [whatItPowersInput, setWhatItPowersInput] = useState("");
+  const [inverterSize, setInverterSize] = useState("");
+  const [pvSize, setPvSize] = useState("");
+  const [batterySize, setBatterySize] = useState("");
   const [notes, setNotes] = useState("");
+  const [existingMedia, setExistingMedia] = useState<ManagedMediaAsset[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [existingDatasheetUrl, setExistingDatasheetUrl] = useState<string | null>(null);
+  const [datasheetFile, setDatasheetFile] = useState<File | null>(null);
+  const [errors, setErrors] = useState<ProjectValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
-  const [installers, setInstallers] = useState<InstallerRecord[]>([]);
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [referenceError, setReferenceError] = useState<string | null>(null);
-  const [isLoadingReferences, setIsLoadingReferences] = useState(true);
+  const mediaPreviewUrls = useObjectUrls(mediaFiles);
 
   useEffect(() => {
     let cancelled = false;
 
-    Promise.allSettled([
-      getCustomers({ page: 1, limit: 100, fields: ["id", "name", "fullName", "email"] }),
-      getInstallers({ page: 1, limit: 100 }),
-      getOrders({ page: 1, limit: 100, fields: ["id", "customer_name", "customer_email", "total_amount", "currency", "status"] }),
-    ])
-      .then(([customersResult, installersResult, ordersResult]) => {
+    getPackages({
+      page: 1,
+      limit: 100,
+      fields: ["id", "name", "description", "system_details", "what_it_powers", "system_size_kw"],
+    })
+      .then((payload) => {
+        if (!cancelled) {
+          setPackages(payload.data);
+        }
+      })
+      .catch((loadError) => {
         if (cancelled) {
           return;
         }
 
-        const errors: string[] = [];
-
-        if (customersResult.status === "fulfilled") {
-          setCustomers(customersResult.value.data);
-        } else if (!isDashboardSessionExpiredError(customersResult.reason)) {
-          errors.push(getErrorMessage(customersResult.reason, "Customers could not be loaded."));
+        if (!isDashboardSessionExpiredError(loadError)) {
+          setReferenceError(getErrorMessage(loadError, "Package options could not be loaded."));
+          setPackages([]);
         }
-
-        if (installersResult.status === "fulfilled") {
-          setInstallers(installersResult.value.data);
-        } else if (!isDashboardSessionExpiredError(installersResult.reason)) {
-          errors.push(getErrorMessage(installersResult.reason, "Installers could not be loaded."));
-        }
-
-        if (ordersResult.status === "fulfilled") {
-          setOrders(ordersResult.value.data);
-        } else if (!isDashboardSessionExpiredError(ordersResult.reason)) {
-          errors.push(getErrorMessage(ordersResult.reason, "Orders could not be loaded."));
-        }
-
-        setReferenceError(errors[0] ?? null);
       })
       .finally(() => {
         if (!cancelled) {
@@ -597,85 +598,315 @@ export function InstallationFormScreen() {
     };
   }, []);
 
-  const customerOptions = useMemo(
-    () =>
-      withSelectedOption(
-        customers.map((customer) => ({
-          value: customer.id,
-          label: formatCustomerOption(customer),
-        })),
-        userId,
-        `Selected customer (${userId})`,
-      ),
-    [customers, userId],
-  );
-  const installerOptions = useMemo(
+  useEffect(() => {
+    if (!projectId) {
+      setIsLoadingProject(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    setIsLoadingProject(true);
+
+    getInstallation(projectId)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        const detail = payload.data;
+        const systemDetails = detail.system_details;
+        setPackageId(detail.package_id || "none");
+        setTitle(detail.title || "");
+        setSummary(detail.summary || "");
+        setOverview(detail.overview || "");
+        setClientName(detail.client_name || detail.customer_name || "");
+        setAddress(detail.address || "");
+        setCity(detail.city || "");
+        setState(detail.state || "");
+        setCountry(detail.country || "Nigeria");
+        setInstallationTimeLabel(detail.installation_time_label || "");
+        setScheduledDate(detail.scheduled_date ? detail.scheduled_date.slice(0, 16) : "");
+        setStatus(detail.status || "published");
+        setHighlightsText((detail.highlights ?? []).join("\n"));
+        setWhatItPowers(detail.what_it_powers ?? []);
+        setInverterSize(systemDetails?.inverter_size || detail.inverter_type || "");
+        setPvSize(systemDetails?.pv_size || (detail.system_size_kw ? String(detail.system_size_kw) : ""));
+        setBatterySize(systemDetails?.battery_size || "");
+        setNotes(detail.notes || "");
+        setExistingMedia(normalizeProjectMedia(detail));
+        setExistingDatasheetUrl(detail.datasheet_url || null);
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (isDashboardSessionExpiredError(loadError)) {
+          return;
+        }
+
+        toast({
+          title: "Project load failed",
+          description: getErrorMessage(loadError, "The project could not be loaded."),
+          variant: "error",
+        });
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingProject(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, toast]);
+
+  const packageOptions = useMemo(
     () =>
       withSelectedOption(
         [
-          { value: "", label: "Assign later" },
-          ...installers.map((installer) => ({
-            value: installer.user.id,
-            label: formatInstallerOption(installer),
+          { value: "none", label: "None" },
+          ...packages.map((pkg) => ({
+            value: pkg.id,
+            label: pkg.name,
           })),
         ],
-        installerId,
-        `Selected installer (${installerId})`,
+        packageId,
+        `Selected package (${packageId})`,
       ),
-    [installerId, installers],
+    [packageId, packages],
   );
-  const orderOptions = useMemo(
-    () =>
-      withSelectedOption(
-        orders.map((order) => ({
-          value: order.id,
-          label: formatOrderOption(order),
-        })),
-        orderId,
-        `Selected order (${orderId})`,
-      ),
-    [orderId, orders],
+  const selectedPackage = useMemo(
+    () => packages.find((pkg) => pkg.id === packageId) ?? null,
+    [packageId, packages],
   );
+  const combinedMediaPreview = useMemo(
+    () => [
+      ...existingMedia.map((media) => ({
+        key: `existing-${media.id ?? media.url}`,
+        name: media.name,
+        url: media.url,
+        kind: media.kind ?? inferMediaKind(media.url, media.mime_type),
+        isExisting: true,
+      })),
+      ...mediaFiles.map((file, index) => ({
+        key: `new-${file.name}-${index}`,
+        name: file.name,
+        url: mediaPreviewUrls[index] ?? "",
+        kind: fileMediaKind(file),
+        isExisting: false,
+      })),
+    ],
+    [existingMedia, mediaFiles, mediaPreviewUrls],
+  );
+
+  function clearFieldError(field: keyof ProjectValidationErrors) {
+    setErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function handlePackageChange(nextPackageId: string) {
+    setPackageId(nextPackageId);
+
+    const nextPackage = packages.find((pkg) => pkg.id === nextPackageId);
+
+    if (!nextPackage || nextPackageId === "none") {
+      return;
+    }
+
+    setTitle((current) => current || `${nextPackage.name} Installation`);
+    setSummary((current) => current || nextPackage.description || "");
+    setHighlightsText((current) => current);
+    setWhatItPowers((current) => (current.length ? current : nextPackage.what_it_powers ?? []));
+    setInverterSize((current) => current || nextPackage.system_details?.inverter_size || "");
+    setPvSize((current) => current || nextPackage.system_details?.pv_size || (nextPackage.system_size_kw ? String(nextPackage.system_size_kw) : ""));
+    setBatterySize((current) => current || nextPackage.system_details?.battery_size || "");
+  }
+
+  function handleMediaFilesChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.target.files ?? []);
+    if (!nextFiles.length) {
+      return;
+    }
+
+    setMediaFiles((current) => [...current, ...nextFiles]);
+    clearFieldError("media");
+    event.target.value = "";
+  }
+
+  function handleDatasheetChange(event: ChangeEvent<HTMLInputElement>) {
+    setDatasheetFile(event.target.files?.[0] ?? null);
+  }
+
+  function removeMediaFile(index: number) {
+    setMediaFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+  }
+
+  function addWhatItPowers() {
+    const nextValue = whatItPowersInput.trim();
+
+    if (!nextValue) {
+      return;
+    }
+
+    if (!whatItPowers.some((item) => item.toLowerCase() === nextValue.toLowerCase())) {
+      setWhatItPowers((current) => [...current, nextValue]);
+      clearFieldError("whatItPowers");
+    }
+
+    setWhatItPowersInput("");
+  }
+
+  function removeWhatItPowers(index: number) {
+    setWhatItPowers((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function validateForm() {
+    const nextErrors: ProjectValidationErrors = {};
+    const highlights = highlightsText
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const hasMedia = combinedMediaPreview.some((media) => media.kind === "image" || media.kind === "video");
+
+    if (!title.trim()) {
+      nextErrors.title = "Enter the project title.";
+    }
+
+    if (!summary.trim()) {
+      nextErrors.summary = "Enter the short listing summary.";
+    }
+
+    if (!overview.trim()) {
+      nextErrors.overview = "Enter the project overview.";
+    }
+
+    if (!clientName.trim()) {
+      nextErrors.clientName = "Enter the client or business name.";
+    }
+
+    if (!city.trim()) {
+      nextErrors.city = "Enter the project city.";
+    }
+
+    if (!state.trim()) {
+      nextErrors.state = "Enter the project state.";
+    }
+
+    if (!country.trim()) {
+      nextErrors.country = "Enter the project country.";
+    }
+
+    if (!highlights.length) {
+      nextErrors.highlights = "Add at least one project highlight.";
+    }
+
+    if (!whatItPowers.length) {
+      nextErrors.whatItPowers = "Add at least one What It Powers item.";
+    }
+
+    if (!inverterSize.trim() && !pvSize.trim() && !batterySize.trim()) {
+      nextErrors.systemDetails = "Add at least one system detail value.";
+    }
+
+    if (!hasMedia) {
+      nextErrors.media = "Upload at least one image or video.";
+    }
+
+    setErrors(nextErrors);
+
+    return {
+      isValid: Object.keys(nextErrors).length === 0,
+      highlights,
+    };
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
 
+    const validation = validateForm();
+
+    if (!validation.isValid) {
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      if (!userId.trim()) {
-        throw new Error("Select a customer.");
-      }
-
-      if (!orderId.trim()) {
-        throw new Error("Select an order.");
-      }
-
-      await createInstallation({
-        user_id: userId.trim(),
-        installer_id: installerId.trim(),
-        order_id: orderId.trim(),
-        status,
+      const normalizedPackageId = packageId === "none" ? null : packageId.trim() || null;
+      const systemDetails = {
+        inverter_size: inverterSize.trim(),
+        inverter_label: inverterSize.trim() ? `${inverterSize.trim()}kVA` : "",
+        pv_size: pvSize.trim(),
+        pv_label: pvSize.trim() ? `${pvSize.trim()}kWp` : "",
+        battery_size: batterySize.trim(),
+        battery_label: batterySize.trim() ? `${batterySize.trim()}kWh` : "",
+      };
+      const payload = buildMultipartFormData({
+        package_id: normalizedPackageId,
+        title: title.trim(),
+        slug: slugify(title),
+        summary: summary.trim(),
+        overview: overview.trim(),
+        client_name: clientName.trim(),
+        customer_name: clientName.trim(),
         address: address.trim(),
         city: city.trim(),
         state: state.trim(),
         country: country.trim(),
-        system_size_kw: Number(systemSizeKw) || 0,
-        number_of_panels: Number(numberOfPanels) || 0,
-        panel_type: panelType.trim(),
-        inverter_type: inverterType.trim(),
-        scheduled_date: scheduledDate.trim(),
-        notes: notes.trim(),
+        installation_time_label: installationTimeLabel.trim() || undefined,
+        scheduled_date: scheduledDate.trim() || undefined,
+        highlights: validation.highlights,
+        what_it_powers: whatItPowers,
+        system_details: systemDetails,
+        status,
+        system_size_kw: Number(pvSize.trim() || inverterSize.trim() || 0) || 0,
+        number_of_panels: 0,
+        panel_type: "",
+        inverter_type: inverterSize.trim() ? `${inverterSize.trim()}kVA` : "",
+        notes: notes.trim() || undefined,
       });
 
-      router.push("/installations?created=1");
+      if (datasheetFile) {
+        payload.append("datasheet", datasheetFile, datasheetFile.name);
+      }
+
+      mediaFiles.forEach((file) => {
+        payload.append("media", file, file.name);
+        if (fileMediaKind(file) === "image") {
+          payload.append("images", file, file.name);
+        }
+      });
+
+      const primaryImage = mediaFiles.find((file) => fileMediaKind(file) === "image");
+      if (primaryImage) {
+        payload.append("image", primaryImage, primaryImage.name);
+      }
+
+      if (isEditing && projectId) {
+        await updateInstallation(projectId, payload);
+      } else {
+        await createInstallation(payload);
+      }
+
+      router.push(`/projects?${isEditing ? "updated=1" : "created=1"}`);
     } catch (saveError) {
       if (isDashboardSessionExpiredError(saveError)) {
         return;
       }
 
       toast({
-        title: "Create installation failed",
-        description: getErrorMessage(saveError, "The installation could not be created."),
+        title: `${isEditing ? "Update" : "Create"} project failed`,
+        description: getErrorMessage(saveError, `The project could not be ${isEditing ? "updated" : "created"}.`),
         variant: "error",
       });
     } finally {
@@ -686,86 +917,312 @@ export function InstallationFormScreen() {
   return (
     <div className="dashboard-stack">
       <Panel className="product-form-shell">
-        <form id={installationFormId} onSubmit={handleSubmit}>
+        <form id={projectFormId} onSubmit={handleSubmit}>
           <div className="product-form-shell__header">
             <div>
-              <h2 className="section-title">Add A New Installation</h2>
-              <p className="section-description">Create a new installation record using the admin installation endpoints.</p>
+              <h2 className="section-title">{isEditing ? "Edit Project" : "Add A New Project"}</h2>
+              <p className="section-description">Capture the public project content exactly once here, then reuse it across the homepage and Projects page.</p>
             </div>
             <FormSubmitter
-              formId={installationFormId}
+              formId={projectFormId}
               cancelLabel="Cancel"
-              onCancel={() => router.push("/installations")}
-              primaryLabel={isSubmitting ? "Saving..." : "Finish"}
-              disabled={isSubmitting}
+              onCancel={() => router.push("/projects")}
+              primaryLabel={isSubmitting ? "Saving..." : isEditing ? "Save Changes" : "Finish"}
+              disabled={isSubmitting || isLoadingProject}
             />
           </div>
 
           <div className="product-form-grid">
-            <DetailPanel title="Basic Information" description="Reference the customer, installer, order, and initial status.">
+            <DetailPanel title="Project Information" description="Set the package source, public copy, client label, location, and publishing state.">
               <div className="detail-panel__stack">
-                <FormField label="Customer" hint={isLoadingReferences ? "Loading customers..." : referenceError || "Select the customer for this installation."}>
-                  <SelectField value={userId} onChange={setUserId} options={customerOptions} placeholder="Select customer" disabled={isLoadingReferences} required />
+                <FormField
+                  label="Project Package"
+                  hint={isLoadingReferences ? "Loading packages..." : referenceError || "Select the package this project came from, or choose None."}
+                >
+                  <SelectField
+                    value={packageId}
+                    onChange={handlePackageChange}
+                    options={packageOptions}
+                    placeholder="Select package"
+                    disabled={isLoadingReferences || isLoadingProject}
+                  />
                 </FormField>
-                <div className="product-inline-row is-two">
-                  <FormField label="Installer" hint={isLoadingReferences ? "Loading installers..." : "Select an installer now or assign one later."}>
-                    <SelectField value={installerId} onChange={setInstallerId} options={installerOptions} placeholder="Select installer" disabled={isLoadingReferences} />
-                  </FormField>
-                  <FormField label="Order" hint={isLoadingReferences ? "Loading orders..." : "Select the order this installation belongs to."}>
-                    <SelectField value={orderId} onChange={setOrderId} options={orderOptions} placeholder="Select order" disabled={isLoadingReferences} required />
-                  </FormField>
-                </div>
-                <div className="product-inline-row is-two">
-                  <FormField label="Status">
-                    <SelectField value={status} onChange={setStatus} options={installationStatusOptions.map((option) => ({ label: option.label, value: option.value }))} />
-                  </FormField>
-                  <FormField label="Scheduled Date">
-                    <TextField value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} placeholder="2026-05-05T18:59:40.002Z" />
-                  </FormField>
-                </div>
-              </div>
-            </DetailPanel>
 
-            <DetailPanel title="Location" description="Capture the service address returned by the installation API.">
-              <div className="detail-panel__stack">
-                <FormField label="Address">
-                  <TextAreaField value={address} onChange={setAddress} placeholder="Installation address" rows={5} />
+                <FormField label="Project Title" error={errors.title}>
+                  <TextField
+                    value={title}
+                    onChange={(event) => {
+                      setTitle(event.target.value);
+                      clearFieldError("title");
+                    }}
+                    placeholder="10kVA Commercial Solar Installation - Lagos Office"
+                    invalid={Boolean(errors.title)}
+                  />
                 </FormField>
+
+                <FormField label="Project Summary" error={errors.summary}>
+                  <TextAreaField
+                    value={summary}
+                    onChange={(value) => {
+                      setSummary(value);
+                      clearFieldError("summary");
+                    }}
+                    placeholder="A short listing summary for the card and public projects page."
+                    rows={4}
+                    invalid={Boolean(errors.summary)}
+                  />
+                </FormField>
+
+                <FormField label="Project Overview" error={errors.overview}>
+                  <TextAreaField
+                    value={overview}
+                    onChange={(value) => {
+                      setOverview(value);
+                      clearFieldError("overview");
+                    }}
+                    placeholder="Describe the project in more detail."
+                    rows={6}
+                    invalid={Boolean(errors.overview)}
+                  />
+                </FormField>
+
+                <FormField label="Client / Business Name" error={errors.clientName}>
+                  <TextField
+                    value={clientName}
+                    onChange={(event) => {
+                      setClientName(event.target.value);
+                      clearFieldError("clientName");
+                    }}
+                    placeholder="Fortsolar Commercial Client"
+                    invalid={Boolean(errors.clientName)}
+                  />
+                </FormField>
+
                 <div className="product-inline-row is-three">
-                  <FormField label="City">
-                    <TextField value={city} onChange={(event) => setCity(event.target.value)} placeholder="Lagos" />
+                  <FormField label="City" error={errors.city}>
+                    <TextField
+                      value={city}
+                      onChange={(event) => {
+                        setCity(event.target.value);
+                        clearFieldError("city");
+                      }}
+                      placeholder="Lagos"
+                      invalid={Boolean(errors.city)}
+                    />
                   </FormField>
-                  <FormField label="State">
-                    <TextField value={state} onChange={(event) => setState(event.target.value)} placeholder="Lagos" />
+                  <FormField label="State" error={errors.state}>
+                    <TextField
+                      value={state}
+                      onChange={(event) => {
+                        setState(event.target.value);
+                        clearFieldError("state");
+                      }}
+                      placeholder="Lagos"
+                      invalid={Boolean(errors.state)}
+                    />
                   </FormField>
-                  <FormField label="Country">
-                    <TextField value={country} onChange={(event) => setCountry(event.target.value)} placeholder="Nigeria" />
+                  <FormField label="Country" error={errors.country}>
+                    <TextField
+                      value={country}
+                      onChange={(event) => {
+                        setCountry(event.target.value);
+                        clearFieldError("country");
+                      }}
+                      placeholder="Nigeria"
+                      invalid={Boolean(errors.country)}
+                    />
                   </FormField>
                 </div>
+
+                <FormField label="Address / Community">
+                  <TextAreaField value={address} onChange={setAddress} placeholder="Ikeja business district" rows={4} />
+                </FormField>
+
+                <div className="product-inline-row is-two">
+                  <FormField label="Installation Time Label">
+                    <TextField
+                      value={installationTimeLabel}
+                      onChange={(event) => setInstallationTimeLabel(event.target.value)}
+                      placeholder="48 hrs"
+                    />
+                  </FormField>
+                  <FormField label="Project Status">
+                    <SelectField
+                      value={status}
+                      onChange={setStatus}
+                      options={buildProjectStatusOptions(status)}
+                      disabled={isLoadingProject}
+                    />
+                  </FormField>
+                </div>
+
+                <FormField label="Scheduled Date">
+                  <TextField
+                    value={scheduledDate}
+                    onChange={(event) => setScheduledDate(event.target.value)}
+                    placeholder="2026-05-29T09:00"
+                    type="datetime-local"
+                  />
+                </FormField>
               </div>
             </DetailPanel>
 
-            <DetailPanel title="System Details" description="Provide the installation sizing and equipment details required by the backend.">
+            <DetailPanel title="Highlights" description="Enter the portfolio highlights, system sizing, and what this installation can power.">
               <div className="detail-panel__stack">
-                <div className="product-inline-row is-two">
-                  <FormField label="System Size (kW)">
-                    <TextField value={systemSizeKw} onChange={(event) => setSystemSizeKw(event.target.value)} placeholder="5" />
-                  </FormField>
-                  <FormField label="Number of Panels">
-                    <TextField value={numberOfPanels} onChange={(event) => setNumberOfPanels(event.target.value)} placeholder="12" />
-                  </FormField>
-                </div>
-                <div className="product-inline-row is-two">
-                  <FormField label="Panel Type">
-                    <TextField value={panelType} onChange={(event) => setPanelType(event.target.value)} placeholder="Jinko 550W" />
-                  </FormField>
-                  <FormField label="Inverter Type">
-                    <TextField value={inverterType} onChange={(event) => setInverterType(event.target.value)} placeholder="5kVA Hybrid" />
-                  </FormField>
-                </div>
-                <FormField label="Notes">
-                  <TextAreaField value={notes} onChange={setNotes} placeholder="Internal installation notes" rows={5} />
+                <FormField label="Highlights" hint="Use one highlight per line." error={errors.highlights}>
+                  <TextAreaField
+                    value={highlightsText}
+                    onChange={(value) => {
+                      setHighlightsText(value);
+                      clearFieldError("highlights");
+                    }}
+                    placeholder={"24/7 uninterrupted power support\nReduced generator costs by over 70%"}
+                    rows={8}
+                    invalid={Boolean(errors.highlights)}
+                  />
                 </FormField>
+
+                <FormField label="System Details" error={errors.systemDetails}>
+                  <div className="detail-panel__stack">
+                    <div className="product-inline-row is-two">
+                      <TextField
+                        value={inverterSize}
+                        onChange={(event) => {
+                          setInverterSize(event.target.value);
+                          clearFieldError("systemDetails");
+                        }}
+                        placeholder="Inverter Size"
+                        invalid={Boolean(errors.systemDetails)}
+                      />
+                      <TextField
+                        value={pvSize}
+                        onChange={(event) => {
+                          setPvSize(event.target.value);
+                          clearFieldError("systemDetails");
+                        }}
+                        placeholder="PV Size"
+                        invalid={Boolean(errors.systemDetails)}
+                      />
+                    </div>
+                    <TextField
+                      value={batterySize}
+                      onChange={(event) => {
+                        setBatterySize(event.target.value);
+                        clearFieldError("systemDetails");
+                      }}
+                      placeholder="Battery Size"
+                      invalid={Boolean(errors.systemDetails)}
+                    />
+                  </div>
+                </FormField>
+
+                <FormField label="What It Powers" error={errors.whatItPowers}>
+                  <div className="detail-panel__stack">
+                    <div className="product-inline-row">
+                      <TextField
+                        value={whatItPowersInput}
+                        onChange={(event) => setWhatItPowersInput(event.target.value)}
+                        placeholder="Add an appliance or load item"
+                        invalid={Boolean(errors.whatItPowers)}
+                      />
+                      <Button type="button" variant="secondary" size="md" onClick={addWhatItPowers}>
+                        Add
+                      </Button>
+                    </div>
+
+                    {whatItPowers.length ? (
+                      <div className="project-chip-list">
+                        {whatItPowers.map((item, index) => (
+                          <button key={`${item}-${index}`} type="button" className="chip-pill is-active" onClick={() => removeWhatItPowers(index)}>
+                            {item}
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="form-repeat-row is-readonly">
+                        <span>No load items added yet.</span>
+                      </div>
+                    )}
+                  </div>
+                </FormField>
+
+                <FormField label="Internal Notes">
+                  <TextAreaField value={notes} onChange={setNotes} placeholder="Add context for the team if needed." rows={6} />
+                </FormField>
+              </div>
+            </DetailPanel>
+
+            <DetailPanel title="Project Media" description="Upload multiple images and videos. The public slider will use only the first 4 images in order.">
+              <div className="detail-panel__stack">
+                <FormField label="Project Images / Videos" error={errors.media}>
+                  <div className={cx("project-upload-dropzone", errors.media && "is-invalid")}>
+                    <input type="file" accept="image/*,video/*" multiple onChange={handleMediaFilesChange} />
+                    <strong>Upload project media</strong>
+                    <span>Images and videos are allowed. The first image becomes the primary project card image.</span>
+                  </div>
+                </FormField>
+
+                {combinedMediaPreview.length ? (
+                  <div className="project-media-grid">
+                    {combinedMediaPreview.map((media, index) => (
+                      <article key={media.key} className="project-media-card">
+                        <div className="project-media-card__surface">
+                          {media.kind === "image" ? (
+                            <img src={media.url} alt={media.name} />
+                          ) : media.kind === "video" ? (
+                            <video src={media.url} muted controls />
+                          ) : (
+                            <div className="project-media-card__file">
+                              <strong>{media.kind?.toUpperCase() || "FILE"}</strong>
+                            </div>
+                          )}
+                        </div>
+                        <div className="project-media-card__footer">
+                          <div>
+                            <strong>{media.name}</strong>
+                            <span>{media.isExisting ? "Existing media" : "New upload"}</span>
+                          </div>
+                          {!media.isExisting ? (
+                            <Button type="button" variant="secondary" size="sm" onClick={() => removeMediaFile(index - existingMedia.length)}>
+                              Remove
+                            </Button>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="upload-showcase-empty">
+                    <PlusIcon className="mini-icon" />
+                    <p>No media uploaded yet. Add at least one image or video for this project.</p>
+                  </div>
+                )}
+
+                <FormField label="Datasheet / Attachment">
+                  <div className="project-upload-inline">
+                    <label className="upload-field">
+                      <input type="file" accept=".pdf,application/pdf" onChange={handleDatasheetChange} />
+                      <span className="upload-field__button">
+                        <span>Upload file</span>
+                      </span>
+                      <span className="upload-field__value">
+                        {datasheetFile?.name || existingDatasheetUrl?.split("/").pop() || "No file chosen"}
+                      </span>
+                    </label>
+                    {existingDatasheetUrl ? (
+                      <a className="action-button is-secondary is-sm" href={existingDatasheetUrl} target="_blank" rel="noreferrer">
+                        <span>Preview</span>
+                      </a>
+                    ) : null}
+                  </div>
+                </FormField>
+
+                {selectedPackage ? (
+                  <InlineCallout>
+                    Package prefill active: {selectedPackage.name}. Blank system-detail and power fields are seeded from the selected package where available.
+                  </InlineCallout>
+                ) : null}
               </div>
             </DetailPanel>
           </div>

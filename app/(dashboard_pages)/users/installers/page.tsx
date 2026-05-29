@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { BanIcon, EyeIcon, TrashIcon } from "@/components/dashboard/icons";
-import { Avatar, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu } from "@/components/dashboard/ui";
+import { Avatar, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, cx } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
-import { DEFAULT_PAGE_SIZE, deleteInstaller, formatManagedUserStatusLabel, getInstallers, updateInstaller } from "@/lib/admin-api";
+import { DEFAULT_PAGE_SIZE, deleteInstaller, formatManagedUserStatusLabel, getBundleRequests, getInstallers, updateInstaller } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { InstallerRecord, PaginationMeta } from "@/types/api.types";
@@ -23,6 +24,7 @@ const emptyPagination: PaginationMeta = {
 export default function InstallersPage() {
   const { can } = useAccessControl();
   const { toast } = useToast();
+  const pathname = usePathname();
   const [rows, setRows] = useState<InstallerRecord[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
@@ -31,6 +33,7 @@ export default function InstallersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pendingInstallations, setPendingInstallations] = useState(0);
   const deferredQuery = useDeferredValue(query);
   const canUpdateInstallers = can("installers", "update");
   const canDeleteInstallers = can("installers", "delete");
@@ -66,6 +69,30 @@ export default function InstallersPage() {
       cancelled = true;
     };
   }, [page, refreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getBundleRequests({ page: 1, limit: 100 })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPendingInstallations(
+          payload.data.filter((request) => !["closed", "cancelled", "canceled"].includes(request.status.trim().toLowerCase())).length,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPendingInstallations(0);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handlePageChange(nextPage: number) {
     setIsLoading(true);
@@ -103,8 +130,6 @@ export default function InstallersPage() {
 
   const activeInstallers = rows.filter((installer) => installer.user.status.toLowerCase() === "active").length;
   const availableInstallers = rows.filter((installer) => installer.installerProfile.availabilityStatus?.toLowerCase() === "available").length;
-  const topRatedInstallers = rows.filter((installer) => (installer.installerProfile.rating ?? 0) >= 4).length;
-
   async function handleToggleStatus(installer: InstallerRecord) {
     const nextStatus = installer.user.status.toLowerCase() === "active" ? "inactive" : "active";
 
@@ -167,11 +192,20 @@ export default function InstallersPage() {
 
   return (
     <div className="dashboard-stack">
+      <div className="inline-actions">
+        <Link href="/users/installers" className={cx("action-button is-secondary is-sm", pathname === "/users/installers" && "is-primary")}>
+          Installer Directory
+        </Link>
+        <Link href="/dashboard/verification-queue" className="action-button is-secondary is-sm">
+          Verification Queue
+        </Link>
+      </div>
+
       <section className="stats-grid--four">
         <MetricCardSecondary title="Total Installers" value={pagination.total.toLocaleString()} icon="installers" spark={[18, 24, 36, 48, 56, 60]} />
         <MetricCardSecondary title="Active On This Page" value={activeInstallers.toLocaleString()} icon="verification" spark={[12, 18, 26, 34, 46, 54]} />
         <MetricCardSecondary title="Available Installers" value={availableInstallers.toLocaleString()} icon="admins" spark={[18, 22, 26, 30, 34, 40]} />
-        <MetricCardSecondary title="Highly Rated" value={topRatedInstallers.toLocaleString()} icon="flag" spark={[44, 42, 36, 28, 22, 18]} />
+        <MetricCardSecondary title="Pending Installations" value={pendingInstallations.toLocaleString()} icon="flag" spark={[44, 42, 36, 28, 22, 18]} />
       </section>
 
       <Panel className="overflow-hidden">

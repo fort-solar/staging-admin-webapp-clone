@@ -494,7 +494,7 @@ export function getPackages(params: ListParams = {}) {
 }
 
 export function getInstallations(params: ListParams = {}) {
-  const primaryPath = withQuery("/api/v1/admin/installations/", {
+  const primaryPath = withQuery("/api/v1/admin/projects/", {
     page: params.page ?? 1,
     limit: params.limit ?? DEFAULT_PAGE_SIZE,
     category: params.category,
@@ -502,7 +502,7 @@ export function getInstallations(params: ListParams = {}) {
     q: params.q,
     fields: params.fields,
   });
-  const fallbackPath = withQuery("/api/v1/admin/packages/", {
+  const fallbackPath = withQuery("/api/v1/admin/installations/", {
     page: params.page ?? 1,
     limit: params.limit ?? DEFAULT_PAGE_SIZE,
     category: params.category,
@@ -515,23 +515,35 @@ export function getInstallations(params: ListParams = {}) {
 }
 
 export function getInstallation(id: string) {
-  return dashboardGet<InstallationDetailApiResponse>(`/api/v1/admin/installations/${id}`);
+  return requestWithEndpointFallback(
+    `/api/v1/admin/projects/${id}`,
+    `/api/v1/admin/installations/${id}`,
+    (path) => dashboardGet<InstallationDetailApiResponse>(path),
+  );
 }
 
-export function createInstallation(body: CreateInstallationRequest) {
+export function createInstallation(body: MultipartCapable<CreateInstallationRequest>) {
   return requestWithEndpointFallback(
+    "/api/v1/admin/projects/",
     "/api/v1/admin/installations/",
-    "/api/v1/admin/packages/",
     (path) => submitDashboardForm<ApiSuccessResponse>(path, body, { method: "POST" }),
   );
 }
 
-export function updateInstallation(id: string, body: UpdateInstallationRequest) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/installations/${id}`, body, { method: "PATCH" });
+export function updateInstallation(id: string, body: MultipartCapable<UpdateInstallationRequest>) {
+  return requestWithEndpointFallback(
+    `/api/v1/admin/projects/${id}`,
+    `/api/v1/admin/installations/${id}`,
+    (path) => submitDashboardForm<ApiSuccessResponse>(path, body, { method: "PATCH" }),
+  );
 }
 
 export function deleteInstallation(id: string) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/installations/${id}`, null, { method: "DELETE" });
+  return requestWithEndpointFallback(
+    `/api/v1/admin/projects/${id}`,
+    `/api/v1/admin/installations/${id}`,
+    (path) => submitDashboardForm<ApiSuccessResponse>(path, null, { method: "DELETE" }),
+  );
 }
 
 export async function getPackageBySlug(slug: string) {
@@ -934,6 +946,6 @@ export function getQuoteRequest(id: string) {
   return dashboardGet<QuoteRequestDetailApiResponse>(`/api/v1/admin/quote-requests/${id}`);
 }
 
-export function updateQuoteRequest(id: string, body: UpdateQuoteRequestRequest) {
+export function updateQuoteRequest(id: string, body: MultipartCapable<UpdateQuoteRequestRequest>) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/quote-requests/${id}`, body, { method: "PATCH" });
 }

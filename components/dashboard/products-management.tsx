@@ -122,6 +122,12 @@ function readArray(record: Record<string, unknown>, keys: string[]) {
   return [];
 }
 
+function readStringArray(record: Record<string, unknown>, keys: string[]) {
+  return readArray(record, keys)
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+}
+
 function slugify(value: string) {
   return value
     .trim()
@@ -256,6 +262,29 @@ function useObjectUrl(file: File | null) {
   return objectUrl;
 }
 
+function useObjectUrls(files: File[]) {
+  const objectUrls = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
+
+  useEffect(() => {
+    return () => {
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [objectUrls]);
+
+  return objectUrls;
+}
+
+function normalizeProductImageUrls(record: Record<string, unknown>) {
+  const mediaRecord = isRecord(record.media) ? record.media : null;
+  const mediaImageUrls = mediaRecord ? readStringArray(mediaRecord, ["image_urls"]) : [];
+  const topLevelImageUrls = readStringArray(record, ["product_image_urls", "image_urls", "images"]);
+  const fallbackImageUrl = readString(record, ["product_image_url", "image_url", "image"]);
+
+  return [...topLevelImageUrls, ...mediaImageUrls, fallbackImageUrl]
+    .filter(Boolean)
+    .filter((value, index, all) => all.indexOf(value) === index);
+}
+
 function statusFromActive(isActive: boolean) {
   return {
     label: isActive ? "Published" : "Draft",
@@ -298,7 +327,8 @@ export function normalizeManagedProductRecord(record: AdminProductRecord | Recor
   const sectionValues = readArray(raw, ["section_values", "sections", "attributes"])
     .map((item, index) => normalizeSectionValue(item, index))
     .filter((item): item is SectionDraft => Boolean(item));
-  const imageUrl = readString(raw, ["product_image_url", "image_url", "image"]);
+  const imageUrls = normalizeProductImageUrls(raw);
+  const imageUrl = imageUrls[0] || null;
   const datasheetUrl = readString(raw, ["datasheet_url"]);
 
   return {
@@ -314,9 +344,11 @@ export function normalizeManagedProductRecord(record: AdminProductRecord | Recor
     stock_quantity: readNumber(raw, ["stock_quantity", "stock"]),
     overview: readString(raw, ["overview", "description", "summary"]) || null,
     section_values: sectionValues,
-    product_image_url: imageUrl || null,
-    image_url: imageUrl || null,
-    image: imageUrl || null,
+    product_image_url: imageUrl,
+    product_image_urls: imageUrls,
+    image_url: imageUrl,
+    image_urls: imageUrls,
+    image: imageUrl,
     datasheet_url: datasheetUrl || null,
     specifications: isRecord(raw.specifications) ? raw.specifications : {},
     is_active: readBoolean(raw, ["is_active", "published", "active"], true),
@@ -423,6 +455,70 @@ function DocumentSelectField({
       {file ? (
         <button type="button" className="self-start text-xs font-semibold text-[var(--danger)]" onClick={() => onFileChange(null)}>
           Clear selected file
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ProductImageGalleryField({
+  files,
+  currentUrls,
+  onFilesChange,
+  productName,
+}: {
+  files: File[];
+  currentUrls: string[];
+  onFilesChange: (files: File[]) => void;
+  productName: string;
+}) {
+  const previewUrls = useObjectUrls(files);
+  const activeUrls = previewUrls.length ? previewUrls : currentUrls;
+  const hasSelection = files.length > 0 || currentUrls.length > 0;
+  const helperLabel = files.length
+    ? `${files.length} image${files.length === 1 ? "" : "s"} selected`
+    : currentUrls.length
+      ? `${currentUrls.length} current image${currentUrls.length === 1 ? "" : "s"} on record`
+      : "Upload one or more product images. The first image is used as the primary card image.";
+
+  return (
+    <div className="upload-preview-card">
+      <label className="upload-field">
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(event) => onFilesChange(Array.from(event.target.files ?? []))}
+        />
+        <span className="upload-field__button">
+          <span>{hasSelection ? "Replace images" : "Choose images"}</span>
+        </span>
+        <span className="upload-field__value">{helperLabel}</span>
+      </label>
+
+      {activeUrls.length ? (
+        <div className="detail-panel__stack">
+          <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
+            The first image becomes the primary product image in cards, tables, and store listings.
+          </div>
+          <div className="thumbnail-strip">
+            {activeUrls.map((url, index) => (
+              <div key={`${url}-${index}`} className="thumbnail-strip__item">
+                <img src={url} alt={`${productName || "Product"} image ${index + 1}`} className="h-full w-full object-cover" />
+                {index === 0 ? <span className="thumbnail-strip__badge">Primary</span> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 py-8 text-center text-sm text-[var(--text-soft)]">
+          Upload one or more product images. The first image will be used as the product card image.
+        </div>
+      )}
+
+      {files.length ? (
+        <button type="button" className="upload-preview-card__reset" onClick={() => onFilesChange([])}>
+          {currentUrls.length ? "Use current images instead" : "Clear selected images"}
         </button>
       ) : null}
     </div>
@@ -1130,6 +1226,11 @@ export function ProductDetailScreen({ productId }: { productId: string }) {
   const status = statusFromActive(product.is_active);
   const selectedCategory = categories.find((item) => item.id === product.category_id) || product.category || null;
   const datasheetKind = product.datasheet_url ? inferDocumentKind(product.datasheet_url) : null;
+  const productImageUrls = product.product_image_urls?.length
+    ? product.product_image_urls
+    : product.product_image_url
+      ? [product.product_image_url]
+      : [];
 
   return (
     <div className="dashboard-stack">
@@ -1186,12 +1287,24 @@ export function ProductDetailScreen({ productId }: { productId: string }) {
           <DetailPanel title="Product Media">
             <div className="grid gap-4">
               <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
-                <strong className="mb-3 block text-sm">Product Image</strong>
-                {product.product_image_url ? (
-                  <img src={product.product_image_url} alt={product.name} className="h-64 w-full rounded-[14px] object-cover" />
+                <strong className="mb-3 block text-sm">Product Images</strong>
+                {productImageUrls.length ? (
+                  <div className="detail-panel__stack">
+                    <img src={productImageUrls[0]} alt={product.name} className="h-64 w-full rounded-[14px] object-cover" />
+                    {productImageUrls.length > 1 ? (
+                      <div className="thumbnail-strip">
+                        {productImageUrls.map((imageUrl, index) => (
+                          <div key={`${imageUrl}-${index}`} className="thumbnail-strip__item">
+                            <img src={imageUrl} alt={`${product.name} ${index + 1}`} className="h-full w-full object-cover" />
+                            {index === 0 ? <span className="thumbnail-strip__badge">Primary</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 ) : (
                   <div className="flex min-h-52 items-center justify-center rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text-soft)]">
-                    No product image uploaded.
+                    No product images uploaded.
                   </div>
                 )}
               </div>
@@ -1243,14 +1356,13 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
   const [price, setPrice] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
   const [sectionValues, setSectionValues] = useState<SectionDraft[]>([]);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [currentImageUrls, setCurrentImageUrls] = useState<string[]>([]);
   const [datasheetFile, setDatasheetFile] = useState<File | null>(null);
   const [currentDatasheetUrl, setCurrentDatasheetUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const categoriesMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
   const selectedCategory = categories.find((category) => category.id === categoryId) || null;
-  const imagePreviewUrl = useObjectUrl(imageFile);
   const isPublishedProduct = currentProduct?.is_active ?? false;
   const primaryProductIntent = isPublishedProduct ? "finish" : "finish-publish";
   const primaryProductLabel = isSubmitting ? "Saving..." : isPublishedProduct ? "Save Changes" : "Publish";
@@ -1318,7 +1430,7 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         setPrice(product.price ? String(product.price) : "");
         setStockQuantity(product.stock_quantity ? String(product.stock_quantity) : "");
         setSectionValues(product.section_values.map((item, index) => ({ ...item, key: item.key || `${slugify(item.section_name)}-${index}` })));
-        setCurrentImageUrl(product.product_image_url || product.image_url || null);
+        setCurrentImageUrls(product.product_image_urls?.length ? product.product_image_urls : product.product_image_url ? [product.product_image_url] : []);
         setCurrentDatasheetUrl(product.datasheet_url || null);
       } catch (loadError) {
         if (!cancelled) {
@@ -1410,14 +1522,15 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         throw new Error("Enter the stock quantity.");
       }
 
-      if (selectedCategory?.requires_product_image && !imageFile && !currentImageUrl) {
-        throw new Error("Upload the product image for this category.");
+      if (selectedCategory?.requires_product_image && !imageFiles.length && !currentImageUrls.length) {
+        throw new Error("Upload at least one product image for this category.");
       }
 
       if (selectedCategory?.requires_datasheet && !datasheetFile && !currentDatasheetUrl) {
         throw new Error("Upload a datasheet for this category.");
       }
 
+      const primaryImageFile = imageFiles[0] ?? null;
       const payload = {
         name: name.trim(),
         overview: overview.trim(),
@@ -1433,14 +1546,18 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
             unit: item.unit?.trim() || undefined,
           })),
         is_active: nextIsActive,
-        ...(imageFile ? { image: imageFile } : {}),
+        ...(primaryImageFile ? { image: primaryImageFile } : {}),
         ...(datasheetFile ? { datasheet: datasheetFile } : {}),
       };
+      const formData = buildMultipartFormData(payload);
+      imageFiles.forEach((file) => {
+        formData.append("images", file);
+      });
 
       if (productId) {
-        await updateProduct(productId, buildMultipartFormData(payload));
+        await updateProduct(productId, formData);
       } else {
-        await createProduct(buildMultipartFormData(payload));
+        await createProduct(formData);
       }
 
       navigateWith(nextIsActive ? "created" : "draft");
@@ -1569,27 +1686,17 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
             <DetailPanel title="Media & Documents" description="These requirements change with the selected category settings.">
               <div className="detail-panel__stack">
                 {selectedCategory?.requires_product_image ? (
-                  <FormField label="Product Image">
-                    <div className="upload-preview-card">
-                      <label className="upload-field">
-                        <input type="file" accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} />
-                        <span className="upload-field__button">
-                          <span>{imageFile || currentImageUrl ? "Replace image" : "Choose image"}</span>
-                        </span>
-                        <span className="upload-field__value">{imageFile?.name || currentImageUrl?.split("/").pop() || "Upload the product image"}</span>
-                      </label>
-                      {imageFile || currentImageUrl ? (
-                        <img src={imagePreviewUrl || currentImageUrl || ""} alt={name || "Product image preview"} className="h-64 w-full rounded-[18px] border border-[var(--border)] object-cover" />
-                      ) : (
-                        <div className="rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 py-8 text-center text-sm text-[var(--text-soft)]">
-                          Upload the product image for this category.
-                        </div>
-                      )}
-                    </div>
+                  <FormField label="Product Images">
+                    <ProductImageGalleryField
+                      files={imageFiles}
+                      currentUrls={currentImageUrls}
+                      onFilesChange={setImageFiles}
+                      productName={name}
+                    />
                   </FormField>
                 ) : (
                   <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
-                    This category does not require a dedicated product image.
+                    This category does not require product images.
                   </div>
                 )}
 

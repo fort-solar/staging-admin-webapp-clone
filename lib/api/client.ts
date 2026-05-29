@@ -49,6 +49,7 @@ const dashboardRequestTargetLabels: Record<string, string> = {
   packages: "package",
   panels: "panel product",
   "product-categories": "product category",
+  projects: "project",
   "quote-requests": "quote request",
   "site-pages": "site page",
   submissions: "verification submission",

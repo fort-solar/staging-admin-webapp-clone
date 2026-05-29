@@ -1,5 +1,5 @@
-import { InstallationsManagementScreen } from "@/components/dashboard/installations-management";
+import { redirect } from "next/navigation";
 
 export default function InstallationsPage() {
-  return <InstallationsManagementScreen />;
+  redirect("/projects");
 }

@@ -1,5 +1,5 @@
-import { InstallationFormScreen } from "@/components/dashboard/installations-management";
+import { redirect } from "next/navigation";
 
 export default function NewInstallationPage() {
-  return <InstallationFormScreen />;
+  redirect("/projects/new");
 }

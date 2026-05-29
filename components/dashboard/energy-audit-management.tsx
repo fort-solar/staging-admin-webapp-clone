@@ -5,11 +5,11 @@ import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from "
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { AttachmentItem, DetailPanel, DirectoryToolbar, KeyValueList, TagList } from "@/components/dashboard/management-primitives";
-import { FormField } from "@/components/dashboard/modals";
+import { FormField, Modal } from "@/components/dashboard/modals";
 import { EyeIcon, FilterIcon, PlusIcon, TrashIcon } from "@/components/dashboard/icons";
 import { Button, EmptyScaffold, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
-import { createAppliance, DEFAULT_PAGE_SIZE, deleteAppliance, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getAppliances, getQuoteRequest, getQuoteRequests, updateAppliance, updateQuoteRequest } from "@/lib/admin-api";
+import { buildMultipartFormData, createAppliance, DEFAULT_PAGE_SIZE, deleteAppliance, formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getAppliances, getQuoteRequest, getQuoteRequests, updateAppliance, updateQuoteRequest } from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
@@ -19,8 +19,8 @@ const auditTabs = ["Quote Request", "Appliances"] as const;
 const quoteStatusDefaults = [
   { label: "New", value: "new" },
   { label: "Quoted", value: "quoted" },
-  { label: "Closed", value: "closed" },
   { label: "Reviewed", value: "reviewed" },
+  { label: "Closed", value: "closed" },
 ] as const;
 const booleanOptions = [
   { label: "Yes", value: "true" },
@@ -110,6 +110,28 @@ function quoteStatusOptions(current?: string) {
   }
 
   return [{ label: formatEnumLabel(normalizedCurrent), value: normalizedCurrent }, ...quoteStatusDefaults];
+}
+
+function buildQuotePackageRequestPayload(detail: QuoteRequestDetailRecord) {
+  return {
+    source_quote_id: detail.id,
+    customer_name: detail.name,
+    customer_email: detail.email,
+    customer_phone: detail.phone,
+    address: detail.address || detail.location,
+    recommended_system_size: detail.recommended_system_size,
+    estimated_cost: detail.estimated_cost,
+    estimated_savings: detail.estimated_savings,
+    payback_period_years: detail.payback_period_years,
+    appliances: detail.appliances.map((appliance) => ({
+      id: appliance.id,
+      name: appliance.name,
+      wattage: appliance.wattage,
+      quantity: appliance.quantity,
+      hoursPerDay: appliance.hoursPerDay,
+    })),
+    form_extras: detail.form_extras,
+  };
 }
 
 export function EnergyAuditManagementScreen() {
@@ -616,6 +638,8 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
   const [detail, setDetail] = useState<QuoteRequestDetailRecord | null>(null);
   const [status, setStatus] = useState("new");
   const [adminNotes, setAdminNotes] = useState("");
+  const [quoteAssetFile, setQuoteAssetFile] = useState<File | null>(null);
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -636,6 +660,7 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
         setDetail(payload.data);
         setStatus(payload.data.status?.trim().toLowerCase() || "new");
         setAdminNotes(payload.data.admin_notes ?? "");
+        setQuoteAssetFile(null);
       })
       .catch((loadError) => {
         if (cancelled) {
@@ -663,18 +688,68 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
       return;
     }
 
+    if (detail.is_closed || detail.status?.trim().toLowerCase() === "closed") {
+      return;
+    }
+
+    if (status === "quoted" && !quoteAssetFile && !detail.quote_asset_url) {
+      toast({
+        title: "Quote asset required",
+        description: "Upload an image or PDF before moving this request to quoted.",
+        variant: "error",
+      });
+      return;
+    }
+
+    if (status === "quoted" && !adminNotes.trim()) {
+      toast({
+        title: "Admin note required",
+        description: "Add an admin note before moving this request to quoted.",
+        variant: "error",
+      });
+      return;
+    }
+
+    if (status === "closed") {
+      setIsCloseConfirmOpen(true);
+      return;
+    }
+
+    await persistQuoteUpdate(false);
+  }
+
+  async function persistQuoteUpdate(closeConfirmed: boolean) {
+    if (!detail) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
-      await updateQuoteRequest(detail.id, {
+      const payload = {
         status,
         adminNotes: adminNotes.trim(),
-      });
+        ...(status === "reviewed" ? { package_request_payload: buildQuotePackageRequestPayload(detail) } : {}),
+        ...(status === "closed" ? { close_confirmed: closeConfirmed } : {}),
+      };
+      const formData = buildMultipartFormData(payload);
+
+      if (quoteAssetFile) {
+        formData.append("quote_asset", quoteAssetFile);
+        formData.append(
+          "quote_asset_kind",
+          quoteAssetFile.type.includes("pdf") ? "pdf" : quoteAssetFile.type.startsWith("image/") ? "image" : "file",
+        );
+      }
+
+      await updateQuoteRequest(detail.id, formData);
 
       const refreshed = await getQuoteRequest(detail.id);
       setDetail(refreshed.data);
       setStatus(refreshed.data.status?.trim().toLowerCase() || "new");
       setAdminNotes(refreshed.data.admin_notes ?? "");
+      setQuoteAssetFile(null);
+      setIsCloseConfirmOpen(false);
 
       toast({
         title: "Quote request updated",
@@ -707,6 +782,8 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
 
   const applianceTags = detail?.appliances.map((appliance) => `${appliance.name} x${appliance.quantity}`) ?? [];
   const formExtras = detail?.form_extras ? JSON.stringify(detail.form_extras, null, 2) : "{}";
+  const reviewedPayload = detail ? JSON.stringify(buildQuotePackageRequestPayload(detail), null, 2) : "{}";
+  const isClosed = Boolean(detail?.is_closed || detail?.status?.trim().toLowerCase() === "closed");
 
   return (
     <div className="dashboard-stack">
@@ -778,13 +855,38 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
             <p>Patch the quote request status and internal notes.</p>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               <FormField label="Status">
-                <SelectField value={status} onChange={setStatus} options={quoteStatusOptions(status)} />
+                <SelectField value={status} onChange={setStatus} options={quoteStatusOptions(status)} disabled={isClosed} />
               </FormField>
+              {status === "quoted" ? (
+                <FormField label="Quote File" hint={detail?.quote_asset_url ? "A quote file already exists. Uploading a new file will replace it." : "Upload either an image or a PDF of the quote."}>
+                  <label className="upload-field">
+                    <input type="file" accept="application/pdf,image/*" onChange={(event) => setQuoteAssetFile(event.target.files?.[0] ?? null)} />
+                    <span className="upload-field__button">
+                      <span>{quoteAssetFile || detail?.quote_asset_url ? "Replace file" : "Choose file"}</span>
+                    </span>
+                    <span className="upload-field__value">{quoteAssetFile?.name || detail?.quote_asset_url?.split("/").pop() || "Upload quote image or PDF"}</span>
+                  </label>
+                </FormField>
+              ) : null}
+              {status === "reviewed" ? (
+                <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                  <strong className="block text-sm">Package Request Payload Preview</strong>
+                  <p className="mt-2 text-sm text-[var(--text-soft)]">
+                    Updating with reviewed will create a package request from this quote.
+                  </p>
+                  <pre className="mt-3 overflow-x-auto rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-4 text-xs leading-6 text-[var(--text-soft)]">{reviewedPayload}</pre>
+                </div>
+              ) : null}
               <FormField label="Admin Notes">
-                <TextAreaField value={adminNotes} onChange={setAdminNotes} placeholder="Internal quote response notes" rows={6} />
+                <TextAreaField value={adminNotes} onChange={setAdminNotes} placeholder="Internal quote response notes" rows={6} invalid={status === "quoted" && !adminNotes.trim()} />
               </FormField>
+              {isClosed ? (
+                <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
+                  This quote has been closed and can no longer be edited.
+                </div>
+              ) : null}
               {canUpdateAudits ? (
-                <Button type="submit" variant="primary" disabled={isLoading || isSaving || !detail}>
+                <Button type="submit" variant="primary" disabled={isLoading || isSaving || !detail || isClosed}>
                   {isSaving ? "Saving..." : "Update"}
                 </Button>
               ) : null}
@@ -792,6 +894,26 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
           </aside>
         </div>
       </Panel>
+
+      <Modal
+        open={isCloseConfirmOpen}
+        onClose={() => !isSaving && setIsCloseConfirmOpen(false)}
+        title="Close Quote Request"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsCloseConfirmOpen(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => void persistQuoteUpdate(true)} disabled={isSaving}>
+              {isSaving ? "Closing..." : "Close Quote"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--text-soft)]">
+          Are you sure you want to close this quote request? Closed quotes can no longer be edited.
+        </p>
+      </Modal>
     </div>
   );
 }
