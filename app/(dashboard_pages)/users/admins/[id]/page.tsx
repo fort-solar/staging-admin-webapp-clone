@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState, type FormEvent } from "react";
+import { use, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
@@ -9,6 +9,7 @@ import { Avatar, Button, InfoIcons, InfoRow, Panel, SelectField, StatusPill, Tex
 import { useToast } from "@/components/ui/toast";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { formatEnumLabel, formatManagedUserStatusLabel, getAdmin, normalizeManagedUserStatus, updateAdmin } from "@/lib/admin-api";
+import { getAdminRoleAccessSummary, getKnownAdminRoleOptions } from "@/lib/auth/access-control";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { AdminRecord } from "@/types/api.types";
@@ -17,7 +18,7 @@ const statusOptions = [
   { label: "Active", value: "active" },
   { label: "Deactivated", value: "inactive" },
 ];
-const roleOptions = ["super_admin", "operations_manager", "content_manager", "business_manager"];
+const roleOptions = getKnownAdminRoleOptions();
 
 export default function AdminDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -31,6 +32,7 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
     status: "active",
     adminRole: "operations_manager",
   });
+  const selectedRoleSummary = useMemo(() => getAdminRoleAccessSummary(form.adminRole), [form.adminRole]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,7 +192,18 @@ export default function AdminDetailsPage({ params }: { params: Promise<{ id: str
                 <span className="form-field__label">
                   <span>Admin Role</span>
                 </span>
-                <SelectField value={form.adminRole} onChange={(value) => setForm((current) => ({ ...current, adminRole: value }))} options={roleOptions} />
+                <div className="flex flex-col gap-3">
+                  <SelectField value={form.adminRole} onChange={(value) => setForm((current) => ({ ...current, adminRole: value }))} options={roleOptions} />
+                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-soft)]">Role access</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--text)]">{selectedRoleSummary.description}</p>
+                    <ul className="mt-2 grid list-disc gap-x-5 gap-y-1 pl-4 text-xs leading-5 text-[var(--text-soft)] sm:grid-cols-2">
+                      {selectedRoleSummary.capabilities.map((capability) => (
+                        <li key={capability}>{capability}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </label>
 
               <label className="form-field">

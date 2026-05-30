@@ -10,6 +10,7 @@ import { Avatar, Button, Checkbox, EmptyScaffold, MetricCardSecondary, Paginatio
 import { useToast } from "@/components/ui/toast";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { createAdmin, DEFAULT_PAGE_SIZE, deleteAdmin, formatEnumLabel, formatManagedUserStatusLabel, getAdmins, updateAdmin } from "@/lib/admin-api";
+import { getAdminRoleAccessSummary, getKnownAdminRoleOptions } from "@/lib/auth/access-control";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { AdminRecord, PaginationMeta } from "@/types/api.types";
@@ -23,7 +24,7 @@ const emptyPagination: PaginationMeta = {
   totalPages: 1,
 };
 
-const roleOptions = ["super_admin", "operations_manager", "content_manager", "business_manager"];
+const roleOptions = getKnownAdminRoleOptions();
 
 export default function AdminsPage() {
   const { can } = useAccessControl();
@@ -51,6 +52,7 @@ export default function AdminsPage() {
     address: "",
     adminRole: "operations_manager",
   });
+  const selectedRoleSummary = useMemo(() => getAdminRoleAccessSummary(form.adminRole), [form.adminRole]);
 
   useEffect(() => {
     let cancelled = false;
@@ -371,7 +373,18 @@ export default function AdminsPage() {
               <ModalTextInput value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+2348000000000" />
             </FormField>
             <FormField label="Admin Role">
-              <ModalSelect value={form.adminRole} onChange={(value) => setForm((current) => ({ ...current, adminRole: value }))} options={roleOptions} />
+              <div className="flex flex-col gap-3">
+                <ModalSelect value={form.adminRole} onChange={(value) => setForm((current) => ({ ...current, adminRole: value }))} options={roleOptions} />
+                <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-soft)]">Role access</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--text)]">{selectedRoleSummary.description}</p>
+                  <ul className="mt-2 grid list-disc gap-x-5 gap-y-1 pl-4 text-xs leading-5 text-[var(--text-soft)] sm:grid-cols-2">
+                    {selectedRoleSummary.capabilities.map((capability) => (
+                      <li key={capability}>{capability}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             </FormField>
           </div>
           <FormField label="Address">

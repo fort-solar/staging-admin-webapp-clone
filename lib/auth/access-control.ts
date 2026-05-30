@@ -169,6 +169,39 @@ const ROLE_PERMISSION_PRESETS: Record<KnownAdminRole, RolePermissionPreset> = {
   },
 };
 
+const ADMIN_ROLE_LABELS: Record<KnownAdminRole, string> = {
+  super_admin: "Super Admin",
+  operations_manager: "Operations Manager",
+  content_manager: "Content Manager",
+  business_manager: "Business Manager",
+};
+
+const ADMIN_ROLE_DESCRIPTIONS: Record<KnownAdminRole, string> = {
+  super_admin: "Full platform access across every admin area.",
+  operations_manager: "Operational control across installers, projects, audits, jobs, and platform settings.",
+  content_manager: "Content publishing access for blog and SEO pages, with supporting project and settings updates.",
+  business_manager: "Commercial operations access across customers, catalog, orders, transactions, notifications, and settings.",
+};
+
+const RESOURCE_ACCESS_LABELS: Record<PermissionResource, string> = {
+  dashboard: "Dashboard",
+  verification_queue: "Verification Queue",
+  customers: "Customers",
+  installers: "Installers",
+  admins: "Admins",
+  orders: "Orders",
+  notifications: "Notifications",
+  products: "Products",
+  bundles: "Packages",
+  transactions: "Transactions",
+  blog: "Blog",
+  site_pages: "SEO Pages",
+  installations: "Projects",
+  energy_audits: "Energy Audits",
+  jobs: "Job Board",
+  settings: "Settings",
+};
+
 const ROUTE_RULES: RouteRule[] = [
   { prefix: "/dashboard/verification-queue", permission: { resource: "verification_queue", action: "read" }, title: "Installer Verification Queue" },
   { prefix: "/dashboard", permission: { resource: "dashboard", action: "read" }, title: "Dashboard" },
@@ -320,6 +353,46 @@ function permissionKey(resource: PermissionResource, action: PermissionAction): 
   return `${resource}.${action}`;
 }
 
+function permissionActionsLabel(actions: readonly PermissionAction[]) {
+  const actionSet = new Set(actions);
+
+  if (ALL_ACTIONS.every((action) => actionSet.has(action))) {
+    return "full access";
+  }
+
+  if (actionSet.size === 1 && actionSet.has("read")) {
+    return "view only";
+  }
+
+  if (actionSet.size === 2 && actionSet.has("read") && actionSet.has("update")) {
+    return "view and update";
+  }
+
+  if (actionSet.size === 2 && actionSet.has("read") && actionSet.has("create")) {
+    return "view and create";
+  }
+
+  if (actionSet.size === 3 && actionSet.has("read") && actionSet.has("create") && actionSet.has("update")) {
+    return "view, create, and update";
+  }
+
+  const labels = ALL_ACTIONS.filter((action) => actionSet.has(action));
+
+  if (labels.length === 0) {
+    return "no access";
+  }
+
+  if (labels.length === 1) {
+    return labels[0];
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+
+  return `${labels.slice(0, -1).join(", ")}, and ${labels.at(-1)}`;
+}
+
 function rolePermissionSet(role: AdminRole | null | undefined) {
   const normalized = normalizeAdminRole(role);
   const preset = normalized in ROLE_PERMISSION_PRESETS ? ROLE_PERMISSION_PRESETS[normalized as KnownAdminRole] : { settings: READ_UPDATE };
@@ -383,10 +456,45 @@ export function normalizeAdminRole(role: AdminRole | null | undefined): AdminRol
 }
 
 export function formatAdminRole(role: AdminRole | null | undefined) {
-  return normalizeAdminRole(role)
+  const normalized = normalizeAdminRole(role);
+
+  if (normalized in ADMIN_ROLE_LABELS) {
+    return ADMIN_ROLE_LABELS[normalized as KnownAdminRole];
+  }
+
+  return normalized
     .split("_")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
+}
+
+export function getKnownAdminRoleOptions() {
+  return (Object.keys(ADMIN_ROLE_LABELS) as KnownAdminRole[]).map((role) => ({
+    value: role,
+    label: ADMIN_ROLE_LABELS[role],
+  }));
+}
+
+export function getAdminRoleAccessSummary(role: AdminRole | null | undefined) {
+  const normalized = normalizeAdminRole(role);
+  const knownRole = (normalized in ROLE_PERMISSION_PRESETS ? normalized : "super_admin") as KnownAdminRole;
+  const preset = ROLE_PERMISSION_PRESETS[knownRole];
+  const capabilities = KNOWN_RESOURCES.flatMap((resource) => {
+    const actions = preset[resource];
+
+    if (!actions?.length) {
+      return [];
+    }
+
+    return [`${RESOURCE_ACCESS_LABELS[resource]}: ${permissionActionsLabel(actions)}`];
+  });
+
+  return {
+    value: knownRole,
+    label: ADMIN_ROLE_LABELS[knownRole],
+    description: ADMIN_ROLE_DESCRIPTIONS[knownRole],
+    capabilities,
+  };
 }
 
 export function getEffectivePermissionKeys(role: AdminRole | null | undefined, permissions: string[] = []) {
