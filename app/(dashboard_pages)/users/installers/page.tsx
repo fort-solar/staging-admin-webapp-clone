@@ -193,10 +193,10 @@ export default function InstallersPage() {
   return (
     <div className="dashboard-stack">
       <div className="inline-actions">
-        <Link href="/users/installers" className={cx("action-button is-secondary is-sm", pathname === "/users/installers" && "is-primary")}>
+        <Link href="/users/installers" className={cx("action-button is-sm", pathname === "/users/installers" ? "is-primary" : "is-secondary")}>
           Installer Directory
         </Link>
-        <Link href="/dashboard/verification-queue" className="action-button is-secondary is-sm">
+        <Link href="/dashboard/verification-queue" className={cx("action-button is-sm", pathname === "/dashboard/verification-queue" ? "is-primary" : "is-secondary")}>
           Verification Queue
         </Link>
       </div>
