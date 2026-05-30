@@ -273,8 +273,8 @@ export default function AdminsPage() {
                   </thead>
                   <tbody>
                     {filteredRows.length ? (
-                    filteredRows.map((admin) => {
-                      const statusLabel = formatManagedUserStatusLabel(admin.status);
+                      filteredRows.map((admin) => {
+                        const statusLabel = formatManagedUserStatusLabel(admin.status);
 
                         return (
                           <tr key={admin.id}>
@@ -312,22 +312,22 @@ export default function AdminsPage() {
                                     { label: "View Details", href: `/users/admins/${admin.id}`, icon: <EyeIcon className="menu-icon" /> },
                                     ...(canUpdateAdmins
                                       ? [
-                                          {
-                                            label: admin.status.toLowerCase() === "active" ? "Deactivate Admin" : "Activate Admin",
-                                            icon: <ShieldOffIcon className="menu-icon" />,
-                                            onSelect: () => handleToggleStatus(admin),
-                                          },
-                                        ]
+                                        {
+                                          label: admin.status.toLowerCase() === "active" ? "Deactivate Admin" : "Activate Admin",
+                                          icon: <ShieldOffIcon className="menu-icon" />,
+                                          onSelect: () => handleToggleStatus(admin),
+                                        },
+                                      ]
                                       : []),
                                     ...(canDeleteAdmins
                                       ? [
-                                          {
-                                            label: "Delete Admin",
-                                            tone: "danger" as const,
-                                            icon: <TrashIcon className="menu-icon" />,
-                                            onSelect: () => handleDeleteAdmin(admin),
-                                          },
-                                        ]
+                                        {
+                                          label: "Delete Admin",
+                                          tone: "danger" as const,
+                                          icon: <TrashIcon className="menu-icon" />,
+                                          onSelect: () => handleDeleteAdmin(admin),
+                                        },
+                                      ]
                                       : []),
                                   ]}
                                 />
@@ -375,17 +375,18 @@ export default function AdminsPage() {
             <FormField label="Admin Role">
               <div className="flex flex-col gap-3">
                 <ModalSelect value={form.adminRole} onChange={(value) => setForm((current) => ({ ...current, adminRole: value }))} options={roleOptions} />
-                <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-soft)]">Role access</p>
-                  <p className="mt-1 text-xs leading-5 text-[var(--text)]">{selectedRoleSummary.description}</p>
-                  <ul className="mt-2 grid list-disc gap-x-5 gap-y-1 pl-4 text-xs leading-5 text-[var(--text-soft)] sm:grid-cols-2">
-                    {selectedRoleSummary.capabilities.map((capability) => (
-                      <li key={capability}>{capability}</li>
-                    ))}
-                  </ul>
-                </div>
+
               </div>
             </FormField>
+          </div>
+          <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-3 mt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-soft)]">Role access</p>
+            <p className="mt-1 text-[10px] leading-5 text-[var(--text)]">{selectedRoleSummary.description}</p>
+            <ul className="mt-2 grid list-disc gap-x-5 gap-y-1 pl-4 text-[10px] leading-5 text-[var(--text-soft)] sm:grid-cols-4">
+              {selectedRoleSummary.capabilities.map((capability) => (
+                <li key={capability}>{capability}</li>
+              ))}
+            </ul>
           </div>
           <FormField label="Address">
             <ModalTextInput value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} placeholder="Enter address" />
