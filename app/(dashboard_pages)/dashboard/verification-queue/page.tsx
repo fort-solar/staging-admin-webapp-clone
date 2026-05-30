@@ -142,16 +142,7 @@ export default function VerificationQueuePage() {
     [deferredQuery, filter, rows],
   );
 
-  const selectedRows = useMemo(() => filteredRows.filter((row) => selected.includes(row.id)), [filteredRows, selected]);
-  const selectedCount = selectedRows.length;
   const allSelected = filteredRows.length > 0 && filteredRows.every((row) => selected.includes(row.id));
-  const pendingBulkIds = useMemo(() => {
-    const scope = selectedCount > 0 ? selectedRows : filteredRows;
-    return scope.filter((row) => row.status.toLowerCase() === "pending").map((row) => row.id);
-  }, [filteredRows, selectedCount, selectedRows]);
-
-  const approveActionLabel =
-    allSelected || selectedCount === 0 ? "Approve All" : selectedCount === 1 ? "Approve" : "Approve Selected";
 
   const activeDocumentsSubmission = rows.find((row) => row.id === documentsId) ?? null;
   const activeApprovalSubmission = approvalState?.submissionId ? rows.find((row) => row.id === approvalState.submissionId) ?? null : null;
@@ -232,20 +223,7 @@ export default function VerificationQueuePage() {
   return (
     <>
       <Panel className="overflow-hidden">
-        <PanelHeader
-          title="Installer Verification Queue"
-          action={
-            canUpdateVerificationQueue ? (
-              <Button
-                variant="primary"
-                onClick={() => openApproveDialog(pendingBulkIds, pendingBulkIds.length === 1 ? pendingBulkIds[0] : undefined)}
-                disabled={pendingBulkIds.length === 0}
-              >
-                {approveActionLabel}
-              </Button>
-            ) : undefined
-          }
-        />
+        <PanelHeader title="Installer Verification Queue" />
 
         <div className="dashboard-table-toolbar">
           <SearchField value={query} onChange={setQuery} placeholder="Search vendors..." />

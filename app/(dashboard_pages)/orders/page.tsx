@@ -119,7 +119,6 @@ export default function OrdersPage() {
   const deferredQuery = useDeferredValue(query);
   const deferredCustomerQuery = useDeferredValue(customerQuery);
   const canCreateCustomers = can("customers", "create");
-  const canCreateOrders = can("orders", "create");
 
   useEffect(() => {
     let cancelled = false;
@@ -394,11 +393,6 @@ export default function OrdersPage() {
     setProductErrors({});
   }
 
-  function openCreateOrderModal() {
-    resetCreateOrderForm();
-    setOpenModal(true);
-  }
-
   function closeCreateOrderModal() {
     if (isSaving) {
       return;
@@ -595,11 +589,10 @@ export default function OrdersPage() {
           <PanelHeader
             title="Order List"
             action={
-              canCreateOrders ? (
-                <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={openCreateOrderModal}>
-                  Create Order
-                </Button>
-              ) : undefined
+              // <Button variant="primary" size="sm" leadingIcon={<PlusIcon className="mini-icon" />} onClick={openCreateOrderModal}>
+              //   Create Order
+              // </Button>
+              undefined
             }
           />
           <div className="dashboard-table-toolbar">
