@@ -658,6 +658,7 @@ export type JobApiRecord = {
   package_request_status?: string | null;
   assigned_to?: string | null;
   customer_user_id?: string | null;
+  client_name?: string | null;
   customer_name?: string | null;
   customer_email?: string | null;
   customer_phone?: string | null;
@@ -687,6 +688,7 @@ export type CreateJobRequest = {
   package_request_name?: string;
   assigned_to?: string;
   customer_user_id?: string;
+  client_name?: string;
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;
@@ -873,6 +875,7 @@ export type BundleRequestRecord = {
   bundle_name: string;
   order_status: string;
   customer_user_id?: string | null;
+  client_name?: string | null;
   customer_email?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;

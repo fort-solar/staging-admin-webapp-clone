@@ -103,6 +103,26 @@ function useObjectUrls(files: File[]) {
   return urls;
 }
 
+function fileSelectionKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+}
+
+function mergeSelectedFiles(currentFiles: File[], nextFiles: File[]) {
+  const seen = new Set(currentFiles.map(fileSelectionKey));
+  const merged = [...currentFiles];
+
+  nextFiles.forEach((file) => {
+    const key = fileSelectionKey(file);
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(file);
+    }
+  });
+
+  return merged;
+}
+
 function normalizeProjectMedia(record: InstallationRecord | Record<string, unknown>) {
   const raw = record as Record<string, unknown>;
   const mediaRecord = isRecord(raw.media) ? raw.media : null;
@@ -705,6 +725,7 @@ export function InstallationFormScreen() {
         url: media.url,
         kind: media.kind ?? inferMediaKind(media.url, media.mime_type),
         isExisting: true,
+        fileIndex: null,
       })),
       ...mediaFiles.map((file, index) => ({
         key: `new-${file.name}-${index}`,
@@ -712,6 +733,7 @@ export function InstallationFormScreen() {
         url: mediaPreviewUrls[index] ?? "",
         kind: fileMediaKind(file),
         isExisting: false,
+        fileIndex: index,
       })),
     ],
     [existingMedia, mediaFiles, mediaPreviewUrls],
@@ -752,7 +774,7 @@ export function InstallationFormScreen() {
       return;
     }
 
-    setMediaFiles((current) => [...current, ...nextFiles]);
+    setMediaFiles((current) => mergeSelectedFiles(current, nextFiles));
     clearFieldError("media");
     event.target.value = "";
   }
@@ -1101,38 +1123,51 @@ export function InstallationFormScreen() {
                   <div className={cx("project-upload-dropzone", errors.media && "is-invalid")}>
                     <input type="file" accept="image/*,video/*" multiple onChange={handleMediaFilesChange} />
                     <strong>Upload project media</strong>
-                    <span>Images and videos are allowed. The first image becomes the primary project card image.</span>
+                    <span>Images and videos are allowed. Select several at once or add more later. The first image becomes the primary project card image.</span>
                   </div>
                 </FormField>
 
                 {combinedMediaPreview.length ? (
-                  <div className="project-media-grid">
-                    {combinedMediaPreview.map((media, index) => (
-                      <article key={media.key} className="project-media-card">
-                        <div className="project-media-card__surface">
-                          {media.kind === "image" ? (
-                            <img src={media.url} alt={media.name} />
-                          ) : media.kind === "video" ? (
-                            <video src={media.url} muted controls />
-                          ) : (
-                            <div className="project-media-card__file">
-                              <strong>{media.kind?.toUpperCase() || "FILE"}</strong>
-                            </div>
-                          )}
-                        </div>
-                        <div className="project-media-card__footer">
-                          <div>
-                            <strong>{media.name}</strong>
-                            <span>{media.isExisting ? "Existing media" : "New upload"}</span>
+                  <div className="detail-panel__stack">
+                    <div className="project-media-grid">
+                      {combinedMediaPreview.map((media) => (
+                        <article key={media.key} className="project-media-card">
+                          <div className="project-media-card__surface">
+                            {!media.isExisting && media.fileIndex !== null ? (
+                              <button
+                                type="button"
+                                className="media-preview-dismiss"
+                                aria-label={`Remove ${media.name}`}
+                                onClick={() => removeMediaFile(media.fileIndex)}
+                              >
+                                <span aria-hidden="true">×</span>
+                              </button>
+                            ) : null}
+                            {media.kind === "image" ? (
+                              <img src={media.url} alt={media.name} />
+                            ) : media.kind === "video" ? (
+                              <video src={media.url} muted controls />
+                            ) : (
+                              <div className="project-media-card__file">
+                                <strong>{media.kind?.toUpperCase() || "FILE"}</strong>
+                              </div>
+                            )}
                           </div>
-                          {!media.isExisting ? (
-                            <Button type="button" variant="secondary" size="sm" onClick={() => removeMediaFile(index - existingMedia.length)}>
-                              Remove
-                            </Button>
-                          ) : null}
-                        </div>
-                      </article>
-                    ))}
+                          <div className="project-media-card__footer">
+                            <div>
+                              <strong>{media.name}</strong>
+                              <span>{media.isExisting ? "Existing media" : "New upload"}</span>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    {mediaFiles.length ? (
+                      <button type="button" className="upload-preview-card__reset" onClick={() => setMediaFiles([])}>
+                        {existingMedia.length ? "Use existing media instead" : "Clear selected media"}
+                      </button>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="upload-showcase-empty">

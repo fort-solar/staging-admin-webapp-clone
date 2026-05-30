@@ -274,6 +274,26 @@ function useObjectUrls(files: File[]) {
   return objectUrls;
 }
 
+function fileSelectionKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+}
+
+function mergeSelectedFiles(currentFiles: File[], nextFiles: File[]) {
+  const seen = new Set(currentFiles.map(fileSelectionKey));
+  const merged = [...currentFiles];
+
+  nextFiles.forEach((file) => {
+    const key = fileSelectionKey(file);
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(file);
+    }
+  });
+
+  return merged;
+}
+
 function normalizeProductImageUrls(record: Record<string, unknown>) {
   const mediaRecord = isRecord(record.media) ? record.media : null;
   const mediaImageUrls = mediaRecord ? readStringArray(mediaRecord, ["image_urls"]) : [];
@@ -473,10 +493,11 @@ function ProductImageGalleryField({
   productName: string;
 }) {
   const previewUrls = useObjectUrls(files);
-  const activeUrls = previewUrls.length ? previewUrls : currentUrls;
-  const hasSelection = files.length > 0 || currentUrls.length > 0;
+  const isShowingSelectedFiles = files.length > 0;
+  const activeUrls = isShowingSelectedFiles ? previewUrls : currentUrls;
+  const buttonLabel = files.length ? "Add more images" : currentUrls.length ? "Replace images" : "Choose images";
   const helperLabel = files.length
-    ? `${files.length} image${files.length === 1 ? "" : "s"} selected`
+    ? `${files.length} new image${files.length === 1 ? "" : "s"} selected`
     : currentUrls.length
       ? `${currentUrls.length} current image${currentUrls.length === 1 ? "" : "s"} on record`
       : "Upload one or more product images. The first image is used as the primary card image.";
@@ -488,10 +509,19 @@ function ProductImageGalleryField({
           type="file"
           accept="image/*"
           multiple
-          onChange={(event) => onFilesChange(Array.from(event.target.files ?? []))}
+          onChange={(event) => {
+            const nextFiles = Array.from(event.target.files ?? []);
+
+            if (!nextFiles.length) {
+              return;
+            }
+
+            onFilesChange(mergeSelectedFiles(files, nextFiles));
+            event.target.value = "";
+          }}
         />
         <span className="upload-field__button">
-          <span>{hasSelection ? "Replace images" : "Choose images"}</span>
+          <span>{buttonLabel}</span>
         </span>
         <span className="upload-field__value">{helperLabel}</span>
       </label>
@@ -505,6 +535,16 @@ function ProductImageGalleryField({
             {activeUrls.map((url, index) => (
               <div key={`${url}-${index}`} className="thumbnail-strip__item">
                 <img src={url} alt={`${productName || "Product"} image ${index + 1}`} className="h-full w-full object-cover" />
+                {isShowingSelectedFiles ? (
+                  <button
+                    type="button"
+                    className="media-preview-dismiss"
+                    aria-label={`Remove ${files[index]?.name || `image ${index + 1}`}`}
+                    onClick={() => onFilesChange(files.filter((_, fileIndex) => fileIndex !== index))}
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ) : null}
                 {index === 0 ? <span className="thumbnail-strip__badge">Primary</span> : null}
               </div>
             ))}
