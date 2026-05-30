@@ -382,7 +382,7 @@ export default function AdminsPage() {
           <div className="rounded-[18px] border border-(--border) bg-(--surface-muted) p-3 mt-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-(--text-soft)">Role access</p>
             <p className="mt-1 text-[10px] leading-5 text-(--text)">{selectedRoleSummary.description}</p>
-            <ul className="mt-2 grid list-disc gap-x-5 gap-y-1 pl-4 text-[10px] leading-5 text-(--text-soft) sm:grid-cols-4">
+            <ul className="mt-2 grid list-disc gap-x-5 gap-y-1 pl-4 text-[10px] leading-5 text-(--text-soft) sm:grid-cols-3">
               {selectedRoleSummary.capabilities.map((capability) => (
                 <li key={capability}>{capability}</li>
               ))}
