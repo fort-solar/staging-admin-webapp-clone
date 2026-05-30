@@ -606,7 +606,7 @@ img {
 
 .section-description {
   margin: 4px 0 0;
-  max-width: 400px;
+  max-width: 550px;
   font-size: 13px;
   color: var(--text-soft);
 }
