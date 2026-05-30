@@ -826,7 +826,7 @@ export function JobsManagementScreen() {
             }
           />
 
-          <div className="management-surface__filters is-inline">
+          <div className="management-surface__filters is-inline mt-10">
             <Tabs value={status} onChange={setStatus} options={jobStatusTabs} compact />
           </div>
         </div>
