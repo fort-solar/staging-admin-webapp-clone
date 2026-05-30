@@ -3637,7 +3637,7 @@ img {
 }
 
 .product-form-shell__header {
-  align-items: flex-start;
+  align-items: center;
   position: sticky;
   top: calc(var(--dashboard-header-offset, var(--header-height)) + 12px);
   z-index: 20;
