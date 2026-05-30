@@ -72,7 +72,6 @@ type JobFormState = {
   packageRequestId: string;
   assignedTo: string;
   customerUserId: string;
-  clientName: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
@@ -112,7 +111,6 @@ const emptyJobForm: JobFormState = {
   packageRequestId: "",
   assignedTo: "",
   customerUserId: "",
-  clientName: "",
   customerName: "",
   customerEmail: "",
   customerPhone: "",
@@ -231,7 +229,6 @@ function prefillFromPackageRequest(current: JobFormState, request: BundleRequest
     title: current.title || `${request.bundle_name} Installation`,
     description: current.description || "Installation delivery for the linked package request.",
     customerUserId: current.customerUserId || request.customer_user_id || "",
-    clientName: request.client_name || current.clientName || request.customer_name || current.customerName,
     customerName: request.customer_name || current.customerName,
     customerEmail: request.customer_email || current.customerEmail,
     customerPhone: request.customer_phone || current.customerPhone,
@@ -244,13 +241,10 @@ function prefillFromPackageRequest(current: JobFormState, request: BundleRequest
 }
 
 function prefillFromCustomer(current: JobFormState, customer: CustomerRecord) {
-  const nextCustomerName = customer.fullName || customer.name || current.customerName;
-
   return {
     ...current,
     customerUserId: customer.id,
-    clientName: current.clientName || nextCustomerName,
-    customerName: nextCustomerName,
+    customerName: customer.fullName || customer.name || current.customerName,
     customerEmail: customer.email || current.customerEmail,
     customerPhone: customer.phone || current.customerPhone,
   };
@@ -292,7 +286,6 @@ function jobFormFromRecord(job: JobApiRecord): JobFormState {
     packageRequestId: job.package_request_id || "",
     assignedTo: job.assigned_to || "",
     customerUserId: job.customer_user_id || "",
-    clientName: job.client_name || "",
     customerName: job.customer_name || "",
     customerEmail: job.customer_email || "",
     customerPhone: job.customer_phone || "",
@@ -361,7 +354,6 @@ function buildJobPayload(form: JobFormState, selectedPackageRequest: BundleReque
     package_request_status: selectedPackageRequest?.status || undefined,
     assigned_to: form.assignedTo.trim() || undefined,
     customer_user_id: form.customerUserId.trim() || undefined,
-    client_name: form.clientName.trim() || undefined,
     customer_name: form.customerName.trim() || undefined,
     customer_email: form.customerEmail.trim() || undefined,
     customer_phone: form.customerPhone.trim() || undefined,
@@ -589,14 +581,6 @@ function JobEditor({
               <TextField value={form.customerPhone} onChange={(event) => setForm((current) => ({ ...current, customerPhone: event.target.value }))} placeholder="+2348012345678" />
             </FormField>
           </div>
-
-          <FormField label="Business / Client Name" hint="Add the company, site, or client label to show above the location details.">
-            <TextField
-              value={form.clientName}
-              onChange={(event) => setForm((current) => ({ ...current, clientName: event.target.value }))}
-              placeholder="Amina Yusuf Ventures"
-            />
-          </FormField>
 
           <FormField label="Address">
             <TextAreaField value={form.address} onChange={(value) => setForm((current) => ({ ...current, address: value }))} placeholder="Lekki Phase 1" rows={4} />
@@ -1291,10 +1275,6 @@ export function JobDetailScreen({ slug }: { slug: string }) {
             <div className="job-meta-row">
               <span>Customer</span>
               <strong>{job?.customer_name || "N/A"}</strong>
-            </div>
-            <div className="job-meta-row">
-              <span>Business / Client</span>
-              <strong>{job?.client_name || job?.customer_name || "N/A"}</strong>
             </div>
             <div className="job-meta-band is-blue">
               <span>Budget</span>

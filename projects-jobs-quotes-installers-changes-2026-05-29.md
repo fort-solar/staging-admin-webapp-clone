@@ -191,6 +191,7 @@ Admin-captured fields:
 ```json
 {
   "package_id": "pkg_123",
+  "client_name": "Ikeja Business Hub",
   "overview": "This commercial deployment was tailored for stable daytime operations and battery-supported backup.",
   "address": "Ikeja business district",
   "city": "Lagos",
@@ -250,6 +251,7 @@ Supported media types:
 - `overview` is required for detail pages.
 - The admin form only exposes:
   - package select
+  - business or client name
   - project overview
   - location
   - installation time
@@ -277,6 +279,7 @@ Supported media types:
   "slug": "10kva-commercial-solar-installation-lagos-office",
   "package_id": "pkg_123",
   "package_name": "Business Solar Package",
+  "client_name": "Ikeja Business Hub",
   "title": "10kVA Commercial Solar Installation - Lagos Office",
   "summary": "A mid-size corporate office in Ikeja now runs 24/7 on solar, reducing diesel costs by over 70%.",
   "overview": "This commercial deployment was tailored for stable daytime operations and battery-supported backup.",
@@ -395,7 +398,6 @@ Logical payload:
   "status": "assigned",
   "scheduled_date": "2026-06-02T09:30:00.000Z",
   "customer_user_id": "customer_user_123",
-  "client_name": "Amina Yusuf Ventures",
   "customer_name": "Amina Yusuf",
   "customer_email": "amina@example.com",
   "customer_phone": "+2348012345678",
@@ -411,8 +413,6 @@ Logical payload:
 ```
 
 The dashboard no longer exposes a manual slug input for jobs. The frontend generates `slug` from the final title using a trimmed lowercase hyphenated format before submit and on edit.
-
-The job form now also captures `client_name` as the business, site, or client label shown above the location fields. It is optional, but the frontend sends it whenever present.
 
 Compatibility fields still tolerated:
 
@@ -430,7 +430,6 @@ The job board and package-request dashboard now benefit from the package request
   "bundle_name": "Business Solar Package",
   "status": "packed",
   "customer_user_id": "customer_user_123",
-  "client_name": "Amina Yusuf Ventures",
   "customer_name": "Amina Yusuf",
   "customer_email": "amina@example.com",
   "customer_phone": "+2348012345678",

@@ -171,7 +171,7 @@ function projectLocation(record: InstallationRecord) {
 }
 
 function projectTitle(record: InstallationRecord) {
-  return record.title || record.package_name || record.address || record.customer_name || record.customer_email || "Untitled project";
+  return record.title || record.client_name || record.package_name || record.address || record.customer_name || record.customer_email || "Untitled project";
 }
 
 function projectSummary(record: InstallationRecord) {
@@ -582,6 +582,7 @@ export function InstallationFormScreen() {
   const [packageId, setPackageId] = useState("none");
   const [existingTitle, setExistingTitle] = useState("");
   const [existingSummary, setExistingSummary] = useState("");
+  const [clientName, setClientName] = useState("");
   const [overview, setOverview] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -657,6 +658,7 @@ export function InstallationFormScreen() {
         setPackageId(detail.package_id || "none");
         setExistingTitle(detail.title || "");
         setExistingSummary(detail.summary || "");
+        setClientName(detail.client_name || "");
         setOverview(detail.overview || "");
         setAddress(detail.address || "");
         setCity(detail.city || "");
@@ -882,6 +884,7 @@ export function InstallationFormScreen() {
         slug: slugify(derivedTitle),
         summary: derivedSummary,
         overview: overview.trim(),
+        client_name: clientName.trim() || undefined,
         address: normalizedAddress,
         city: normalizedCity,
         state: normalizedState,
@@ -976,6 +979,14 @@ export function InstallationFormScreen() {
                     placeholder="Describe the project in more detail."
                     rows={6}
                     invalid={Boolean(errors.overview)}
+                  />
+                </FormField>
+
+                <FormField label="Business / Client Name" hint="Use this when the project was delivered for a named business, organization, or client.">
+                  <TextField
+                    value={clientName}
+                    onChange={(event) => setClientName(event.target.value)}
+                    placeholder="Ikeja Business Hub"
                   />
                 </FormField>
 
