@@ -1295,7 +1295,7 @@ export function JobDetailScreen({ slug }: { slug: string }) {
           <div className="flex flex-wrap items-center justify-between gap-4 px-6 pb-4 pt-6">
             <div>
               <h3 className="m-0 text-sm font-bold sm:text-[15px]">Applicants</h3>
-              <p className="mt-2 text-sm text-[var(--text-soft)]">Review proposals, update applicant decisions, and keep the assigned installer aligned with the active package request.</p>
+              <p className="mt-2 text-sm text-(--text-soft)">Review proposals, update applicant decisions, and keep the assigned installer aligned with the active package request.</p>
             </div>
             {job && canDeleteJobs ? (
               <Button variant="danger" size="sm" leadingIcon={<TrashIcon className="mini-icon" />} onClick={() => void handleDeleteJob()}>
@@ -1308,7 +1308,7 @@ export function JobDetailScreen({ slug }: { slug: string }) {
           <ErrorMessage title="Applicant load failed" message={applicantError} />
 
           <div className="grid gap-0 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-            <div className="border-b border-[var(--border)] xl:border-b-0 xl:border-r">
+            <div className="border-b border-(--border) xl:border-b-0 xl:border-r">
               <div className="management-surface__body">
                 <DirectoryToolbar
                   searchValue={applicantQuery}
