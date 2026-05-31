@@ -6,6 +6,32 @@ type RouteContext = {
   params: Promise<{ endpoint: string[] }>;
 };
 
+function isJsonResponse(response: Response) {
+  return (response.headers.get("content-type") ?? "").includes("application/json");
+}
+
+function buildProxyResponseHeaders(response: Response) {
+  const headers = new Headers();
+
+  [
+    "content-type",
+    "content-length",
+    "content-disposition",
+    "cache-control",
+    "etag",
+    "last-modified",
+    "accept-ranges",
+  ].forEach((name) => {
+    const value = response.headers.get(name);
+
+    if (value) {
+      headers.set(name, value);
+    }
+  });
+
+  return headers;
+}
+
 async function forwardRequest(request: NextRequest, path: string, accessToken: string) {
   const body = await getRequestBody(request);
 
@@ -58,7 +84,7 @@ async function proxyHandler(request: NextRequest, context: RouteContext) {
     upstream = await forwardRequest(request, path, refreshed.payload.accessToken);
   }
 
-  const payload = await parseServerPayload(upstream);
+  const payload = isJsonResponse(upstream) ? await parseServerPayload(upstream) : null;
 
   if (upstream.ok && path === "/api/v1/admin/me" && payload && typeof payload === "object" && "success" in payload && payload.success === true) {
     await syncSessionCookieFromProfile(response, payload as import("@/types/api.types").AdminMeApiResponse, previousSnapshot);
@@ -72,7 +98,12 @@ async function proxyHandler(request: NextRequest, context: RouteContext) {
     return errorResponse;
   }
 
-  const proxied = NextResponse.json(payload ?? { success: true }, { status: upstream.status });
+  const proxied = isJsonResponse(upstream)
+    ? NextResponse.json(payload ?? { success: true }, { status: upstream.status })
+    : new NextResponse(upstream.body, {
+        status: upstream.status,
+        headers: buildProxyResponseHeaders(upstream),
+      });
   response.cookies.getAll().forEach((cookie) => {
     proxied.cookies.set(cookie);
   });

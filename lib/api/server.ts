@@ -39,7 +39,10 @@ export async function parseServerPayload<T = ServerPayload>(response: Response) 
 
 export async function fetchFortsolar(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  headers.set("Accept", "application/json");
+
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
 
   return fetch(buildApiUrl(path), {
     ...init,
@@ -119,12 +122,17 @@ export async function getRequestBody(request: Request) {
 export function makeProxyHeaders(request: Request, accessToken: string) {
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
+  const accept = request.headers.get("accept");
 
   if (contentType) {
     headers.set("Content-Type", contentType);
   }
 
-  headers.set("Accept", "application/json");
+  if (accept) {
+    headers.set("Accept", accept);
+  } else {
+    headers.set("Accept", "application/json");
+  }
   headers.set("Authorization", `Bearer ${accessToken}`);
 
   return headers;

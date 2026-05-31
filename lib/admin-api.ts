@@ -75,8 +75,12 @@ import type {
   UpdateProductCategoryRequest,
   UpdateProductInverterRequest,
   UpdateProductPanelRequest,
+  VerificationDocumentRecord,
   VerificationDetailApiResponse,
   VerificationListApiResponse,
+  VerificationDocumentUploadRecord,
+  VerificationSubmissionDetail,
+  VerificationSubmissionRecord,
   AddVerificationDocumentRequest,
   InstallerDetailApiResponse,
   InstallerListApiResponse,
@@ -149,6 +153,248 @@ export function buildMultipartFormData(payload: Record<string, unknown>) {
   });
 
   return formData;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readRecordString(record: Record<string, unknown>, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
+function readRecordNumber(record: Record<string, unknown>, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function readRecordBoolean(record: Record<string, unknown>, keys: string[], fallback = false) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "boolean") {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
+function extractFileName(value: string) {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const [withoutQuery] = normalized.split(/[?#]/, 1);
+  const segments = withoutQuery.split("/").filter(Boolean);
+  return segments[segments.length - 1] ?? normalized;
+}
+
+function inferMimeType(source: string) {
+  const normalized = source.trim().toLowerCase();
+
+  if (normalized.endsWith(".pdf")) {
+    return "application/pdf";
+  }
+
+  if (normalized.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  if (normalized.endsWith(".gif")) {
+    return "image/gif";
+  }
+
+  if (normalized.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  if (normalized.endsWith(".svg")) {
+    return "image/svg+xml";
+  }
+
+  return "application/octet-stream";
+}
+
+function normalizeVerificationUploadRecord(value: unknown, fallbackId: string): VerificationDocumentUploadRecord | null {
+  if (typeof value === "string" && !value.trim()) {
+    return null;
+  }
+
+  if (!isRecord(value) && typeof value !== "string") {
+    return null;
+  }
+
+  const upload = isRecord(value) && isRecord(value.upload) ? value.upload : value;
+  const rawPath =
+    typeof upload === "string"
+      ? upload
+      : readRecordString(upload, ["file_path", "url", "path"]);
+  const originalFileName =
+    typeof upload === "string"
+      ? extractFileName(upload)
+      : readRecordString(upload, ["original_filename", "name", "file_name", "filename", "stored_filename"]) ||
+        extractFileName(rawPath);
+
+  return {
+    id:
+      typeof upload === "string"
+        ? fallbackId
+        : readRecordString(upload, ["id", "upload_id"], fallbackId),
+    original_filename: originalFileName || fallbackId,
+    mime_type:
+      (typeof upload === "string"
+        ? ""
+        : readRecordString(upload, ["mime_type", "type"])) || inferMimeType(originalFileName || rawPath),
+    file_size: typeof upload === "string" ? "" : readRecordString(upload, ["file_size", "size"]),
+    file_path: rawPath,
+    stored_filename:
+      typeof upload === "string"
+        ? originalFileName || fallbackId
+        : readRecordString(upload, ["stored_filename", "filename"], originalFileName || fallbackId),
+    is_public: typeof upload === "string" ? false : readRecordBoolean(upload, ["is_public"]),
+    created_at:
+      typeof upload === "string"
+        ? ""
+        : readRecordString(upload, ["created_at", "uploaded_at"]),
+  };
+}
+
+function normalizeVerificationDocumentRecord(value: unknown, submissionId: string, index: number): VerificationDocumentRecord | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const upload = normalizeVerificationUploadRecord(value.upload ?? value, `${submissionId}-upload-${index + 1}`);
+
+  if (!upload) {
+    return null;
+  }
+
+  return {
+    id: readRecordString(value, ["id"], `${submissionId}-document-${index + 1}`),
+    verification_id: readRecordString(value, ["verification_id", "verificationId"], submissionId),
+    upload_id: readRecordString(value, ["upload_id", "uploadId"], upload.id),
+    label: readRecordString(value, ["label"], upload.original_filename || `Document ${index + 1}`),
+    category: readRecordString(value, ["category", "kind", "type"], "Verification Document"),
+    pages: readRecordNumber(value, ["pages", "page_count"], 1),
+    created_at: readRecordString(value, ["created_at", "uploaded_at"], upload.created_at),
+    upload,
+  } satisfies VerificationDocumentRecord;
+}
+
+function normalizeVerificationSubmissionRecord(value: unknown, fallbackId: string): VerificationSubmissionRecord {
+  const record = isRecord(value) ? value : {};
+  const documentCount =
+    Array.isArray(record.documents) ? record.documents.length : readRecordNumber(record, ["documents_count", "documentsCount"]);
+
+  return {
+    id: readRecordString(record, ["id"], fallbackId),
+    installer_id: readRecordString(record, ["installer_id", "installerId"]),
+    status: readRecordString(record, ["status"], "pending"),
+    submitted_at: readRecordString(record, ["submitted_at", "submittedAt", "created_at", "createdAt"]),
+    reviewed_at: readRecordString(record, ["reviewed_at", "reviewedAt"]) || null,
+    reviewed_by_admin_id: readRecordString(record, ["reviewed_by_admin_id", "reviewedByAdminId"]) || null,
+    admin_note: readRecordString(record, ["admin_note", "adminNote"]) || null,
+    created_at: readRecordString(record, ["created_at", "createdAt"]),
+    updated_at: readRecordString(record, ["updated_at", "updatedAt"]),
+    user_id: readRecordString(record, ["user_id", "userId"]),
+    user_email: readRecordString(record, ["user_email", "userEmail"]),
+    user_name: readRecordString(record, ["user_name", "userName", "name"]),
+    documents_count: documentCount,
+  } satisfies VerificationSubmissionRecord;
+}
+
+function normalizeVerificationDocuments(value: Record<string, unknown>, submissionId: string): VerificationDocumentRecord[] {
+  if (Array.isArray(value.documents)) {
+    return value.documents
+      .map((document, index) => normalizeVerificationDocumentRecord(document, submissionId, index))
+      .filter((document): document is VerificationDocumentRecord => Boolean(document));
+  }
+
+  const verification = isRecord(value.verification) ? value.verification : null;
+
+  if (!verification) {
+    return [];
+  }
+
+  const fallbackDocuments = [
+    {
+      key: "id_file",
+      label: "ID File",
+      category: "Identity Verification",
+    },
+    {
+      key: "certificate_file",
+      label: "Certificate File",
+      category: "Professional Certification",
+    },
+  ] as const;
+
+  return fallbackDocuments
+    .map<VerificationDocumentRecord | null>((entry) => {
+      const upload = normalizeVerificationUploadRecord(verification[entry.key], `${submissionId}-${entry.key}`);
+
+      if (!upload) {
+        return null;
+      }
+
+      return {
+        id: `${submissionId}-${entry.key}`,
+        verification_id: submissionId,
+        upload_id: upload.id,
+        label: entry.label,
+        category: entry.category,
+        pages: 1,
+        created_at: upload.created_at,
+        upload,
+      } satisfies VerificationDocumentRecord;
+    })
+    .filter((document): document is VerificationDocumentRecord => Boolean(document));
+}
+
+function normalizeVerificationSubmissionDetailResponse(id: string, payload: ApiDataResponse<unknown>): VerificationDetailApiResponse {
+  const detailRecord = isRecord(payload.data) ? payload.data : {};
+  const submissionRecord = isRecord(detailRecord.submission) ? detailRecord.submission : detailRecord;
+  const submission = normalizeVerificationSubmissionRecord(submissionRecord, id);
+  const documents = normalizeVerificationDocuments(detailRecord, submission.id || id);
+
+  return {
+    ...payload,
+    data: {
+      submission,
+      documents,
+    } satisfies VerificationSubmissionDetail,
+  } satisfies VerificationDetailApiResponse;
 }
 
 async function requestWithEndpointFallback<TResponse>(
@@ -624,7 +870,9 @@ export function getVerificationSubmissions(params: ListParams = {}) {
 }
 
 export function getVerificationSubmission(id: string) {
-  return dashboardGet<VerificationDetailApiResponse>(`/api/v1/admin/verification/submissions/${id}`);
+  return dashboardGet<ApiDataResponse<unknown>>(`/api/v1/admin/verification/submissions/${id}`).then((payload) =>
+    normalizeVerificationSubmissionDetailResponse(id, payload),
+  );
 }
 
 export function addVerificationDocument(id: string, body: AddVerificationDocumentRequest) {
