@@ -122,6 +122,24 @@ export default function DashboardPage() {
     }
 
     let cancelled = false;
+    const activeRow = queue.find((item) => item.id === documentsId) ?? null;
+
+    if (activeRow?.documents?.length) {
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setDocumentDetail({
+            submission: activeRow,
+            documents: activeRow.documents ?? [],
+          });
+          setDocumentsLoading(false);
+          setDocumentsError(null);
+        }
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     getVerificationSubmission(documentsId)
       .then((payload) => {
@@ -144,7 +162,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [documentsId]);
+  }, [documentsId, queue]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {

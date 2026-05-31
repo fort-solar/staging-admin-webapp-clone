@@ -69,8 +69,17 @@ function DocumentThumbPreview({
 }) {
   if (kind === "image" && previewUrl) {
     // The preview is loaded from an authenticated proxy route, so raw img rendering is intentional.
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={previewUrl} alt={document.label} className="verification-documents__thumb-preview verification-documents__thumb-preview-image" />;
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={previewUrl}
+          alt={document.label}
+          referrerPolicy="no-referrer"
+          className="verification-documents__thumb-preview verification-documents__thumb-preview-image"
+        />
+      </>
+    );
   }
 
   return (
@@ -102,11 +111,23 @@ function PreviewCanvas({
   return (
     <div className="verification-documents__canvas">
       {kind === "image" ? (
-        // The preview is loaded from an authenticated proxy route, so raw img rendering is intentional.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={previewUrl} alt={document.upload.original_filename || document.label} className="verification-documents__canvas-media is-image" />
+        <>
+          {/* The preview is loaded from an authenticated proxy route, so raw img rendering is intentional. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewUrl}
+            alt={document.upload.original_filename || document.label}
+            referrerPolicy="no-referrer"
+            className="verification-documents__canvas-media is-image"
+          />
+        </>
       ) : kind === "pdf" ? (
-        <iframe src={previewUrl} title={document.upload.original_filename || document.label} className="verification-documents__canvas-media is-pdf" />
+        <iframe
+          src={previewUrl}
+          title={document.upload.original_filename || document.label}
+          referrerPolicy="no-referrer"
+          className="verification-documents__canvas-media is-pdf"
+        />
       ) : (
         <div className="verification-documents__canvas-empty">
           Preview is unavailable for this file type. Use the open or download action instead.
@@ -256,12 +277,19 @@ function VerificationDocumentsDialogContent({
           </Button>
           {selectedDocumentUrl ? (
             <>
-              <a href={selectedDocumentUrl} target="_blank" rel="noreferrer" className="action-button is-secondary is-md">
+              <a
+                href={selectedDocumentUrl}
+                target="_blank"
+                rel="noreferrer"
+                referrerPolicy="no-referrer"
+                className="action-button is-secondary is-md"
+              >
                 Open file
               </a>
               <a
                 href={selectedDocumentUrl}
                 download={selectedDocument.upload.original_filename || undefined}
+                referrerPolicy="no-referrer"
                 className="action-button is-primary is-md"
               >
                 Download

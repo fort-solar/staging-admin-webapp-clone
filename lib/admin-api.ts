@@ -2,6 +2,7 @@ import { DashboardRequestError, dashboardGet, submitDashboardForm, type Dashboar
 import type {
   AdminDetailApiResponse,
   AdminListApiResponse,
+  ApiCollectionResponse,
   ApiDataResponse,
   ApiSuccessResponse,
   ApplianceDetailApiResponse,
@@ -31,6 +32,7 @@ import type {
   CreateJobRequest,
   PackageListApiResponse,
   PackageRecord,
+  PaginationMeta,
   ProductBatteryDetailApiResponse,
   ProductBatteryListApiResponse,
   ProductCategoryDetailApiResponse,
@@ -331,30 +333,58 @@ function normalizeVerificationSubmissionRecord(value: unknown, fallbackId: strin
     user_email: readRecordString(record, ["user_email", "userEmail"]),
     user_name: readRecordString(record, ["user_name", "userName", "name"]),
     documents_count: documentCount,
+    documents: [],
   } satisfies VerificationSubmissionRecord;
+}
+
+function readVerificationUploadValue(
+  sources: Array<Record<string, unknown> | null>,
+  keys: readonly string[],
+) {
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+
+    for (const key of keys) {
+      const value = source[key];
+
+      if ((typeof value === "string" && value.trim()) || isRecord(value)) {
+        return value;
+      }
+    }
+  }
+
+  return null;
 }
 
 function normalizeVerificationDocuments(value: Record<string, unknown>, submissionId: string): VerificationDocumentRecord[] {
   if (Array.isArray(value.documents)) {
-    return value.documents
+    const normalizedDocuments = value.documents
       .map((document, index) => normalizeVerificationDocumentRecord(document, submissionId, index))
       .filter((document): document is VerificationDocumentRecord => Boolean(document));
+
+    if (normalizedDocuments.length > 0) {
+      return normalizedDocuments;
+    }
   }
 
   const verification = isRecord(value.verification) ? value.verification : null;
-
-  if (!verification) {
-    return [];
-  }
+  const uploadSources = [value, verification];
 
   const fallbackDocuments = [
     {
-      key: "id_file",
+      keys: ["id_file", "id_file_url", "idFile", "idFileUrl"],
       label: "ID File",
       category: "Identity Verification",
     },
     {
-      key: "certificate_file",
+      keys: [
+        "certificate_file",
+        "certificate_file_url",
+        "certificateFile",
+        "certificateFileUrl",
+      ],
       label: "Certificate File",
       category: "Professional Certification",
     },
@@ -362,14 +392,18 @@ function normalizeVerificationDocuments(value: Record<string, unknown>, submissi
 
   return fallbackDocuments
     .map<VerificationDocumentRecord | null>((entry) => {
-      const upload = normalizeVerificationUploadRecord(verification[entry.key], `${submissionId}-${entry.key}`);
+      const uploadValue = readVerificationUploadValue(uploadSources, entry.keys);
+      const upload = normalizeVerificationUploadRecord(
+        uploadValue,
+        `${submissionId}-${entry.keys[0]}`,
+      );
 
       if (!upload) {
         return null;
       }
 
       return {
-        id: `${submissionId}-${entry.key}`,
+        id: `${submissionId}-${entry.keys[0]}`,
         verification_id: submissionId,
         upload_id: upload.id,
         label: entry.label,
@@ -382,19 +416,64 @@ function normalizeVerificationDocuments(value: Record<string, unknown>, submissi
     .filter((document): document is VerificationDocumentRecord => Boolean(document));
 }
 
+function attachVerificationDocuments(
+  submission: VerificationSubmissionRecord,
+  source: Record<string, unknown>,
+) {
+  const documents = normalizeVerificationDocuments(source, submission.id);
+
+  return {
+    ...submission,
+    documents,
+    documents_count: Math.max(submission.documents_count, documents.length),
+  } satisfies VerificationSubmissionRecord;
+}
+
 function normalizeVerificationSubmissionDetailResponse(id: string, payload: ApiDataResponse<unknown>): VerificationDetailApiResponse {
   const detailRecord = isRecord(payload.data) ? payload.data : {};
   const submissionRecord = isRecord(detailRecord.submission) ? detailRecord.submission : detailRecord;
-  const submission = normalizeVerificationSubmissionRecord(submissionRecord, id);
-  const documents = normalizeVerificationDocuments(detailRecord, submission.id || id);
+  const submission = attachVerificationDocuments(
+    normalizeVerificationSubmissionRecord(submissionRecord, id),
+    detailRecord,
+  );
 
   return {
     ...payload,
     data: {
       submission,
-      documents,
+      documents: submission.documents ?? [],
     } satisfies VerificationSubmissionDetail,
   } satisfies VerificationDetailApiResponse;
+}
+
+function normalizePaginationMeta(value: unknown): PaginationMeta {
+  const record = isRecord(value) ? value : {};
+
+  return {
+    page: readRecordNumber(record, ["page"], 1),
+    limit: readRecordNumber(record, ["limit"], DEFAULT_PAGE_SIZE),
+    total: readRecordNumber(record, ["total"]),
+    totalPages: Math.max(readRecordNumber(record, ["totalPages", "total_pages"], 1), 1),
+  } satisfies PaginationMeta;
+}
+
+function normalizeVerificationSubmissionListResponse(
+  payload: ApiCollectionResponse<unknown>,
+): VerificationListApiResponse {
+  const data = Array.isArray(payload.data)
+    ? payload.data.map((record, index) =>
+        attachVerificationDocuments(
+          normalizeVerificationSubmissionRecord(record, `verification-${index + 1}`),
+          isRecord(record) ? record : {},
+        ),
+      )
+    : [];
+
+  return {
+    ...payload,
+    data,
+    pagination: normalizePaginationMeta(payload.pagination),
+  } satisfies VerificationListApiResponse;
 }
 
 async function requestWithEndpointFallback<TResponse>(
@@ -857,7 +936,7 @@ export function deleteAdmin(id: string) {
 }
 
 export function getVerificationSubmissions(params: ListParams = {}) {
-  return dashboardGet<VerificationListApiResponse>(
+  return dashboardGet<ApiCollectionResponse<unknown>>(
     withQuery("/api/v1/admin/verification/submissions", {
       page: params.page ?? 1,
       limit: params.limit ?? DEFAULT_PAGE_SIZE,
@@ -866,7 +945,7 @@ export function getVerificationSubmissions(params: ListParams = {}) {
       q: params.q,
       fields: params.fields,
     }),
-  );
+  ).then((payload) => normalizeVerificationSubmissionListResponse(payload));
 }
 
 export function getVerificationSubmission(id: string) {

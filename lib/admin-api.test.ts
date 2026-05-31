@@ -1,5 +1,26 @@
 import { normalizeManagedProductRecord, normalizeCategoryRecord } from "@/components/dashboard/products-management";
-import { buildMultipartFormData } from "@/lib/admin-api";
+import { dashboardGet } from "@/lib/api/client";
+import {
+  buildMultipartFormData,
+  getVerificationSubmission,
+  getVerificationSubmissions,
+} from "@/lib/admin-api";
+
+jest.mock("@/lib/api/client", () => ({
+  DashboardRequestError: class DashboardRequestError extends Error {
+    status: number;
+    payload: unknown;
+
+    constructor(message: string, status = 400, payload: unknown = null) {
+      super(message);
+      this.name = "DashboardRequestError";
+      this.status = status;
+      this.payload = payload;
+    }
+  },
+  dashboardGet: jest.fn(),
+  submitDashboardForm: jest.fn(),
+}));
 
 describe("admin product normalization", () => {
   it("keeps unified product image and category metadata aligned with the new API shape", () => {
@@ -60,5 +81,106 @@ describe("buildMultipartFormData", () => {
     expect(formData.get("section_values")).toBe(
       JSON.stringify([{ section_id: "sec-1", section_name: "Size", value: "12", unit: "kVA" }]),
     );
+  });
+});
+
+describe("verification submission normalization", () => {
+  const mockedDashboardGet = dashboardGet as jest.MockedFunction<typeof dashboardGet>;
+
+  afterEach(() => {
+    mockedDashboardGet.mockReset();
+  });
+
+  it("hydrates submission documents from id and certificate urls returned by the list endpoint", async () => {
+    mockedDashboardGet.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: "verification-1",
+          installer_id: "installer-1",
+          status: "pending",
+          submitted_at: "2026-05-31T17:40:23.406Z",
+          reviewed_at: null,
+          reviewed_by_admin_id: null,
+          admin_note: null,
+          created_at: "2026-05-31T17:40:23.406Z",
+          updated_at: "2026-05-31T17:40:23.406Z",
+          user_id: "user-1",
+          user_email: "installer@example.com",
+          user_name: "Installer Example",
+          documents_count: 0,
+          id_file_url: "https://api.fortsolar.test/uploads/id-card.pdf?sig=abc",
+          certificate_file_url: "/uploads/certificates/solar-training.png",
+        },
+      ],
+      pagination: {
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+      },
+    } as never);
+
+    const payload = await getVerificationSubmissions();
+
+    expect(payload.data).toHaveLength(1);
+    expect(payload.data[0]?.documents_count).toBe(2);
+    expect(payload.data[0]?.documents).toEqual([
+      expect.objectContaining({
+        label: "ID File",
+        upload: expect.objectContaining({
+          file_path: "https://api.fortsolar.test/uploads/id-card.pdf?sig=abc",
+        }),
+      }),
+      expect.objectContaining({
+        label: "Certificate File",
+        upload: expect.objectContaining({
+          file_path: "/uploads/certificates/solar-training.png",
+        }),
+      }),
+    ]);
+  });
+
+  it("hydrates submission documents from url fields returned by the detail endpoint", async () => {
+    mockedDashboardGet.mockResolvedValue({
+      success: true,
+      data: {
+        submission: {
+          id: "verification-2",
+          installer_id: "installer-2",
+          status: "pending",
+          submitted_at: "2026-05-31T17:40:23.406Z",
+          reviewed_at: null,
+          reviewed_by_admin_id: null,
+          admin_note: null,
+          created_at: "2026-05-31T17:40:23.406Z",
+          updated_at: "2026-05-31T17:40:23.406Z",
+          user_id: "user-2",
+          user_email: "installer2@example.com",
+          user_name: "Installer Two",
+          documents_count: 0,
+        },
+        id_file_url: "/uploads/id/installer-two.pdf",
+        certificate_file_url: "/uploads/cert/installer-two.pdf",
+      },
+    } as never);
+
+    const payload = await getVerificationSubmission("verification-2");
+
+    expect(payload.data.submission.documents_count).toBe(2);
+    expect(payload.data.documents).toEqual([
+      expect.objectContaining({
+        label: "ID File",
+        upload: expect.objectContaining({
+          file_path: "/uploads/id/installer-two.pdf",
+        }),
+      }),
+      expect.objectContaining({
+        label: "Certificate File",
+        upload: expect.objectContaining({
+          file_path: "/uploads/cert/installer-two.pdf",
+        }),
+      }),
+    ]);
   });
 });

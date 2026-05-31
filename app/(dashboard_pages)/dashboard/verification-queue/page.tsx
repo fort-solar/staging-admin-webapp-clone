@@ -99,6 +99,24 @@ export default function VerificationQueuePage() {
     }
 
     let cancelled = false;
+    const activeRow = rows.find((row) => row.id === documentsId) ?? null;
+
+    if (activeRow?.documents?.length) {
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setDocumentDetail({
+            submission: activeRow,
+            documents: activeRow.documents ?? [],
+          });
+          setDocumentsLoading(false);
+          setDocumentsError(null);
+        }
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     queueMicrotask(() => {
       if (!cancelled) {
@@ -128,7 +146,7 @@ export default function VerificationQueuePage() {
     return () => {
       cancelled = true;
     };
-  }, [documentsId]);
+  }, [documentsId, rows]);
 
   const filteredRows = useMemo(
     () =>

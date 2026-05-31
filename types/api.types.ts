@@ -787,6 +787,7 @@ export type VerificationSubmissionRecord = {
   user_email: string;
   user_name: string;
   documents_count: number;
+  documents?: VerificationDocumentRecord[];
 };
 
 export type VerificationDocumentUploadRecord = {
