@@ -640,6 +640,8 @@ export function TableActionsMenu({
                 position: "fixed",
                 top: panelPosition.top,
                 left: panelPosition.left,
+                right: "auto",
+                bottom: "auto",
                 zIndex: 1200,
                 visibility: panelPosition.visibility,
                 transformOrigin: panelPosition.transformOrigin,
