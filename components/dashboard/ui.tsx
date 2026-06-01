@@ -590,10 +590,18 @@ export function Pagination({ page, totalPages, onChange }: PaginationProps) {
 
     return [...staticPages, "ellipsis", totalPages] as const;
   }, [totalPages]);
+  const isPreviousDisabled = page <= 1;
+  const isNextDisabled = page >= totalPages;
 
   return (
     <div className="pagination">
-      <button type="button" className="pagination__edge" onClick={() => onChange(Math.max(1, page - 1))} aria-label="Previous page">
+      <button
+        type="button"
+        className="pagination__edge"
+        onClick={() => onChange(Math.max(1, page - 1))}
+        aria-label="Previous page"
+        disabled={isPreviousDisabled}
+      >
         <ChevronDownIcon className="pagination__arrow rotate-90" />
       </button>
       {visible.map((entry, index) =>
@@ -612,7 +620,13 @@ export function Pagination({ page, totalPages, onChange }: PaginationProps) {
           </button>
         ),
       )}
-      <button type="button" className="pagination__edge" onClick={() => onChange(Math.min(totalPages, page + 1))} aria-label="Next page">
+      <button
+        type="button"
+        className="pagination__edge"
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+        aria-label="Next page"
+        disabled={isNextDisabled}
+      >
         <ChevronDownIcon className="pagination__arrow -rotate-90" />
       </button>
     </div>

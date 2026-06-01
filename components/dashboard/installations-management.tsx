@@ -533,11 +533,11 @@ export function InstallationsManagementScreen() {
         <ErrorMessage title="Project load failed" message={error} />
 
         {isLoading && !rows.length ? (
-          <div className="p-6">
+          <div className="data-display-state">
             <p className="section-description">Loading projects...</p>
           </div>
         ) : !isLoading && !rows.length && !error ? (
-          <div className="p-6">
+          <div className="data-display-state">
             <EmptyScaffold title="No projects found" description="No record found on the database" />
           </div>
         ) : (
@@ -1143,7 +1143,14 @@ export function InstallationFormScreen() {
                     <div className="project-media-grid">
                       {combinedMediaPreview.map((media) => (
                         <article key={media.key} className="project-media-card">
-                          <div className="project-media-card__surface">
+                          <div
+                            className={cx(
+                              "project-media-card__surface",
+                              media.kind === "image" && "is-image",
+                              media.kind === "video" && "is-video",
+                              media.kind !== "image" && media.kind !== "video" && "is-file",
+                            )}
+                          >
                             {!media.isExisting && media.fileIndex !== null ? (
                               <button
                                 type="button"
