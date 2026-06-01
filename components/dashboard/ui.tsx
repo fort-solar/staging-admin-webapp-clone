@@ -107,6 +107,13 @@ type TabsProps<T extends string> = {
   compact?: boolean;
 };
 
+type FloatingMenuPosition = {
+  top: number;
+  left: number;
+  visibility: "hidden" | "visible";
+  transformOrigin: string;
+};
+
 function SparkBars({ values }: { values: number[] }) {
   return (
     <div className="spark-bars" aria-hidden="true">
@@ -535,10 +542,10 @@ export function TableActionsMenu({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [panelPosition, setPanelPosition] = useState({
+  const [panelPosition, setPanelPosition] = useState<FloatingMenuPosition>({
     top: 0,
     left: 0,
-    visibility: "hidden" as const,
+    visibility: "hidden",
     transformOrigin: "top right",
   });
 
