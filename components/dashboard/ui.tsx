@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { metricPeriodOptions, type MetricIconName, type MetricPeriod, type Tone } from "@/lib/dashboard-data";
 import {
   ActivityIcon,
@@ -533,6 +534,13 @@ export function TableActionsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panelPosition, setPanelPosition] = useState({
+    top: 0,
+    left: 0,
+    visibility: "hidden" as const,
+    transformOrigin: "top right",
+  });
 
   useEffect(() => {
     function handleOutside(event: MouseEvent) {
@@ -545,6 +553,70 @@ export function TableActionsMenu({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    if (open) {
+      document.addEventListener("keydown", handleEscape);
+    }
+
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function updatePosition() {
+      if (!ref.current || !panelRef.current) {
+        return;
+      }
+
+      const anchorRect = ref.current.getBoundingClientRect();
+      const panelRect = panelRef.current.getBoundingClientRect();
+      const gap = 10;
+      const viewportPadding = 12;
+
+      let left = anchorRect.right - panelRect.width;
+      left = Math.min(
+        Math.max(viewportPadding, left),
+        window.innerWidth - panelRect.width - viewportPadding,
+      );
+
+      let top = anchorRect.bottom + gap;
+      let transformOrigin = "top right";
+
+      if (
+        top + panelRect.height > window.innerHeight - viewportPadding &&
+        anchorRect.top - gap - panelRect.height >= viewportPadding
+      ) {
+        top = anchorRect.top - panelRect.height - gap;
+        transformOrigin = "bottom right";
+      }
+
+      setPanelPosition({
+        top,
+        left,
+        visibility: "visible",
+        transformOrigin,
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    document.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      document.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
   if (!items.length) {
     return null;
   }
@@ -552,31 +624,45 @@ export function TableActionsMenu({
   return (
     <div className={cx("menu-anchor", className)} ref={ref}>
       <IconButton label="More actions" icon={<DotsIcon className="menu-icon" />} onClick={() => setOpen((value) => !value)} />
-      {open ? (
-        <div className={cx("menu-panel", panelClassName)}>
-          {items.map((item) =>
-            item.href ? (
-              <Link key={item.label} href={item.href} className={cx("menu-item", item.tone === "danger" && "is-danger")} onClick={() => setOpen(false)}>
-                {item.icon}
-                <span>{item.label}</span>
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                className={cx("menu-item", item.tone === "danger" && "is-danger")}
-                onClick={() => {
-                  item.onSelect?.();
-                  setOpen(false);
-                }}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            ),
-          )}
-        </div>
-      ) : null}
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={panelRef}
+              className={cx("menu-panel", "is-floating", panelClassName)}
+              style={{
+                position: "fixed",
+                top: panelPosition.top,
+                left: panelPosition.left,
+                zIndex: 1200,
+                visibility: panelPosition.visibility,
+                transformOrigin: panelPosition.transformOrigin,
+              }}
+            >
+              {items.map((item) =>
+                item.href ? (
+                  <Link key={item.label} href={item.href} className={cx("menu-item", item.tone === "danger" && "is-danger")} onClick={() => setOpen(false)}>
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                ) : (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className={cx("menu-item", item.tone === "danger" && "is-danger")}
+                    onClick={() => {
+                      item.onSelect?.();
+                      setOpen(false);
+                    }}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </button>
+                ),
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
