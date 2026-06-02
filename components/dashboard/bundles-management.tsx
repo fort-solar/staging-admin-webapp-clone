@@ -637,9 +637,9 @@ export function BundleDetailScreen({ packageId }: { packageId: string }) {
               <div className="rounded-[18px] border border-(--border) bg-[var(--surface-muted)] p-3">
                 <strong className="mb-3 block text-sm">Package Thumbnail</strong>
                 {pkg.thumbnailUrl ? (
-                  <img src={pkg.thumbnailUrl} alt={`${pkg.name} thumbnail`} className="aspect-[16/9] w-full max-w-[560px] rounded-[14px] object-cover" />
+                  <img src={pkg.thumbnailUrl} alt={`${pkg.name} thumbnail`} className="aspect-[4/3] w-full max-w-[520px] rounded-[14px] object-cover" />
                 ) : (
-                  <div className="flex aspect-[16/9] w-full max-w-[560px] items-center justify-center rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text-soft)]">
+                  <div className="flex aspect-[4/3] w-full max-w-[520px] items-center justify-center rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--surface)] text-sm text-[var(--text-soft)]">
                     No thumbnail uploaded.
                   </div>
                 )}
@@ -1215,7 +1215,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
               </div>
             </DetailPanel>
 
-            <DetailPanel title="Product Media" description="The package thumbnail is used in listings. The package image leads the detail page, while product images and datasheets are derived from the selected products.">
+            <DetailPanel title="Product Media" description="The package thumbnail is used in listings, and the package image leads the detail page. Use tight 4:3 crops for both. Product images and datasheets are derived from the selected products.">
               <div className="detail-panel__stack">
                 <FormField label="Package Thumbnail">
                   <div className="grid gap-3">
@@ -1224,17 +1224,17 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                       <span className="upload-field__button">
                         <span>{thumbnailFile || currentThumbnailUrl ? "Replace image" : "Choose image"}</span>
                       </span>
-                      <span className="upload-field__value">{thumbnailFile?.name || currentThumbnailUrl?.split("/").pop() || "Upload package thumbnail"}</span>
+                      <span className="upload-field__value">{thumbnailFile?.name || currentThumbnailUrl?.split("/").pop() || "Upload package thumbnail (recommended 4:3)"}</span>
                     </label>
                     {thumbnailPreviewUrl || currentThumbnailUrl ? (
                       <img
                         src={thumbnailPreviewUrl || currentThumbnailUrl || ""}
                         alt="Package thumbnail preview"
-                        className="aspect-[16/9] w-full max-w-[560px] rounded-[18px] border border-[var(--border)] object-cover"
+                        className="aspect-[4/3] w-full max-w-[520px] rounded-[18px] border border-[var(--border)] object-cover"
                       />
                     ) : (
-                      <div className="flex aspect-[16/9] w-full max-w-[560px] items-center justify-center rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] text-sm text-[var(--text-soft)]">
-                        Upload package thumbnail
+                      <div className="flex aspect-[4/3] w-full max-w-[520px] items-center justify-center rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 text-center text-sm text-[var(--text-soft)]">
+                        Upload package thumbnail. Recommended crop: 4:3.
                       </div>
                     )}
                   </div>
@@ -1247,13 +1247,13 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                       <span className="upload-field__button">
                         <span>{packageImageFile || currentPackageImageUrl ? "Replace image" : "Choose image"}</span>
                       </span>
-                      <span className="upload-field__value">{packageImageFile?.name || currentPackageImageUrl?.split("/").pop() || "Upload package image"}</span>
+                      <span className="upload-field__value">{packageImageFile?.name || currentPackageImageUrl?.split("/").pop() || "Upload package image (recommended 4:3)"}</span>
                     </label>
                     {packageImagePreviewUrl || currentPackageImageUrl ? (
-                      <img src={packageImagePreviewUrl || currentPackageImageUrl || ""} alt="Package image preview" className="h-56 w-full rounded-[18px] border border-[var(--border)] object-cover" />
+                      <img src={packageImagePreviewUrl || currentPackageImageUrl || ""} alt="Package image preview" className="aspect-[4/3] w-full max-w-[520px] rounded-[18px] border border-[var(--border)] object-cover" />
                     ) : (
-                      <div className="flex min-h-48 items-center justify-center rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] text-sm text-[var(--text-soft)]">
-                        Upload package image
+                      <div className="flex aspect-[4/3] w-full max-w-[520px] items-center justify-center rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 text-center text-sm text-[var(--text-soft)]">
+                        Upload package image. Recommended crop: 4:3.
                       </div>
                     )}
                   </div>
@@ -1265,7 +1265,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                     {selectedProducts.length ? (
                       selectedProducts.map((product) =>
                         product.product_image_url || product.image_url ? (
-                          <img key={product.id} src={product.product_image_url || product.image_url || ""} alt={product.name} className="h-20 w-20 rounded-[14px] border border-[var(--border)] object-cover" />
+                          <img key={product.id} src={product.product_image_url || product.image_url || ""} alt={product.name} className="aspect-[4/3] w-24 rounded-[14px] border border-[var(--border)] object-cover" />
                         ) : null,
                       )
                     ) : (

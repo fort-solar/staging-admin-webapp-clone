@@ -500,8 +500,11 @@ export type AdminProductRecord = {
   category_id: string | null;
   category?: ProductCategoryApiRecord | null;
   price: number;
+  discounted_price?: number | null;
   stock_quantity: number;
   overview?: string | null;
+  free_delivery?: boolean | null;
+  delivery_warranty_info?: string | null;
   section_values: ProductSectionValueRecord[];
   product_image_url?: string | null;
   product_image_urls?: string[];
@@ -528,8 +531,11 @@ export type CreateAdminProductRequest = {
   name: string;
   category_id: string | null;
   price: number;
+  discounted_price?: number | null;
   stock_quantity: number;
   overview?: string;
+  free_delivery?: boolean;
+  delivery_warranty_info?: string | null;
   section_values: ProductSectionValueRecord[];
   is_active: boolean;
   image?: string;

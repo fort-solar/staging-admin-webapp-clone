@@ -3277,7 +3277,7 @@ img {
 }
 
 .catalog-card__media {
-  width: 104px;
+  width: 112px;
   height: 84px;
   border-radius: 14px;
 }
@@ -3621,8 +3621,8 @@ img {
 
 .media-showcase__thumb,
 .thumbnail-strip__item {
-  width: 72px;
-  height: 56px;
+  width: 84px;
+  height: 63px;
   border-radius: 12px;
 }
 

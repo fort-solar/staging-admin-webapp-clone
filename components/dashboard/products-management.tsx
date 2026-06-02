@@ -85,6 +85,25 @@ function readNumber(record: Record<string, unknown>, keys: string[], fallback = 
   return fallback;
 }
 
+function readNullableNumber(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+}
+
 function readBoolean(record: Record<string, unknown>, keys: string[], fallback = false) {
   for (const key of keys) {
     const value = record[key];
@@ -361,8 +380,11 @@ export function normalizeManagedProductRecord(record: AdminProductRecord | Recor
     categoryKey: category?.id || categoryId || slugify(category?.name || "uncategorized"),
     categoryLabel: category?.name || readString(raw, ["category_name", "category"], "Uncategorised"),
     price: readNumber(raw, ["price"]),
+    discounted_price: readNullableNumber(raw, ["discounted_price", "sale_price", "offer_price"]),
     stock_quantity: readNumber(raw, ["stock_quantity", "stock"]),
     overview: readString(raw, ["overview", "description", "summary"]) || null,
+    free_delivery: readBoolean(raw, ["free_delivery", "is_free_delivery"]),
+    delivery_warranty_info: readString(raw, ["delivery_warranty_info", "delivery_and_warranty_info"], "") || null,
     section_values: sectionValues,
     product_image_url: imageUrl,
     product_image_urls: imageUrls,
@@ -376,6 +398,52 @@ export function normalizeManagedProductRecord(record: AdminProductRecord | Recor
     created_at: readString(raw, ["created_at", "createdAt"]),
     updated_at: readString(raw, ["updated_at", "updatedAt"]),
   } satisfies ManagedProductRow;
+}
+
+function BooleanChoiceField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="text-sm font-semibold text-[var(--text)]">{label}</span>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {[
+          { label: "Yes", value: true },
+          { label: "No", value: false },
+        ].map((option) => {
+          const isActive = value === option.value;
+
+          return (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cx(
+                "flex items-center justify-between rounded-[16px] border px-4 py-3 text-left transition-colors",
+                isActive
+                  ? "border-[var(--brand)] bg-[var(--surface-success)] text-[var(--brand)]"
+                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-soft)]",
+              )}
+            >
+              <span className="text-sm font-medium">{option.label}</span>
+              <span
+                className={cx(
+                  "h-4 w-4 rounded-full border-2",
+                  isActive ? "border-[var(--brand)] bg-[var(--brand)]" : "border-[var(--border-strong)]",
+                )}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export async function loadProducts(params: {
@@ -500,7 +568,7 @@ function ProductImageGalleryField({
     ? `${files.length} new image${files.length === 1 ? "" : "s"} selected`
     : currentUrls.length
       ? `${currentUrls.length} current image${currentUrls.length === 1 ? "" : "s"} on record`
-      : "Upload one or more product images. The first image is used as the primary card image.";
+      : "Upload one or more product images. The first image is used as the primary thumbnail. Recommended crop: 4:3.";
 
   return (
     <div className="upload-preview-card">
@@ -529,7 +597,7 @@ function ProductImageGalleryField({
       {activeUrls.length ? (
         <div className="detail-panel__stack">
           <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
-            The first image becomes the primary product image in cards, tables, and store listings.
+            The first image becomes the primary product thumbnail in cards, tables, and store listings. Use a tight 4:3 crop for the cleanest result.
           </div>
           <div className="thumbnail-strip">
             {activeUrls.map((url, index) => (
@@ -552,7 +620,7 @@ function ProductImageGalleryField({
         </div>
       ) : (
         <div className="rounded-[18px] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] px-4 py-8 text-center text-sm text-[var(--text-soft)]">
-          Upload one or more product images. The first image will be used as the product card image.
+          Upload one or more product images. The first image will be used as the product thumbnail. Recommended crop: 4:3.
         </div>
       )}
 
@@ -1299,7 +1367,15 @@ export function ProductDetailScreen({ productId }: { productId: string }) {
                 { label: "Slug", value: product.slug },
                 { label: "Category", value: product.categoryLabel },
                 { label: "Price", value: formatCurrencyLabel(product.price) },
+                {
+                  label: "Discounted Price",
+                  value:
+                    product.discounted_price && product.discounted_price > 0
+                      ? formatCurrencyLabel(product.discounted_price)
+                      : "Not set",
+                },
                 { label: "Stock", value: `${product.stock_quantity} units` },
+                { label: "Free Delivery", value: product.free_delivery ? "Yes" : "No" },
                 { label: "Status", value: <StatusPill label={status.label} tone={status.tone} /> },
                 { label: "Created", value: formatDateLabel(product.created_at) },
                 { label: "Updated", value: formatDateLabel(product.updated_at) },
@@ -1308,6 +1384,12 @@ export function ProductDetailScreen({ productId }: { productId: string }) {
             <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
               <strong className="block text-sm">Overview</strong>
               <p className="mt-2 text-sm text-[var(--text-soft)]">{product.overview || "No product overview was returned for this record."}</p>
+            </div>
+            <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+              <strong className="block text-sm">Delivery &amp; Warranty Info</strong>
+              <p className="mt-2 text-sm text-[var(--text-soft)]">
+                {product.delivery_warranty_info || "No delivery or warranty information has been added for this product yet."}
+              </p>
             </div>
           </DetailPanel>
 
@@ -1394,7 +1476,10 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
   const [overview, setOverview] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [price, setPrice] = useState("");
+  const [discountedPrice, setDiscountedPrice] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
+  const [freeDelivery, setFreeDelivery] = useState(false);
+  const [deliveryWarrantyInfo, setDeliveryWarrantyInfo] = useState("");
   const [sectionValues, setSectionValues] = useState<SectionDraft[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [currentImageUrls, setCurrentImageUrls] = useState<string[]>([]);
@@ -1468,7 +1553,14 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         setOverview(product.overview || "");
         setCategoryId(product.category_id || "");
         setPrice(product.price ? String(product.price) : "");
+        setDiscountedPrice(
+          product.discounted_price && product.discounted_price > 0
+            ? String(product.discounted_price)
+            : "",
+        );
         setStockQuantity(product.stock_quantity ? String(product.stock_quantity) : "");
+        setFreeDelivery(Boolean(product.free_delivery));
+        setDeliveryWarrantyInfo(product.delivery_warranty_info || "");
         setSectionValues(product.section_values.map((item, index) => ({ ...item, key: item.key || `${slugify(item.section_name)}-${index}` })));
         setCurrentImageUrls(product.product_image_urls?.length ? product.product_image_urls : product.product_image_url ? [product.product_image_url] : []);
         setCurrentDatasheetUrl(product.datasheet_url || null);
@@ -1562,6 +1654,18 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         throw new Error("Enter the stock quantity.");
       }
 
+      if (discountedPrice.trim()) {
+        const nextDiscountedPrice = Number(discountedPrice);
+
+        if (!Number.isFinite(nextDiscountedPrice) || nextDiscountedPrice <= 0) {
+          throw new Error("Enter a valid discounted price.");
+        }
+
+        if (nextDiscountedPrice >= Number(price)) {
+          throw new Error("Discounted price must be lower than the regular price.");
+        }
+      }
+
       if (selectedCategory?.requires_product_image && !imageFiles.length && !currentImageUrls.length) {
         throw new Error("Upload at least one product image for this category.");
       }
@@ -1576,7 +1680,10 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         overview: overview.trim(),
         category_id: categoryId,
         price: Number(price),
+        discounted_price: discountedPrice.trim() ? Number(discountedPrice) : "",
         stock_quantity: Number(stockQuantity),
+        free_delivery: freeDelivery,
+        delivery_warranty_info: deliveryWarrantyInfo.trim(),
         section_values: sectionValues
           .filter((item) => item.section_name.trim())
           .map((item) => ({
@@ -1672,10 +1779,32 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
                   <FormField label="Price">
                     <TextField value={price} onChange={(event) => setPrice(event.target.value)} placeholder="250000" />
                   </FormField>
+                  <FormField label="Discounted Price">
+                    <TextField
+                      value={discountedPrice}
+                      onChange={(event) => setDiscountedPrice(event.target.value)}
+                      placeholder="220000"
+                    />
+                  </FormField>
+                </div>
+                <div className="product-inline-row is-two">
                   <FormField label="Stock Quantity">
                     <TextField value={stockQuantity} onChange={(event) => setStockQuantity(event.target.value)} placeholder="22" />
                   </FormField>
+                  <BooleanChoiceField
+                    label="Free Delivery"
+                    value={freeDelivery}
+                    onChange={setFreeDelivery}
+                  />
                 </div>
+                <FormField label="Delivery & Warranty Info">
+                  <TextAreaField
+                    value={deliveryWarrantyInfo}
+                    onChange={setDeliveryWarrantyInfo}
+                    placeholder="Describe the delivery terms and warranty coverage for this product."
+                    rows={5}
+                  />
+                </FormField>
                 {loadingProduct ? <p className="section-description">Loading product data...</p> : null}
               </div>
             </DetailPanel>

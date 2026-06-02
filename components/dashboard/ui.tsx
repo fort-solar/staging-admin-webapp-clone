@@ -551,7 +551,9 @@ export function TableActionsMenu({
 
   useEffect(() => {
     function handleOutside(event: MouseEvent) {
-      if (!ref.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      if (!ref.current?.contains(target) && !panelRef.current?.contains(target)) {
         setOpen(false);
       }
     }
