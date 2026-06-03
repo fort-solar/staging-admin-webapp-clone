@@ -244,7 +244,10 @@ function normalizeSectionValue(record: unknown, index: number): SectionDraft | n
   };
 }
 
-function buildSectionDrafts(sections: ProductCategorySectionRecord[], currentValues: SectionDraft[] = []) {
+export function buildSectionDrafts(
+  sections: ProductCategorySectionRecord[],
+  currentValues: SectionDraft[] = [],
+) {
   const existing = new Map(
     currentValues.map((item) => [
       item.section_id || slugify(item.section_name),
@@ -264,8 +267,105 @@ function buildSectionDrafts(sections: ProductCategorySectionRecord[], currentVal
     } satisfies SectionDraft;
   });
 
-  const extras = currentValues.filter((item) => !drafted.some((draft) => draft.key === item.key));
-  return [...drafted, ...extras];
+  return drafted;
+}
+
+type ProductFormValidationInput = {
+  name: string;
+  categoryId: string;
+  price: string;
+  discountedPrice: string;
+  stockQuantity: string;
+  selectedCategory?: Pick<
+    ProductCategoryApiRecord,
+    "requires_product_image" | "requires_datasheet"
+  > | null;
+  imageFiles: File[];
+  currentImageUrls: string[];
+  datasheetFile: File | null;
+  currentDatasheetUrl: string | null;
+};
+
+type ProductFormValidationResult = {
+  price: number;
+  discountedPrice: number | "";
+  stockQuantity: number;
+};
+
+export function validateProductFormInput(
+  input: ProductFormValidationInput,
+): ProductFormValidationResult {
+  if (!input.name.trim()) {
+    throw new Error("Enter a product name.");
+  }
+
+  if (!input.categoryId) {
+    throw new Error("Select a product category.");
+  }
+
+  if (!input.price.trim()) {
+    throw new Error("Enter the product price.");
+  }
+
+  const price = Number(input.price);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error("Enter a valid product price.");
+  }
+
+  if (!input.stockQuantity.trim()) {
+    throw new Error("Enter the stock quantity.");
+  }
+
+  const stockQuantity = Number(input.stockQuantity);
+
+  if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) {
+    throw new Error("Enter a valid stock quantity.");
+  }
+
+  let discountedPrice: number | "" = "";
+
+  if (input.discountedPrice.trim()) {
+    discountedPrice = Number(input.discountedPrice);
+
+    if (!Number.isFinite(discountedPrice) || discountedPrice <= 0) {
+      throw new Error("Enter a valid discounted price.");
+    }
+
+    if (discountedPrice >= price) {
+      throw new Error("Discounted price must be lower than the regular price.");
+    }
+  }
+
+  if (
+    input.selectedCategory?.requires_product_image &&
+    !input.imageFiles.length &&
+    !input.currentImageUrls.length
+  ) {
+    throw new Error("Upload at least one product image for this category.");
+  }
+
+  if (
+    input.selectedCategory?.requires_datasheet &&
+    !input.datasheetFile &&
+    !input.currentDatasheetUrl
+  ) {
+    throw new Error("Upload a datasheet for this category.");
+  }
+
+  return {
+    price,
+    discountedPrice,
+    stockQuantity,
+  };
+}
+
+export function appendFilesToFormData(formData: FormData, key: string, files: File[]) {
+  files.forEach((file) => {
+    formData.append(key, file);
+  });
+
+  return formData;
 }
 
 function useObjectUrl(file: File | null) {
@@ -1639,50 +1739,27 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
     setIsSubmitting(true);
 
     try {
-      if (!name.trim()) {
-        throw new Error("Enter a product name.");
-      }
-
-      if (!categoryId) {
-        throw new Error("Select a product category.");
-      }
-
-      if (!price.trim()) {
-        throw new Error("Enter the product price.");
-      }
-
-      if (!stockQuantity.trim()) {
-        throw new Error("Enter the stock quantity.");
-      }
-
-      if (discountedPrice.trim()) {
-        const nextDiscountedPrice = Number(discountedPrice);
-
-        if (!Number.isFinite(nextDiscountedPrice) || nextDiscountedPrice <= 0) {
-          throw new Error("Enter a valid discounted price.");
-        }
-
-        if (nextDiscountedPrice >= Number(price)) {
-          throw new Error("Discounted price must be lower than the regular price.");
-        }
-      }
-
-      if (selectedCategory?.requires_product_image && !imageFiles.length && !currentImageUrls.length) {
-        throw new Error("Upload at least one product image for this category.");
-      }
-
-      if (selectedCategory?.requires_datasheet && !datasheetFile && !currentDatasheetUrl) {
-        throw new Error("Upload a datasheet for this category.");
-      }
+      const normalized = validateProductFormInput({
+        name,
+        categoryId,
+        price,
+        discountedPrice,
+        stockQuantity,
+        selectedCategory,
+        imageFiles,
+        currentImageUrls,
+        datasheetFile,
+        currentDatasheetUrl,
+      });
 
       const primaryImageFile = imageFiles[0] ?? null;
       const payload = {
         name: name.trim(),
         overview: overview.trim(),
         category_id: categoryId,
-        price: Number(price),
-        discounted_price: discountedPrice.trim() ? Number(discountedPrice) : "",
-        stock_quantity: Number(stockQuantity),
+        price: normalized.price,
+        discounted_price: normalized.discountedPrice,
+        stock_quantity: normalized.stockQuantity,
         free_delivery: freeDelivery,
         delivery_warranty_info: deliveryWarrantyInfo.trim(),
         section_values: sectionValues
@@ -1698,9 +1775,7 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         ...(datasheetFile ? { datasheet: datasheetFile } : {}),
       };
       const formData = buildMultipartFormData(payload);
-      imageFiles.forEach((file) => {
-        formData.append("images", file);
-      });
+      appendFilesToFormData(formData, "images", imageFiles);
 
       if (productId) {
         await updateProduct(productId, formData);

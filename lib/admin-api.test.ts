@@ -1,4 +1,14 @@
-import { normalizeManagedProductRecord, normalizeCategoryRecord } from "@/components/dashboard/products-management";
+import {
+  appendFilesToFormData,
+  buildSectionDrafts,
+  normalizeManagedProductRecord,
+  normalizeCategoryRecord,
+  validateProductFormInput,
+} from "@/components/dashboard/products-management";
+import {
+  buildQuotePackageRequestPayload,
+  getQuoteUpdateViewState,
+} from "@/components/dashboard/energy-audit-management";
 import { dashboardGet } from "@/lib/api/client";
 import {
   buildMultipartFormData,
@@ -81,6 +91,90 @@ describe("buildMultipartFormData", () => {
     expect(formData.get("section_values")).toBe(
       JSON.stringify([{ section_id: "sec-1", section_name: "Size", value: "12", unit: "kVA" }]),
     );
+  });
+
+  it("appends multi-file image uploads under the repeated images key", () => {
+    const front = new File(["front"], "front.jpg", { type: "image/jpeg" });
+    const side = new File(["side"], "side.jpg", { type: "image/jpeg" });
+    const formData = appendFilesToFormData(buildMultipartFormData({ name: "Panel" }), "images", [
+      front,
+      side,
+    ]);
+
+    expect(formData.getAll("images")).toEqual([front, side]);
+  });
+});
+
+describe("product form helpers", () => {
+  it("purges unselected category schema blocks when the category changes", () => {
+    const nextDrafts = buildSectionDrafts(
+      [
+        { id: "sec-brand", key: "brand", name: "Brand", position: 1 },
+        { id: "sec-size", key: "size", name: "Size", position: 2 },
+      ],
+      [
+        {
+          key: "sec-brand",
+          section_id: "sec-brand",
+          section_name: "Brand",
+          value: "SMA",
+          unit: "",
+        },
+        {
+          key: "sec-legacy",
+          section_id: "sec-legacy",
+          section_name: "Legacy Block",
+          value: "Remove me",
+          unit: "",
+        },
+      ],
+    );
+
+    expect(nextDrafts).toEqual([
+      expect.objectContaining({
+        section_id: "sec-brand",
+        section_name: "Brand",
+        value: "SMA",
+      }),
+      expect.objectContaining({
+        section_id: "sec-size",
+        section_name: "Size",
+        value: "",
+      }),
+    ]);
+    expect(nextDrafts.some((item) => item.section_name === "Legacy Block")).toBe(false);
+  });
+
+  it("enforces positive-only pricing and stock rules", () => {
+    expect(() =>
+      validateProductFormInput({
+        name: "Panel",
+        categoryId: "cat-1",
+        price: "0",
+        discountedPrice: "",
+        stockQuantity: "12",
+        selectedCategory: null,
+        imageFiles: [],
+        currentImageUrls: [],
+        datasheetFile: null,
+        currentDatasheetUrl: null,
+      }),
+    ).toThrow("Enter a valid product price.");
+
+    expect(() =>
+      validateProductFormInput({
+        name: "Panel",
+        categoryId: "cat-1",
+        price: "250000",
+        discountedPrice: "",
+        stockQuantity: "-1",
+        selectedCategory: null,
+        imageFiles: [],
+        currentImageUrls: [],
+        datasheetFile: null,
+        currentDatasheetUrl: null,
+      }),
+    ).toThrow("Enter a valid stock quantity.");
   });
 });
 
@@ -182,5 +276,72 @@ describe("verification submission normalization", () => {
         }),
       }),
     ]);
+  });
+});
+
+describe("quote review helpers", () => {
+  it("builds the reviewed package-request payload from the quote detail", () => {
+    const payload = buildQuotePackageRequestPayload({
+      id: "quote-1",
+      name: "Ada Customer",
+      email: "ada@example.com",
+      phone: "08000000000",
+      address: "14 Allen Avenue",
+      location: "Ikeja, Lagos",
+      recommended_system_size: 5,
+      estimated_cost: 3500000,
+      estimated_savings: 420000,
+      payback_period_years: 4,
+      form_extras: { roofType: "pitched" },
+      appliances: [
+        {
+          id: "app-1",
+          name: "AC",
+          wattage: 1200,
+          quantity: 2,
+          hoursPerDay: 8,
+        },
+      ],
+    } as never);
+
+    expect(payload).toEqual({
+      source_quote_id: "quote-1",
+      customer_name: "Ada Customer",
+      customer_email: "ada@example.com",
+      customer_phone: "08000000000",
+      address: "14 Allen Avenue",
+      recommended_system_size: 5,
+      estimated_cost: 3500000,
+      estimated_savings: 420000,
+      payback_period_years: 4,
+      appliances: [
+        {
+          id: "app-1",
+          name: "AC",
+          wattage: 1200,
+          quantity: 2,
+          hoursPerDay: 8,
+        },
+      ],
+      form_extras: { roofType: "pitched" },
+    });
+  });
+
+  it("marks reviewed quotes as read-only and exposes the reviewed payload preview state", () => {
+    const view = getQuoteUpdateViewState(
+      {
+        id: "quote-2",
+        status: "reviewed",
+        is_closed: false,
+      } as never,
+      "reviewed",
+    );
+
+    expect(view).toEqual({
+      isReadOnly: true,
+      showReviewedPayloadPreview: true,
+      isClosed: false,
+      isReviewed: true,
+    });
   });
 });

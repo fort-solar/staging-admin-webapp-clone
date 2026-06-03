@@ -315,12 +315,14 @@ export function TextAreaField({
   placeholder,
   rows = 4,
   invalid = false,
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
   invalid?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <textarea
@@ -330,6 +332,7 @@ export function TextAreaField({
       placeholder={placeholder}
       rows={rows}
       aria-invalid={invalid || undefined}
+      disabled={disabled}
     />
   );
 }

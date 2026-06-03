@@ -112,7 +112,7 @@ function quoteStatusOptions(current?: string) {
   return [{ label: formatEnumLabel(normalizedCurrent), value: normalizedCurrent }, ...quoteStatusDefaults];
 }
 
-function buildQuotePackageRequestPayload(detail: QuoteRequestDetailRecord) {
+export function buildQuotePackageRequestPayload(detail: QuoteRequestDetailRecord) {
   return {
     source_quote_id: detail.id,
     customer_name: detail.name,
@@ -131,6 +131,23 @@ function buildQuotePackageRequestPayload(detail: QuoteRequestDetailRecord) {
       hoursPerDay: appliance.hoursPerDay,
     })),
     form_extras: detail.form_extras,
+  };
+}
+
+export function getQuoteUpdateViewState(
+  detail: QuoteRequestDetailRecord | null,
+  status: string,
+) {
+  const persistedStatus = detail?.status?.trim().toLowerCase() || "";
+  const selectedStatus = status.trim().toLowerCase();
+  const isReviewed = persistedStatus === "reviewed";
+  const isClosed = Boolean(detail?.is_closed || persistedStatus === "closed");
+
+  return {
+    isReadOnly: isReviewed || isClosed,
+    showReviewedPayloadPreview: selectedStatus === "reviewed" || isReviewed,
+    isClosed,
+    isReviewed,
   };
 }
 
@@ -640,6 +657,7 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
   const [adminNotes, setAdminNotes] = useState("");
   const [quoteAssetFile, setQuoteAssetFile] = useState<File | null>(null);
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+  const [isReviewedPayloadOpen, setIsReviewedPayloadOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -783,7 +801,7 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
   const applianceTags = detail?.appliances.map((appliance) => `${appliance.name} x${appliance.quantity}`) ?? [];
   const formExtras = detail?.form_extras ? JSON.stringify(detail.form_extras, null, 2) : "{}";
   const reviewedPayload = detail ? JSON.stringify(buildQuotePackageRequestPayload(detail), null, 2) : "{}";
-  const isClosed = Boolean(detail?.is_closed || detail?.status?.trim().toLowerCase() === "closed");
+  const quoteUpdateView = getQuoteUpdateViewState(detail, status);
 
   return (
     <div className="dashboard-stack">
@@ -855,12 +873,28 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
             <p>Patch the quote request status and internal notes.</p>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               <FormField label="Status">
-                <SelectField value={status} onChange={setStatus} options={quoteStatusOptions(status)} disabled={isClosed} />
+                <SelectField
+                  value={status}
+                  onChange={(nextStatus) => {
+                    setStatus(nextStatus);
+
+                    if (nextStatus.trim().toLowerCase() === "reviewed") {
+                      setIsReviewedPayloadOpen(true);
+                    }
+                  }}
+                  options={quoteStatusOptions(status)}
+                  disabled={quoteUpdateView.isReadOnly}
+                />
               </FormField>
               {status === "quoted" ? (
                 <FormField label="Quote File" hint={detail?.quote_asset_url ? "A quote file already exists. Uploading a new file will replace it." : "Upload either an image or a PDF of the quote."}>
                   <label className="upload-field">
-                    <input type="file" accept="application/pdf,image/*" onChange={(event) => setQuoteAssetFile(event.target.files?.[0] ?? null)} />
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      disabled={quoteUpdateView.isReadOnly}
+                      onChange={(event) => setQuoteAssetFile(event.target.files?.[0] ?? null)}
+                    />
                     <span className="upload-field__button">
                       <span>{quoteAssetFile || detail?.quote_asset_url ? "Replace file" : "Choose file"}</span>
                     </span>
@@ -868,7 +902,7 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
                   </label>
                 </FormField>
               ) : null}
-              {status === "reviewed" ? (
+              {quoteUpdateView.showReviewedPayloadPreview ? (
                 <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
                   <strong className="block text-sm">Package Request Payload Preview</strong>
                   <p className="mt-2 text-sm text-[var(--text-soft)]">
@@ -878,15 +912,31 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
                 </div>
               ) : null}
               <FormField label="Admin Notes">
-                <TextAreaField value={adminNotes} onChange={setAdminNotes} placeholder="Internal quote response notes" rows={6} invalid={status === "quoted" && !adminNotes.trim()} />
+                <TextAreaField
+                  value={adminNotes}
+                  onChange={setAdminNotes}
+                  placeholder="Internal quote response notes"
+                  rows={6}
+                  invalid={status === "quoted" && !adminNotes.trim()}
+                  disabled={quoteUpdateView.isReadOnly}
+                />
               </FormField>
-              {isClosed ? (
+              {quoteUpdateView.isReviewed ? (
+                <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
+                  This quote has been reviewed and is now read-only.
+                </div>
+              ) : null}
+              {quoteUpdateView.isClosed ? (
                 <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
                   This quote has been closed and can no longer be edited.
                 </div>
               ) : null}
               {canUpdateAudits ? (
-                <Button type="submit" variant="primary" disabled={isLoading || isSaving || !detail || isClosed}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isLoading || isSaving || !detail || quoteUpdateView.isReadOnly}
+                >
                   {isSaving ? "Saving..." : "Update"}
                 </Button>
               ) : null}
@@ -913,6 +963,25 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
         <p className="text-sm text-[var(--text-soft)]">
           Are you sure you want to close this quote request? Closed quotes can no longer be edited.
         </p>
+      </Modal>
+
+      <Modal
+        open={isReviewedPayloadOpen}
+        onClose={() => setIsReviewedPayloadOpen(false)}
+        title="Package Request Payload"
+        size="lg"
+        footer={
+          <Button variant="secondary" onClick={() => setIsReviewedPayloadOpen(false)}>
+            Close
+          </Button>
+        }
+      >
+        <p className="text-sm text-[var(--text-soft)]">
+          Reviewing this quote will generate the following package request payload.
+        </p>
+        <pre className="mt-4 overflow-x-auto rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-4 text-xs leading-6 text-[var(--text-soft)]">
+          {reviewedPayload}
+        </pre>
       </Modal>
     </div>
   );
