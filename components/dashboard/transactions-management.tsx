@@ -29,6 +29,7 @@ import {
   getInstallations,
   getTransaction,
   getTransactions,
+  loadAllPaginatedRecords,
   updateTransaction,
 } from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
@@ -128,24 +129,6 @@ function createFormState(record?: TransactionRecord | null): TransactionFormStat
   };
 }
 
-function transactionMatchesQuery(record: TransactionRecord, query: string) {
-  const haystack = [
-    record.id,
-    record.user_id,
-    record.installation_id ?? "",
-    record.type,
-    record.status,
-    record.payment_method,
-    record.payment_reference ?? "",
-    record.description ?? "",
-    record.currency,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return haystack.includes(query.toLowerCase());
-}
-
 export function TransactionsManagementScreen() {
   const { can } = useAccessControl();
   const { toast } = useToast();
@@ -179,7 +162,15 @@ export function TransactionsManagementScreen() {
     setIsLoading(true);
     setError(null);
 
-    Promise.all([getTransactions({ page, limit: DEFAULT_PAGE_SIZE }), getDashboardOverview()])
+    Promise.all([
+      getTransactions({
+        page,
+        limit: DEFAULT_PAGE_SIZE,
+        search: deferredQuery.trim() || undefined,
+        q: deferredQuery.trim() || undefined,
+      }),
+      getDashboardOverview(),
+    ])
       .then(([transactionsPayload, overviewPayload]) => {
         if (cancelled) {
           return;
@@ -207,7 +198,7 @@ export function TransactionsManagementScreen() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   useEffect(() => {
     if (!detailId) {
@@ -250,12 +241,14 @@ export function TransactionsManagementScreen() {
     }
 
     let cancelled = false;
+    setIsLoadingReferences(true);
+    setReferenceError(null);
 
     Promise.allSettled([
-      getCustomers({ page: 1, limit: 100, fields: ["id", "name", "fullName", "email"] }),
-      getInstallations({
-        page: 1,
-        limit: 100,
+      loadAllPaginatedRecords(getCustomers, {
+        fields: ["id", "name", "fullName", "email"],
+      }),
+      loadAllPaginatedRecords(getInstallations, {
         fields: ["id", "user_id", "customer_email", "customer_name", "status", "city", "state"],
       }),
     ])
@@ -267,13 +260,13 @@ export function TransactionsManagementScreen() {
         const errors: string[] = [];
 
         if (customersResult.status === "fulfilled") {
-          setCustomers(customersResult.value.data);
+          setCustomers(customersResult.value);
         } else if (!isDashboardSessionExpiredError(customersResult.reason)) {
           errors.push(getErrorMessage(customersResult.reason, "Customers could not be loaded."));
         }
 
         if (installationsResult.status === "fulfilled") {
-          setInstallations(installationsResult.value.data);
+          setInstallations(installationsResult.value);
         } else if (!isDashboardSessionExpiredError(installationsResult.reason)) {
           errors.push(getErrorMessage(installationsResult.reason, "Installations could not be loaded."));
         }
@@ -291,7 +284,7 @@ export function TransactionsManagementScreen() {
     };
   }, [formOpen]);
 
-  const filteredRows = useMemo(() => rows.filter((record) => transactionMatchesQuery(record, deferredQuery)), [deferredQuery, rows]);
+  const filteredRows = useMemo(() => rows, [rows]);
   const customerOptions = useMemo(
     () =>
       withSelectedOption(
@@ -464,7 +457,10 @@ export function TransactionsManagementScreen() {
           <div className="management-surface__body">
             <DirectoryToolbar
               searchValue={query}
-              onSearchChange={setQuery}
+              onSearchChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
               searchPlaceholder="Search transactions..."
               filters={
                 <Button variant="secondary" size="sm" leadingIcon={<FilterIcon className="mini-icon" />}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { type FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
@@ -21,12 +21,18 @@ import {
   getPackageBySlug,
   getPackages,
   getProductCategories,
+  getProducts,
+  loadAllPaginatedRecords,
   updatePackage,
 } from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import type { ManagedMediaAsset, PackageProductItemRecord, PackageRecord, PackageSystemDetailsRecord, PaginationMeta, ProductCategoryApiRecord } from "@/types/api.types";
-import { loadProducts, normalizeCategoryRecord, type ManagedProductRow } from "@/components/dashboard/products-management";
+import {
+  normalizeManagedProductRecord,
+  normalizeCategoryRecord,
+  type ManagedProductRow,
+} from "@/components/dashboard/products-management";
 
 const packageCreateFormId = "package-create-form";
 const appliancePresetOptions = ["Laptops", "Phones", "Fridge", "Microwave", "Led Bulbs", "Outlets", "TVs", "Standing Fan", "Washing Machine"];
@@ -759,7 +765,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
     ? [{ label: "Move to Draft", intent: "draft" as const, variant: "secondary" as const, disabled: isSubmitting }]
     : [{ label: "Save Draft", intent: "draft" as const, variant: "secondary" as const, disabled: isSubmitting }];
 
-  async function fetchProductsForCategory(categoryId: string) {
+  const fetchProductsForCategory = useCallback(async (categoryId: string) => {
     if (!categoryId || !categoriesMap.size) {
       return;
     }
@@ -772,16 +778,18 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
     setLoadingProductsByCategory((current) => ({ ...current, [categoryId]: true }));
 
     try {
-      const productsPayload = await loadProducts({
-        page: 1,
-        limit: 100,
-        query: "",
-        categories: categoriesMap,
-        categoryId,
+      const productRows = await loadAllPaginatedRecords(getProducts, {
+        category_id: categoryId,
+        fields: ["id", "name", "price", "category_id", "is_active", "stock_quantity"],
       });
 
       setProductsByCategory((current) => {
-        const next = { ...current, [categoryId]: productsPayload.data };
+        const next = {
+          ...current,
+          [categoryId]: productRows.map((item) =>
+            normalizeManagedProductRecord(item, categoriesMap),
+          ),
+        };
         categoryProductsRef.current = next;
         return next;
       });
@@ -792,17 +800,17 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
       loadingCategoryRequestsRef.current.delete(categoryId);
       setLoadingProductsByCategory((current) => ({ ...current, [categoryId]: false }));
     }
-  }
+  }, [categoriesMap]);
 
   useEffect(() => {
     let cancelled = false;
 
     setCatalogError(null);
 
-    getProductCategories({ page: 1, limit: 100 })
-      .then((payload) => {
+    loadAllPaginatedRecords(getProductCategories)
+      .then((records) => {
         if (!cancelled) {
-          setCategories(payload.data.map(normalizeCategoryRecord));
+          setCategories(records.map(normalizeCategoryRecord));
         }
       })
       .catch((loadError) => {
@@ -830,7 +838,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
     selectedCategoryIds.forEach((categoryId) => {
       void fetchProductsForCategory(categoryId);
     });
-  }, [categoriesMap, loadingCatalog, selectedCategoryIds]);
+  }, [fetchProductsForCategory, loadingCatalog, selectedCategoryIds]);
 
   useEffect(() => {
     if (!packageId || loadingCatalog) {

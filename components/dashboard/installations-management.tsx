@@ -20,6 +20,7 @@ import {
   getInstallation,
   getInstallations,
   getPackages,
+  loadAllPaginatedRecords,
   updateInstallation,
 } from "@/lib/admin-api";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
@@ -606,14 +607,12 @@ export function InstallationFormScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    getPackages({
-      page: 1,
-      limit: 100,
+    loadAllPaginatedRecords(getPackages, {
       fields: ["id", "name", "description", "overview", "system_details", "what_it_powers", "system_size_kw"],
     })
-      .then((payload) => {
+      .then((records) => {
         if (!cancelled) {
-          setPackages(payload.data);
+          setPackages(records);
         }
       })
       .catch((loadError) => {

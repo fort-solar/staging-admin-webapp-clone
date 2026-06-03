@@ -57,10 +57,11 @@ export default function AdminsPage() {
   useEffect(() => {
     let cancelled = false;
 
-    setIsLoading(true);
-    setError(null);
-
-    getAdmins({ page, limit: DEFAULT_PAGE_SIZE })
+    getAdmins({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -87,7 +88,14 @@ export default function AdminsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
+
+  function handleSearchChange(nextQuery: string) {
+    setIsLoading(true);
+    setError(null);
+    setQuery(nextQuery);
+    setPage(1);
+  }
 
   const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((admin) => formatManagedUserStatusLabel(admin.status))))], [rows]);
 
@@ -95,24 +103,10 @@ export default function AdminsPage() {
     () =>
       rows.filter((admin) => {
         const statusLabel = formatManagedUserStatusLabel(admin.status);
-        const haystack = [
-          admin.id,
-          admin.name,
-          admin.fullName,
-          admin.email,
-          admin.phone ?? "",
-          admin.address ?? "",
-          admin.adminRole ?? "",
-          statusLabel,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
         const matchesStatus = status === "All" || statusLabel === status;
-        return matchesQuery && matchesStatus;
+        return matchesStatus;
       }),
-    [deferredQuery, rows, status],
+    [rows, status],
   );
 
   const activeAdmins = rows.filter((admin) => admin.status.toLowerCase() === "active").length;
@@ -146,6 +140,8 @@ export default function AdminsPage() {
         address: "",
         adminRole: "operations_manager",
       });
+      setIsLoading(true);
+      setError(null);
       setPage(1);
       setRefreshKey((value) => value + 1);
     } catch (createError) {
@@ -179,6 +175,8 @@ export default function AdminsPage() {
         description: `${admin.fullName || admin.name} is now ${formatManagedUserStatusLabel(nextStatus).toLowerCase()}.`,
         variant: "success",
       });
+      setIsLoading(true);
+      setError(null);
       setRefreshKey((value) => value + 1);
     } catch (updateError) {
       if (isDashboardActionCancelledError(updateError) || isDashboardSessionExpiredError(updateError)) {
@@ -202,6 +200,8 @@ export default function AdminsPage() {
         variant: "success",
       });
 
+      setIsLoading(true);
+      setError(null);
       if (rows.length === 1 && page > 1) {
         setPage((current) => current - 1);
       } else {
@@ -240,8 +240,12 @@ export default function AdminsPage() {
               ) : undefined
             }
           />
-          <div className="dashboard-table-toolbar">
-            <SearchField value={query} onChange={setQuery} placeholder="Search admins..." />
+        <div className="dashboard-table-toolbar">
+            <SearchField
+              value={query}
+              onChange={handleSearchChange}
+              placeholder="Search admins..."
+            />
             <div className="inline-actions">
               <SelectField value={status} onChange={setStatus} options={statusOptions} />
             </div>

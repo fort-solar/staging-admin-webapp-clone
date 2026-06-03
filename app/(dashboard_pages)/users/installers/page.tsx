@@ -9,7 +9,15 @@ import { BanIcon, EyeIcon, TrashIcon } from "@/components/dashboard/icons";
 import { Avatar, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, cx } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
-import { DEFAULT_PAGE_SIZE, deleteInstaller, formatManagedUserStatusLabel, getBundleRequests, getInstallers, updateInstaller } from "@/lib/admin-api";
+import {
+  DEFAULT_PAGE_SIZE,
+  deleteInstaller,
+  formatManagedUserStatusLabel,
+  getBundleRequests,
+  getInstallers,
+  loadAllPaginatedRecords,
+  updateInstaller,
+} from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { InstallerRecord, PaginationMeta } from "@/types/api.types";
@@ -41,7 +49,11 @@ export default function InstallersPage() {
   useEffect(() => {
     let cancelled = false;
 
-    getInstallers({ page, limit: DEFAULT_PAGE_SIZE })
+    getInstallers({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -68,19 +80,19 @@ export default function InstallersPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   useEffect(() => {
     let cancelled = false;
 
-    getBundleRequests({ page: 1, limit: 100 })
-      .then((payload) => {
+    loadAllPaginatedRecords(getBundleRequests)
+      .then((records) => {
         if (cancelled) {
           return;
         }
 
         setPendingInstallations(
-          payload.data.filter((request) => !["closed", "cancelled", "canceled"].includes(request.status.trim().toLowerCase())).length,
+          records.filter((request) => !["closed", "cancelled", "canceled"].includes(request.status.trim().toLowerCase())).length,
         );
       })
       .catch(() => {
@@ -100,32 +112,23 @@ export default function InstallersPage() {
     setPage(nextPage);
   }
 
+  function handleSearchChange(nextQuery: string) {
+    setIsLoading(true);
+    setError(null);
+    setQuery(nextQuery);
+    setPage(1);
+  }
+
   const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((installer) => formatManagedUserStatusLabel(installer.user.status))))], [rows]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((installer) => {
         const statusLabel = formatManagedUserStatusLabel(installer.user.status);
-        const haystack = [
-          installer.user.id,
-          installer.user.name,
-          installer.user.fullName,
-          installer.user.email,
-          installer.user.phone ?? "",
-          installer.user.address ?? "",
-          installer.installerProfile.companyName ?? "",
-          installer.installerProfile.city ?? "",
-          installer.installerProfile.state ?? "",
-          statusLabel,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
         const matchesStatus = status === "All" || statusLabel === status;
-        return matchesQuery && matchesStatus;
+        return matchesStatus;
       }),
-    [deferredQuery, rows, status],
+    [rows, status],
   );
 
   const activeInstallers = rows.filter((installer) => installer.user.status.toLowerCase() === "active").length;
@@ -211,7 +214,11 @@ export default function InstallersPage() {
       <Panel className="overflow-hidden">
         <PanelHeader title="Installer Directory" />
         <div className="dashboard-table-toolbar">
-          <SearchField value={query} onChange={setQuery} placeholder="Search installers..." />
+          <SearchField
+            value={query}
+            onChange={handleSearchChange}
+            placeholder="Search installers..."
+          />
           <div className="inline-actions">
             <SelectField value={status} onChange={setStatus} options={statusOptions} />
           </div>

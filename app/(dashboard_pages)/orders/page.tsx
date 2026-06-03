@@ -126,7 +126,15 @@ export default function OrdersPage() {
     setIsLoading(true);
     setError(null);
 
-    Promise.all([getDashboardOverview(), getOrders({ page, limit: DEFAULT_PAGE_SIZE })])
+    Promise.all([
+      getDashboardOverview(),
+      getOrders({
+        page,
+        limit: DEFAULT_PAGE_SIZE,
+        search: deferredQuery.trim() || undefined,
+        q: deferredQuery.trim() || undefined,
+      }),
+    ])
       .then(([overviewPayload, ordersPayload]) => {
         if (cancelled) {
           return;
@@ -154,7 +162,7 @@ export default function OrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   useEffect(() => {
     if (!openModal) {
@@ -168,7 +176,7 @@ export default function OrdersPage() {
 
     getCustomers({
       page: 1,
-      limit: 10,
+      limit: DEFAULT_PAGE_SIZE,
       search: deferredCustomerQuery.trim() || undefined,
       q: deferredCustomerQuery.trim() || undefined,
       fields: ["id", "name", "fullName", "email"],
@@ -232,7 +240,7 @@ export default function OrdersPage() {
         try {
           const payload = await getPackages({
             page: 1,
-            limit: 10,
+            limit: DEFAULT_PAGE_SIZE,
             search: item.catalog_search.trim() || undefined,
             q: item.catalog_search.trim() || undefined,
             fields: ["id", "name", "price", "is_active", "slug"],
@@ -294,7 +302,7 @@ export default function OrdersPage() {
         try {
           const payload = await getProducts({
             page: 1,
-            limit: 10,
+            limit: DEFAULT_PAGE_SIZE,
             search: item.catalog_search.trim() || undefined,
             q: item.catalog_search.trim() || undefined,
             fields: ["id", "name", "price", "is_active", "category_id"],
@@ -338,21 +346,10 @@ export default function OrdersPage() {
     () =>
       rows.filter((order) => {
         const statusLabel = formatEnumLabel(order.status);
-        const haystack = [
-          order.id,
-          order.customer_name,
-          order.customer_email,
-          order.notes ?? "",
-          statusLabel,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
         const matchesStatus = status === "All" || statusLabel === status;
-        return matchesQuery && matchesStatus;
+        return matchesStatus;
       }),
-    [deferredQuery, rows, status],
+    [rows, status],
   );
 
   const customerSelectOptions = useMemo(() => {
@@ -424,7 +421,7 @@ export default function OrdersPage() {
     try {
       const payload = await getCustomers({
         page: 1,
-        limit: 10,
+        limit: DEFAULT_PAGE_SIZE,
         search: searchTerm || undefined,
         q: searchTerm || undefined,
         fields: ["id", "name", "fullName", "email"],
@@ -596,7 +593,14 @@ export default function OrdersPage() {
             }
           />
           <div className="dashboard-table-toolbar">
-            <SearchField value={query} onChange={setQuery} placeholder="Search orders..." />
+            <SearchField
+              value={query}
+              onChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
+              placeholder="Search orders..."
+            />
             <div className="inline-actions">
               <SelectField value={status} onChange={setStatus} options={statusOptions} />
             </div>

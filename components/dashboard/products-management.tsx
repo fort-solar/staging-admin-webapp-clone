@@ -22,6 +22,7 @@ import {
   getProduct,
   getProductCategories,
   getProducts,
+  loadAllPaginatedRecords,
   updateProduct,
   updateProductCategory,
 } from "@/lib/admin-api";
@@ -33,7 +34,7 @@ const productViewTabs = ["Products", "Categories"] as const;
 const productStatusTabs = ["All", "Published", "Draft"] as const;
 const categoryFormId = "product-category-form";
 const productCreateFormId = "product-create-form";
-const productFormCategoryLimit = 100;
+const productFormCategoryLimit = DEFAULT_PAGE_SIZE;
 
 type ProductView = (typeof productViewTabs)[number];
 type ProductStatusFilter = (typeof productStatusTabs)[number];
@@ -478,8 +479,8 @@ async function loadProductRecord(id: string, categories: Map<string, ProductCate
 }
 
 async function loadProductFormCategories(limit = productFormCategoryLimit) {
-  const payload = await getProductCategories({ page: 1, limit });
-  return payload.data.map(normalizeCategoryRecord);
+  const records = await loadAllPaginatedRecords(getProductCategories, { limit });
+  return records.map(normalizeCategoryRecord);
 }
 
 async function deleteProductRecord(product: ManagedProductRow) {
@@ -1259,7 +1260,7 @@ export function ProductDetailScreen({ productId }: { productId: string }) {
     let cancelled = false;
 
     Promise.all([
-      getProductCategories({ page: 1, limit: 100 }).then((payload) => payload.data.map(normalizeCategoryRecord)).catch(() => []),
+      loadProductFormCategories().catch(() => []),
     ])
       .then(([categoryRows]) => {
         if (cancelled) {

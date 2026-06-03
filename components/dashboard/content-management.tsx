@@ -299,7 +299,12 @@ export function BlogManagementScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    getBlogPosts({ page, limit: DEFAULT_PAGE_SIZE })
+    getBlogPosts({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+      q: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -326,15 +331,14 @@ export function BlogManagementScreen() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((post) => {
-        const haystack = `${post.title} ${post.category} ${post.summary} ${post.status}`.toLowerCase();
-        return haystack.includes(deferredQuery.toLowerCase()) && matchesStatus(post.status, status);
+        return matchesStatus(post.status, status);
       }),
-    [deferredQuery, rows, status],
+    [rows, status],
   );
 
   const metrics = useMemo(
@@ -438,7 +442,10 @@ export function BlogManagementScreen() {
             </div>
             <DirectoryToolbar
               searchValue={query}
-              onSearchChange={setQuery}
+              onSearchChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
               searchPlaceholder="Search blogs..."
               filters={
                 <Button variant="secondary" size="sm" leadingIcon={<FilterIcon className="mini-icon" />}>
@@ -763,7 +770,12 @@ export function SitePagesManagementScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    getSitePages({ page, limit: DEFAULT_PAGE_SIZE })
+    getSitePages({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+      q: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -790,15 +802,14 @@ export function SitePagesManagementScreen() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((record) => {
-        const haystack = `${record.title} ${record.page_type} ${record.seo_title} ${record.status}`.toLowerCase();
-        return haystack.includes(deferredQuery.toLowerCase()) && matchesStatus(record.status, status);
+        return matchesStatus(record.status, status);
       }),
-    [deferredQuery, rows, status],
+    [rows, status],
   );
 
   const metrics = useMemo(
@@ -873,7 +884,10 @@ export function SitePagesManagementScreen() {
           </div>
           <DirectoryToolbar
             searchValue={query}
-            onSearchChange={setQuery}
+            onSearchChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
             searchPlaceholder="Search pages..."
             filters={
               <Button variant="secondary" size="sm" leadingIcon={<FilterIcon className="mini-icon" />}>

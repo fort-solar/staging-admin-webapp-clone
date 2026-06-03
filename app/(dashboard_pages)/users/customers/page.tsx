@@ -37,7 +37,11 @@ export default function CustomersPage() {
   useEffect(() => {
     let cancelled = false;
 
-    getCustomers({ page, limit: DEFAULT_PAGE_SIZE })
+    getCustomers({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -64,12 +68,19 @@ export default function CustomersPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   function handlePageChange(nextPage: number) {
     setIsLoading(true);
     setError(null);
     setPage(nextPage);
+  }
+
+  function handleSearchChange(nextQuery: string) {
+    setIsLoading(true);
+    setError(null);
+    setQuery(nextQuery);
+    setPage(1);
   }
 
   const statusOptions = useMemo(() => ["All", ...Array.from(new Set(rows.map((customer) => formatManagedUserStatusLabel(customer.status))))], [rows]);
@@ -78,23 +89,10 @@ export default function CustomersPage() {
     () =>
       rows.filter((customer) => {
         const labelStatus = formatManagedUserStatusLabel(customer.status);
-        const haystack = [
-          customer.id,
-          customer.name,
-          customer.fullName,
-          customer.email,
-          customer.phone ?? "",
-          customer.address ?? "",
-          labelStatus,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
         const matchesStatus = status === "All" || labelStatus === status;
-        return matchesQuery && matchesStatus;
+        return matchesStatus;
       }),
-    [deferredQuery, rows, status],
+    [rows, status],
   );
 
   const activeCustomers = rows.filter((customer) => customer.status.toLowerCase() === "active").length;
@@ -122,7 +120,11 @@ export default function CustomersPage() {
             }
           />
           <div className="dashboard-table-toolbar">
-            <SearchField value={query} onChange={setQuery} placeholder="Search customers..." />
+            <SearchField
+              value={query}
+              onChange={handleSearchChange}
+              placeholder="Search customers..."
+            />
             <div className="inline-actions">
               <SelectField value={status} onChange={setStatus} options={statusOptions} />
             </div>

@@ -229,7 +229,12 @@ export function NotificationsManagementScreen() {
     setIsLoading(true);
     setError(null);
 
-    getNotifications({ page, limit: DEFAULT_PAGE_SIZE })
+    getNotifications({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+      q: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -256,25 +261,15 @@ export function NotificationsManagementScreen() {
     return () => {
       cancelled = true;
     };
-  }, [feedVersion, page, refreshKey]);
+  }, [deferredQuery, feedVersion, page, refreshKey]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((record) => {
         const tab = notificationTab(record);
-        const haystack = [
-          record.title,
-          record.message,
-          metadataValue(record, "recipients") ?? "",
-          metadataValue(record, "triggerEvent") ?? "",
-          record.type,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return tab === activeTab && haystack.includes(deferredQuery.toLowerCase());
+        return tab === activeTab;
       }),
-    [activeTab, deferredQuery, rows],
+    [activeTab, rows],
   );
 
   const activeRecord = rows.find((record) => record.id === detailId) ?? null;
@@ -481,7 +476,10 @@ export function NotificationsManagementScreen() {
           <div className="notification-page__toolbar">
             <DirectoryToolbar
               searchValue={query}
-              onSearchChange={setQuery}
+              onSearchChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
               searchPlaceholder="Search notifications..."
               filters={
                 <Button variant="secondary" size="sm" leadingIcon={<FilterIcon className="mini-icon" />}>

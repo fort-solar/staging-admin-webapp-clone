@@ -25,6 +25,7 @@ import {
   getJobApplicants,
   getJobBySlug,
   getJobs,
+  loadAllPaginatedRecords,
   updateBundleRequest,
   updateJob,
   updateJobApplicant,
@@ -377,9 +378,7 @@ function useJobReferenceOptions() {
     let cancelled = false;
 
     Promise.allSettled([
-      getBundleRequests({
-        page: 1,
-        limit: 100,
+      loadAllPaginatedRecords(getBundleRequests, {
         fields: [
           "id",
           "bundle_name",
@@ -398,8 +397,10 @@ function useJobReferenceOptions() {
           "job_status",
         ],
       }),
-      getInstallers({ page: 1, limit: 100 }),
-      getCustomers({ page: 1, limit: 100, fields: ["id", "name", "fullName", "email", "phone"] }),
+      loadAllPaginatedRecords(getInstallers),
+      loadAllPaginatedRecords(getCustomers, {
+        fields: ["id", "name", "fullName", "email", "phone"],
+      }),
     ])
       .then(([packageRequestsResult, installersResult, customersResult]) => {
         if (cancelled) {
@@ -409,19 +410,19 @@ function useJobReferenceOptions() {
         const errors: string[] = [];
 
         if (packageRequestsResult.status === "fulfilled") {
-          setPackageRequests(packageRequestsResult.value.data);
+          setPackageRequests(packageRequestsResult.value);
         } else if (!isDashboardSessionExpiredError(packageRequestsResult.reason)) {
           errors.push(getErrorMessage(packageRequestsResult.reason, "Package requests could not be loaded."));
         }
 
         if (installersResult.status === "fulfilled") {
-          setInstallers(installersResult.value.data);
+          setInstallers(installersResult.value);
         } else if (!isDashboardSessionExpiredError(installersResult.reason)) {
           errors.push(getErrorMessage(installersResult.reason, "Installers could not be loaded."));
         }
 
         if (customersResult.status === "fulfilled") {
-          setCustomers(customersResult.value.data);
+          setCustomers(customersResult.value);
         } else if (!isDashboardSessionExpiredError(customersResult.reason)) {
           errors.push(getErrorMessage(customersResult.reason, "Customers could not be loaded."));
         }

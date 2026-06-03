@@ -79,7 +79,12 @@ export default function BundleRequestPage() {
     setIsLoading(true);
     setError(null);
 
-    getBundleRequests({ page, limit: DEFAULT_PAGE_SIZE })
+    getBundleRequests({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+      q: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -106,34 +111,16 @@ export default function BundleRequestPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
         const statusLabel = formatEnumLabel(row.status);
-        const orderStatusLabel = formatEnumLabel(row.order_status);
-        const haystack = [
-          row.id,
-          row.order_id,
-          row.bundle_id,
-          row.bundle_name,
-          row.customer_name ?? "",
-          row.customer_email ?? "",
-          row.city ?? "",
-          row.state ?? "",
-          row.job_status ?? "",
-          row.admin_note ?? "",
-          statusLabel,
-          orderStatusLabel,
-        ]
-          .join(" ")
-          .toLowerCase();
-        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
         const matchesStatus = status === "All" || statusLabel === status;
-        return matchesQuery && matchesStatus;
+        return matchesStatus;
       }),
-    [deferredQuery, rows, status],
+    [rows, status],
   );
 
   const activeRequest = rows.find((row) => row.id === detailId) ?? null;
@@ -216,7 +203,14 @@ export default function BundleRequestPage() {
         <Panel className="overflow-hidden">
           <PanelHeader title="Request List" />
           <div className="dashboard-table-toolbar">
-            <SearchField value={query} onChange={setQuery} placeholder="Search package requests..." />
+            <SearchField
+              value={query}
+              onChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
+              placeholder="Search package requests..."
+            />
             <div className="inline-actions">
               <SelectField value={status} onChange={setStatus} options={statusOptions} />
             </div>

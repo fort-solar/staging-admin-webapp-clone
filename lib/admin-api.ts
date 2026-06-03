@@ -124,6 +124,38 @@ function withQuery(path: string, params: Record<string, string | number | boolea
   return query ? `${path}?${query}` : path;
 }
 
+export async function loadAllPaginatedRecords<T>(
+  loader: (params: ListParams) => Promise<{ data: T[]; pagination: PaginationMeta }>,
+  params: Omit<ListParams, "page"> = {},
+) {
+  const records: T[] = [];
+  let page = 1;
+  let totalPages = 1;
+  const limit =
+    typeof params.limit === "number" && Number.isFinite(params.limit)
+      ? params.limit
+      : DEFAULT_PAGE_SIZE;
+
+  while (page <= totalPages) {
+    const payload = await loader({
+      ...params,
+      page,
+      limit,
+    });
+
+    records.push(...payload.data);
+    totalPages = Math.max(payload.pagination?.totalPages ?? 1, 1);
+
+    if (payload.data.length === 0) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return records;
+}
+
 function appendFormDataValue(formData: FormData, key: string, value: unknown) {
   if (value === null || value === undefined) {
     return;

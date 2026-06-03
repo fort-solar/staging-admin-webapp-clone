@@ -59,7 +59,12 @@ export default function VerificationQueuePage() {
       }
     });
 
-    getVerificationSubmissions({ page, limit: DEFAULT_PAGE_SIZE })
+    getVerificationSubmissions({
+      page,
+      limit: DEFAULT_PAGE_SIZE,
+      search: deferredQuery.trim() || undefined,
+      q: deferredQuery.trim() || undefined,
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -87,7 +92,7 @@ export default function VerificationQueuePage() {
     return () => {
       cancelled = true;
     };
-  }, [page, refreshKey]);
+  }, [deferredQuery, page, refreshKey]);
 
   useEffect(() => {
     if (!documentsId) {
@@ -152,12 +157,10 @@ export default function VerificationQueuePage() {
     () =>
       rows.filter((item) => {
         const statusLabel = formatEnumLabel(item.status);
-        const haystack = `${item.user_name} ${item.user_email} ${statusLabel}`.toLowerCase();
-        const matchesQuery = haystack.includes(deferredQuery.toLowerCase());
         const matchesFilter = filter === "All" || statusLabel === filter;
-        return matchesQuery && matchesFilter;
+        return matchesFilter;
       }),
-    [deferredQuery, filter, rows],
+    [filter, rows],
   );
 
   const allSelected = filteredRows.length > 0 && filteredRows.every((row) => selected.includes(row.id));
@@ -244,7 +247,14 @@ export default function VerificationQueuePage() {
         <PanelHeader title="Installer Verification Queue" />
 
         <div className="dashboard-table-toolbar">
-          <SearchField value={query} onChange={setQuery} placeholder="Search vendors..." />
+          <SearchField
+            value={query}
+            onChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+            placeholder="Search vendors..."
+          />
           <div className="inline-actions">
             <SelectField value={filter} onChange={setFilter} options={["All", "Pending", "Approved", "Rejected"]} />
           </div>
