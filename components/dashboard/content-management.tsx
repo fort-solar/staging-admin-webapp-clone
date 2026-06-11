@@ -617,7 +617,6 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
 
       const intent = getFormSubmitIntent(event, "publish");
       const payload = {
-        ...(postId ? {} : { slug: resolvedPostSlug }),
         title,
         summary,
         body: normalizeRichTextHtml(body),
@@ -628,20 +627,34 @@ export function BlogFormScreen({ slug }: { slug?: string }) {
         read_time_minutes: Number(readTimeMinutes) || 0,
       };
 
-      const bodyPayload = imageFile
-        ? buildMultipartFormData({
-            ...payload,
-            image_url: imageFile,
-          })
-        : {
-            ...payload,
-            image_url: imageUrl,
-          };
-
       if (postId) {
-        await updateBlogPost(postId, bodyPayload);
+        const updatePayload = imageFile
+          ? buildMultipartFormData({
+              ...payload,
+              image_url: imageFile,
+            })
+          : {
+              ...payload,
+              image_url: imageUrl,
+            };
+
+        await updateBlogPost(postId, updatePayload);
       } else {
-        await createBlogPost(bodyPayload);
+        const createPayload = {
+          slug: resolvedPostSlug,
+          ...payload,
+        };
+        const createBodyPayload = imageFile
+          ? buildMultipartFormData({
+              ...createPayload,
+              image_url: imageFile,
+            })
+          : {
+              ...createPayload,
+              image_url: imageUrl,
+            };
+
+        await createBlogPost(createBodyPayload);
       }
 
       toast({
@@ -1122,7 +1135,6 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
       }
 
       const payload = {
-        ...(pageId ? {} : { slug: resolvedPageSlug }),
         title,
         page_type: pageType.trim() || "content",
         seo_title: seoTitle || title,
@@ -1136,7 +1148,10 @@ export function SitePageFormScreen({ slug }: { slug?: string }) {
       if (pageId) {
         await updateSitePage(pageId, payload);
       } else {
-        await createSitePage(payload);
+        await createSitePage({
+          slug: resolvedPageSlug,
+          ...payload,
+        });
       }
 
       toast({
