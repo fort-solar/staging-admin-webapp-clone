@@ -112,6 +112,30 @@ function quoteStatusOptions(current?: string) {
   return [{ label: formatEnumLabel(normalizedCurrent), value: normalizedCurrent }, ...quoteStatusDefaults];
 }
 
+export function calculateMonthlyKwh(
+  powerRatingWatts: number | null | undefined,
+  dailyHoursUsage: number | null | undefined,
+) {
+  const watts = Number(powerRatingWatts ?? 0);
+  const dailyHours = Number(dailyHoursUsage ?? 0);
+
+  if (!Number.isFinite(watts) || watts <= 0 || !Number.isFinite(dailyHours) || dailyHours <= 0) {
+    return 0;
+  }
+
+  return Math.round(((watts * dailyHours * 30) / 1000) * 100) / 100;
+}
+
+function resolveApplianceMonthlyKwh(record: ApplianceCatalogRecord | null | undefined) {
+  const persistedMonthlyKwh = Number(record?.monthly_kwh ?? 0);
+
+  if (Number.isFinite(persistedMonthlyKwh) && persistedMonthlyKwh > 0) {
+    return persistedMonthlyKwh;
+  }
+
+  return calculateMonthlyKwh(record?.power_rating_watts, record?.daily_hours_usage);
+}
+
 export function buildQuotePackageRequestPayload(detail: QuoteRequestDetailRecord) {
   return {
     source_quote_id: detail.id,
@@ -570,7 +594,7 @@ export function EnergyAuditManagementScreen() {
               <h3>{selectedApplianceId ? "Edit Appliance" : "Create Appliance"}</h3>
               <p>
                 {selectedAppliance
-                  ? `${selectedAppliance.name} • ${selectedAppliance.monthly_kwh} kWh/month`
+                  ? `${selectedAppliance.name} • ${resolveApplianceMonthlyKwh(selectedAppliance)} kWh/month`
                   : "Create a new appliance catalog entry for the energy audit calculator."}
               </p>
 
@@ -625,7 +649,7 @@ export function EnergyAuditManagementScreen() {
 
                 {selectedAppliance ? (
                   <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
-                    Monthly usage: <strong className="text-[var(--text)]">{selectedAppliance.monthly_kwh} kWh</strong> • Updated {formatDateTimeLabel(selectedAppliance.updated_at)}
+                    Monthly usage: <strong className="text-[var(--text)]">{resolveApplianceMonthlyKwh(selectedAppliance)} kWh</strong> • Updated {formatDateTimeLabel(selectedAppliance.updated_at)}
                   </div>
                 ) : null}
 

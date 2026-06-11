@@ -747,6 +747,7 @@ function ProductCategoryEditorModal({
 }) {
   const { toast } = useToast();
   const [categoryTitle, setCategoryTitle] = useState("");
+  const [categoryDescription, setCategoryDescription] = useState("");
   const [categorySections, setCategorySections] = useState<ProductCategorySectionRecord[]>([{ name: "" }]);
   const [requiresDatasheet, setRequiresDatasheet] = useState(false);
   const [requiresProductImage, setRequiresProductImage] = useState(true);
@@ -756,6 +757,7 @@ function ProductCategoryEditorModal({
   useEffect(() => {
     if (!open) {
       setCategoryTitle("");
+      setCategoryDescription("");
       setCategorySections([{ name: "" }]);
       setRequiresDatasheet(false);
       setRequiresProductImage(true);
@@ -763,6 +765,7 @@ function ProductCategoryEditorModal({
     }
 
     setCategoryTitle(category?.name ?? "");
+    setCategoryDescription(category?.description ?? "");
     setCategorySections(category?.sections?.length ? category.sections : [{ name: "" }]);
     setRequiresDatasheet(Boolean(category?.requires_datasheet));
     setRequiresProductImage(category ? Boolean(category.requires_product_image) : true);
@@ -795,6 +798,7 @@ function ProductCategoryEditorModal({
 
       const payload = {
         name: categoryTitle.trim(),
+        description: categoryDescription.trim() || undefined,
         sections: preparedSections.map((section, index) => ({
           ...(section.id ? { id: section.id } : {}),
           name: section.name.trim(),
@@ -869,6 +873,15 @@ function ProductCategoryEditorModal({
 
         <FormField label="Category Title">
           <TextField value={categoryTitle} onChange={(event) => setCategoryTitle(event.target.value)} placeholder="Inverter" />
+        </FormField>
+
+        <FormField label="Description" hint="Explain what belongs in this category for admins creating products.">
+          <TextAreaField
+            value={categoryDescription}
+            onChange={setCategoryDescription}
+            placeholder="Hybrid and off-grid inverter products for residential and commercial solar systems."
+            rows={4}
+          />
         </FormField>
 
         <div className="flex flex-col gap-3">
@@ -1739,6 +1752,32 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
     setIsSubmitting(true);
 
     try {
+      if (
+        selectedCategory?.requires_product_image &&
+        !imageFiles.length &&
+        !currentImageUrls.length
+      ) {
+        toast({
+          title: "Product image required",
+          description: `${selectedCategory.name} requires at least one product image before this product can be saved.`,
+          variant: "error",
+        });
+        return;
+      }
+
+      if (
+        selectedCategory?.requires_datasheet &&
+        !datasheetFile &&
+        !currentDatasheetUrl
+      ) {
+        toast({
+          title: "Datasheet required",
+          description: `${selectedCategory.name} requires a datasheet upload before this product can be saved.`,
+          variant: "error",
+        });
+        return;
+      }
+
       const normalized = validateProductFormInput({
         name,
         categoryId,
@@ -1930,6 +1969,17 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
 
             <DetailPanel title="Media & Documents" description="These requirements change with the selected category settings.">
               <div className="detail-panel__stack">
+                {selectedCategory ? (
+                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--text-soft)]">
+                    {selectedCategory.requires_product_image
+                      ? "This category requires at least one product image."
+                      : "This category does not require product images."}{" "}
+                    {selectedCategory.requires_datasheet
+                      ? "A datasheet upload is also required."
+                      : "A datasheet upload is optional."}
+                  </div>
+                ) : null}
+
                 {selectedCategory?.requires_product_image ? (
                   <FormField label="Product Images">
                     <ProductImageGalleryField

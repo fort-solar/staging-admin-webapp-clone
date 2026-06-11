@@ -26,8 +26,21 @@ function inferDocumentKind(source: string, mimeType?: string | null): Verificati
   return "file";
 }
 
-function buildVerificationDocumentUrl(document: VerificationDocumentRecord) {
+function isRemoteHttpUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function hasOpaqueStorageScheme(value: string) {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) && !isRemoteHttpUrl(value) && !value.startsWith("blob:") && !value.startsWith("data:");
+}
+
+export function buildVerificationDocumentUrl(document: VerificationDocumentRecord) {
   const filePath = document.upload.file_path.trim();
+  const uploadId = document.upload_id.trim() || document.upload.id.trim();
+
+  if (!filePath && uploadId) {
+    return `/api/proxy/api/v1/uploads/${encodeURIComponent(uploadId)}/download`;
+  }
 
   if (!filePath) {
     return "";
@@ -37,7 +50,11 @@ function buildVerificationDocumentUrl(document: VerificationDocumentRecord) {
     return filePath;
   }
 
-  if (/^https?:\/\//i.test(filePath)) {
+  if (uploadId && hasOpaqueStorageScheme(filePath)) {
+    return `/api/proxy/api/v1/uploads/${encodeURIComponent(uploadId)}/download`;
+  }
+
+  if (isRemoteHttpUrl(filePath)) {
     if (apiBaseUrl) {
       try {
         const fileUrl = new URL(filePath);
