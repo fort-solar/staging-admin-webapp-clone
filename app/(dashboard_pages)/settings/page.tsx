@@ -25,7 +25,7 @@ import {
 } from "@/components/dashboard/icons";
 import { normalizeAdminActivity } from "@/lib/admin-activity";
 import { formatDateLabel, formatDateTimeLabel, formatEnumLabel, formatManagedUserStatusLabel, getAdminActivity } from "@/lib/admin-api";
-import { dashboardGet, isDashboardSessionExpiredError } from "@/lib/api/client";
+import { dashboardGet, isDashboardSessionExpiredError, submitDashboardForm } from "@/lib/api/client";
 import { formatAdminRole } from "@/lib/auth/access-control";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus, type Tone } from "@/lib/dashboard-data";
@@ -38,6 +38,7 @@ const settingsTabs = [
   "Notifications",
   "Activity Log",
   "Preferences",
+  "Financing Settings",
 ] as const;
 
 type SettingsTab = (typeof settingsTabs)[number];
@@ -192,6 +193,65 @@ export default function SettingsPage() {
 
     return window.localStorage.getItem("fortsolar:appearance") === "dark" ? "dark" : "light";
   });
+
+  const [minDownpayment, setMinDownpayment] = useState<number>(30);
+  const [shortTermRate, setShortTermRate] = useState<number>(25.20);
+  const [longTermRate, setLongTermRate] = useState<number>(36.00);
+  const [tenuresInput, setTenuresInput] = useState<string>("3, 6, 12, 24");
+  const [isSavingFinancing, setIsSavingFinancing] = useState(false);
+  const [financingSaveError, setFinancingSaveError] = useState<string | null>(null);
+  const [financingSaveSuccess, setFinancingSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    dashboardGet<{ success: boolean; data: { min_downpayment_pct: number; short_term_rate: number; long_term_rate: number; tenures: number[] } }>("/api/v1/admin/settings/financing")
+      .then((payload) => {
+        if (cancelled) return;
+        setMinDownpayment(payload.data.min_downpayment_pct);
+        setShortTermRate(payload.data.short_term_rate);
+        setLongTermRate(payload.data.long_term_rate);
+        setTenuresInput(payload.data.tenures.join(", "));
+      })
+      .catch((err) => {
+        console.warn("Could not load financing settings:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSaveFinancing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingFinancing(true);
+    setFinancingSaveError(null);
+    setFinancingSaveSuccess(false);
+
+    try {
+      const parsedTenures = tenuresInput
+        .split(",")
+        .map((t) => parseInt(t.trim(), 10))
+        .filter((t) => !isNaN(t) && t > 0);
+
+      if (parsedTenures.length === 0) {
+        throw new Error("Please enter at least one valid tenure in months.");
+      }
+
+      await submitDashboardForm("/api/v1/admin/settings/financing", {
+        min_downpayment_pct: Number(minDownpayment),
+        short_term_rate: Number(shortTermRate),
+        long_term_rate: Number(longTermRate),
+        tenures: parsedTenures,
+      }, { method: "POST" });
+
+      setFinancingSaveSuccess(true);
+    } catch (err: any) {
+      setFinancingSaveError(err.message || "Failed to update financing settings.");
+    } finally {
+      setIsSavingFinancing(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -674,6 +734,88 @@ export default function SettingsPage() {
                   <InfoRow icon={<ShieldIcon className="mini-icon" />} label="Theme Mode" value={appearance === "dark" ? "Dark" : "Light"} />
                 </div>
               </div>
+            ) : null}
+
+            {activeTab === "Financing Settings" ? (
+              <form onSubmit={handleSaveFinancing} className="settings-section">
+                <div className="settings-section-heading">
+                  <h3>Financing Parameters</h3>
+                  <p>Configure dynamic calculations for customer financing option packages.</p>
+                </div>
+
+                {financingSaveSuccess && (
+                  <div className="status-pill status-pill--success" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#10b981", background: "rgba(16, 185, 129, 0.1)" }}>
+                    Financing settings saved successfully!
+                  </div>
+                )}
+                {financingSaveError && (
+                  <div className="status-pill status-pill--danger" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#ef4444", background: "rgba(239, 68, 68, 0.1)" }}>
+                    {financingSaveError}
+                  </div>
+                )}
+
+                <div className="settings-form-grid">
+                  <SettingsField label="Minimum Downpayment (%)">
+                    <input
+                      type="number"
+                      className="dashboard-input"
+                      value={minDownpayment}
+                      onChange={(e) => setMinDownpayment(Number(e.target.value))}
+                      min="0"
+                      max="100"
+                      required
+                    />
+                  </SettingsField>
+
+                  <SettingsField label="Short-Term Rate (<= 12 Months APR %)">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="dashboard-input"
+                      value={shortTermRate}
+                      onChange={(e) => setShortTermRate(Number(e.target.value))}
+                      min="0"
+                      required
+                    />
+                  </SettingsField>
+
+                  <SettingsField label="Long-Term Rate (> 12 Months APR %)">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="dashboard-input"
+                      value={longTermRate}
+                      onChange={(e) => setLongTermRate(Number(e.target.value))}
+                      min="0"
+                      required
+                    />
+                  </SettingsField>
+
+                  <SettingsField label="Available Tenures (Months, comma-separated)">
+                    <input
+                      type="text"
+                      className="dashboard-input"
+                      value={tenuresInput}
+                      onChange={(e) => setTenuresInput(e.target.value)}
+                      placeholder="e.g. 3, 6, 12, 24"
+                      required
+                    />
+                  </SettingsField>
+                </div>
+
+                <div className="settings-divider" />
+
+                <div className="inline-actions justify-end">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isSavingFinancing}
+                  >
+                    {isSavingFinancing ? "Saving Settings..." : "Save Financing Settings"}
+                  </Button>
+                </div>
+              </form>
             ) : null}
           </section>
         </div>

@@ -413,6 +413,7 @@ export type PackageRecord = {
   name: string;
   description: string | null;
   category_id: string | null;
+  target_audience?: string | null;
   system_size_kw: number;
   price: number;
   number_of_panels: number;
@@ -446,6 +447,7 @@ export type CreatePackageRequest = {
   description?: string;
   overview?: string;
   category_id?: string | null;
+  target_audience?: string | null;
   system_size_kw?: number;
   price: number;
   number_of_panels?: number;
@@ -895,6 +897,20 @@ export type BundleRequestRecord = {
   job_id?: string | null;
   job_slug?: string | null;
   job_status?: string | null;
+  financing_requested?: boolean;
+  financing_status?: string | null;
+  financing_terms?: {
+    downpayment_amount?: number;
+    installment?: number;
+    tenure?: number;
+  } | null;
+  financing_id_upload_id?: string | null;
+  financing_statement_upload_id?: string | null;
+  financing_cac_upload_id?: string | null;
+  financing_utility_bill_upload_id?: string | null;
+  financing_bvn?: string | null;
+  financing_bvn_consent?: boolean;
+  financing_profile_type?: string | null;
 };
 
 export type BundleRequestListApiResponse = ApiCollectionResponse<BundleRequestRecord>;
@@ -902,6 +918,12 @@ export type UpdateBundleRequestRequest = {
   status: string;
   admin_note: string;
   job_status?: string;
+  financing_status?: string | null;
+  financing_terms?: {
+    downpayment_amount?: number;
+    installment?: number;
+    tenure?: number;
+  } | null;
 };
 
 export type OrderDetail = {
