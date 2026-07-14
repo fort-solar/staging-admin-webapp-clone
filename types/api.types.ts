@@ -931,6 +931,7 @@ export type OrderDetail = {
   items: OrderItemRecord[];
   events: OrderEventRecord[];
   bundleRequests: BundleRequestRecord[];
+  installations?: any[];
 };
 
 export type OrderListApiResponse = ApiCollectionResponse<OrderRecord>;

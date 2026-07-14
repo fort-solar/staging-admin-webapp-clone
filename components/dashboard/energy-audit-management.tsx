@@ -711,6 +711,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
   const [status, setStatus] = useState("new");
   const [adminNotes, setAdminNotes] = useState("");
   const [quoteAssetFile, setQuoteAssetFile] = useState<File | null>(null);
+  const [recommendedSystemSize, setRecommendedSystemSize] = useState("");
+  const [estimatedCost, setEstimatedCost] = useState("");
+  const [estimatedSavings, setEstimatedSavings] = useState("");
+  const [paybackPeriodYears, setPaybackPeriodYears] = useState("");
+  const [validityDays, setValidityDays] = useState("7");
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
   const [isReviewedPayloadOpen, setIsReviewedPayloadOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -734,6 +739,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
         setStatus(payload.data.status?.trim().toLowerCase() || "new");
         setAdminNotes(payload.data.admin_notes ?? "");
         setQuoteAssetFile(null);
+        setRecommendedSystemSize(payload.data.recommended_system_size?.toString() ?? "");
+        setEstimatedCost(payload.data.estimated_cost?.toString() ?? "");
+        setEstimatedSavings(payload.data.estimated_savings?.toString() ?? "");
+        setPaybackPeriodYears(payload.data.payback_period_years?.toString() ?? "");
+        setValidityDays((payload.data.form_extras?.validity_days ?? "7").toString());
       })
       .catch((loadError) => {
         if (cancelled) {
@@ -802,6 +812,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
       const payload = {
         status,
         adminNotes: adminNotes.trim(),
+        recommendedSystemSize: recommendedSystemSize ? parseFloat(recommendedSystemSize) : undefined,
+        estimatedCost: estimatedCost ? parseFloat(estimatedCost) : undefined,
+        estimatedSavings: estimatedSavings ? parseFloat(estimatedSavings) : undefined,
+        paybackPeriodYears: paybackPeriodYears ? parseFloat(paybackPeriodYears) : undefined,
+        validityDays: validityDays ? parseInt(validityDays) : undefined,
         ...(status === "reviewed" ? { package_request_payload: buildQuotePackageRequestPayload(detail) } : {}),
         ...(status === "closed" ? { close_confirmed: closeConfirmed } : {}),
       };
@@ -822,6 +837,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
       setStatus(refreshed.data.status?.trim().toLowerCase() || "new");
       setAdminNotes(refreshed.data.admin_notes ?? "");
       setQuoteAssetFile(null);
+      setRecommendedSystemSize(refreshed.data.recommended_system_size?.toString() ?? "");
+      setEstimatedCost(refreshed.data.estimated_cost?.toString() ?? "");
+      setEstimatedSavings(refreshed.data.estimated_savings?.toString() ?? "");
+      setPaybackPeriodYears(refreshed.data.payback_period_years?.toString() ?? "");
+      setValidityDays((refreshed.data.form_extras?.validity_days ?? "7").toString());
       setIsCloseConfirmOpen(false);
 
       toast({
@@ -963,20 +983,79 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
                 />
               </FormField>
               {status === "quoted" ? (
-                <FormField label="Quote File" hint={detail?.quote_asset_url ? "A quote file already exists. Uploading a new file will replace it." : "Upload either an image or a PDF of the quote."}>
-                  <label className="upload-field">
-                    <input
-                      type="file"
-                      accept="application/pdf,image/*"
-                      disabled={quoteUpdateView.isReadOnly}
-                      onChange={(event) => setQuoteAssetFile(event.target.files?.[0] ?? null)}
-                    />
-                    <span className="upload-field__button">
-                      <span>{quoteAssetFile || detail?.quote_asset_url ? "Replace file" : "Choose file"}</span>
-                    </span>
-                    <span className="upload-field__value">{quoteAssetFile?.name || detail?.quote_asset_url?.split("/").pop() || "Upload quote image or PDF"}</span>
-                  </label>
-                </FormField>
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <FormField label="Recommended System Size (kW)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 5.5"
+                        value={recommendedSystemSize}
+                        onChange={(e) => setRecommendedSystemSize(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Estimated Cost (NGN)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 5000000"
+                        value={estimatedCost}
+                        onChange={(e) => setEstimatedCost(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Estimated Savings (NGN/yr)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 1200000"
+                        value={estimatedSavings}
+                        onChange={(e) => setEstimatedSavings(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Payback Period (Years)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 4.5"
+                        value={paybackPeriodYears}
+                        onChange={(e) => setPaybackPeriodYears(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Quote Validity (Days)">
+                      <input
+                        type="number"
+                        placeholder="e.g. 7"
+                        value={validityDays}
+                        onChange={(e) => setValidityDays(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Quote File" hint={detail?.quote_asset_url ? "A quote file already exists. Uploading a new file will replace it." : "Upload either an image or a PDF of the quote."}>
+                    <label className="upload-field">
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        disabled={quoteUpdateView.isReadOnly}
+                        onChange={(event) => setQuoteAssetFile(event.target.files?.[0] ?? null)}
+                      />
+                      <span className="upload-field__button">
+                        <span>{quoteAssetFile || detail?.quote_asset_url ? "Replace file" : "Choose file"}</span>
+                      </span>
+                      <span className="upload-field__value">{quoteAssetFile?.name || detail?.quote_asset_url?.split("/").pop() || "Upload quote image or PDF"}</span>
+                    </label>
+                  </FormField>
+                </>
               ) : null}
               {quoteUpdateView.showReviewedPayloadPreview ? (
                 <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-left">

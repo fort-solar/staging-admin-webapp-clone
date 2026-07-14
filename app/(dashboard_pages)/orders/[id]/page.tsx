@@ -6,8 +6,9 @@ import { ErrorMessage } from "@/components/dashboard/error-message";
 import { ChevronLeftIcon } from "@/components/dashboard/icons";
 import { Button, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
+import { useAccessControl } from "@/components/auth/use-access-control";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
-import { formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getOrder, updateOrder } from "@/lib/admin-api";
+import { formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getOrder, updateOrder, createInstallation } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus } from "@/lib/dashboard-data";
 import type { OrderDetail } from "@/types/api.types";
@@ -17,6 +18,9 @@ const orderStatusOptions = ["pending", "processing", "completed", "cancelled"];
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { toast } = useToast();
+  const { can } = useAccessControl();
+  const canCreateInstallations = can("installations", "create");
+  
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [form, setForm] = useState({
     status: "pending",
@@ -26,7 +30,49 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingInstallation, setIsCreatingInstallation] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleCreateInstallation() {
+    if (!detail) return;
+    setIsCreatingInstallation(true);
+    try {
+      const br = detail.bundleRequests?.[0];
+      const systemSize = Number(br?.system_size_kw) || 5.0;
+      const address = br?.address || "Lagos, Nigeria";
+
+      await createInstallation({
+        user_id: detail.order.customer_user_id,
+        order_id: detail.order.id,
+        address,
+        status: "scheduled",
+        city: br?.city || "",
+        state: br?.state || "",
+        country: br?.country || "Nigeria",
+        system_size_kw: systemSize,
+        number_of_panels: br?.number_of_panels || 0,
+        panel_type: br?.panel_type || "",
+        inverter_type: br?.inverter_type || "",
+      });
+
+      const refreshed = await getOrder(id);
+      setDetail(refreshed.data);
+
+      toast({
+        title: "Installation Created",
+        description: "Installation spawned successfully for this order.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to create installation",
+        description: getErrorMessage(err, "An error occurred while spawning installation."),
+        variant: "error",
+      });
+    } finally {
+      setIsCreatingInstallation(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -178,6 +224,46 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     ))
                   ) : (
                     <p className="mt-4 text-sm text-[var(--text-soft)]">{isLoading ? "Loading package requests..." : "No package requests were returned for this order."}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h4 className="m-0 text-sm font-bold sm:text-[15px]">Installations</h4>
+                <div className="mt-4 flex flex-col gap-4">
+                  {detail?.installations && detail.installations.length ? (
+                    detail.installations.map((installation) => (
+                      <div key={installation.id} className="rounded-[16px] border border-[var(--border)] p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <strong>{installation.installer_company || "FortSolar Fleet"}</strong>
+                          <StatusPill label={formatEnumLabel(installation.status)} tone={toneFromStatus(installation.status)} solid={false} />
+                        </div>
+                        <p className="mb-0 mt-2 text-sm text-[var(--text-soft)]">
+                          Address: {installation.address} <br />
+                          Size: {installation.system_size_kw ? `${installation.system_size_kw} kW` : "N/A"} <br />
+                          Installer: {installation.installer_name || "Unassigned"}
+                        </p>
+                        <div className="mt-3">
+                          <Link href="/jobs" className="text-xs font-semibold text-[#168416] hover:underline">
+                            Manage Installation in Jobs
+                          </Link>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div>
+                      <p className="text-sm text-[var(--text-soft)]">No installations spawned for this order.</p>
+                      {canCreateInstallations && detail?.order.status === "processing" && (
+                        <Button
+                          onClick={handleCreateInstallation}
+                          variant="secondary"
+                          className="mt-3 w-full"
+                          disabled={isCreatingInstallation}
+                        >
+                          {isCreatingInstallation ? "Spawning..." : "Spawn Installation"}
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
