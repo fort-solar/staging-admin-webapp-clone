@@ -137,6 +137,8 @@ export function TransactionsManagementScreen() {
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailRecord, setDetailRecord] = useState<TransactionRecord | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -165,7 +167,7 @@ export function TransactionsManagementScreen() {
     Promise.all([
       getTransactions({
         page,
-        limit: DEFAULT_PAGE_SIZE,
+        limit,
         search: deferredQuery.trim() || undefined,
         q: deferredQuery.trim() || undefined,
       }),
@@ -198,7 +200,7 @@ export function TransactionsManagementScreen() {
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, page, refreshKey]);
+  }, [deferredQuery, page, limit, refreshKey]);
 
   useEffect(() => {
     if (!detailId) {
@@ -481,7 +483,10 @@ export function TransactionsManagementScreen() {
               <thead>
                 <tr>
                   <th className="table-checkbox-cell">
-                    <Checkbox />
+                    <Checkbox
+                      checked={filteredRows.length > 0 && selectedIds.length === filteredRows.length}
+                      onChange={(checked) => setSelectedIds(checked ? filteredRows.map(r => r.id) : [])}
+                    />
                   </th>
                   <th>Transaction ID</th>
                   <th>User ID</th>
@@ -498,7 +503,10 @@ export function TransactionsManagementScreen() {
                   filteredRows.map((record) => (
                     <tr key={record.id}>
                       <td className="table-checkbox-cell">
-                        <Checkbox />
+                        <Checkbox
+                          checked={selectedIds.includes(record.id)}
+                          onChange={(checked) => setSelectedIds(checked ? [...selectedIds, record.id] : selectedIds.filter(id => id !== record.id))}
+                        />
                       </td>
                       <td>{record.id}</td>
                       <td>{record.user_id}</td>
@@ -540,7 +548,16 @@ export function TransactionsManagementScreen() {
               </tbody>
             </table>
           </div>
-          <Pagination page={page} totalPages={Math.max(1, pagination.totalPages)} onChange={setPage} />
+          <Pagination
+            page={page}
+            totalPages={Math.max(1, pagination.totalPages)}
+            onChange={setPage}
+            limit={limit}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setPage(1);
+            }}
+          />
         </Panel>
       </div>
 

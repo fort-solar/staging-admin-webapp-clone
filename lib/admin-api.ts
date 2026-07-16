@@ -887,6 +887,10 @@ export function createInstallation(body: MultipartCapable<CreateInstallationRequ
   );
 }
 
+export function createCustomerInstallation(body: any) {
+  return submitDashboardForm<any>("/api/v1/admin/installations/", body, { method: "POST" });
+}
+
 export function updateInstallation(id: string, body: MultipartCapable<UpdateInstallationRequest>) {
   return requestWithEndpointFallback(
     `/api/v1/admin/projects/${id}`,

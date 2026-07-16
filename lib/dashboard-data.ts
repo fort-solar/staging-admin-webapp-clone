@@ -194,12 +194,13 @@ export function toneFromStatus(status: string): Tone {
     normalized.includes("completed") ||
     normalized.includes("granted") ||
     normalized.includes("published") ||
-    normalized.includes("sent")
+    normalized.includes("sent") ||
+    normalized === "open"
   ) {
     return "success";
   }
 
-  if (normalized.includes("pending") || normalized.includes("processing") || normalized.includes("new")) {
+  if (normalized.includes("pending") || normalized.includes("processing") || normalized.includes("new") || normalized === "assigned") {
     return "warning";
   }
 
@@ -207,7 +208,7 @@ export function toneFromStatus(status: string): Tone {
     return "danger";
   }
 
-  if (normalized.includes("packed") || normalized.includes("transit") || normalized.includes("shipped") || normalized.includes("paused")) {
+  if (normalized.includes("packed") || normalized.includes("transit") || normalized.includes("shipped") || normalized.includes("paused") || normalized.includes("progress")) {
     return normalized.includes("shipped") ? "purple" : "info";
   }
 

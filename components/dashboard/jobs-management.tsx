@@ -82,6 +82,11 @@ type JobFormState = {
   country: string;
   systemSizeKw: string;
   notes: string;
+  inverter_size: string;
+  panel_size: string;
+  number_of_panels: string;
+  battery_type: string;
+  battery_energy: string;
 };
 type JobValidationErrors = Partial<Record<
   | "title"
@@ -121,6 +126,11 @@ const emptyJobForm: JobFormState = {
   country: "Nigeria",
   systemSizeKw: "",
   notes: "",
+  inverter_size: "",
+  panel_size: "",
+  number_of_panels: "0",
+  battery_type: "Lithium",
+  battery_energy: "",
 };
 
 function slugify(value: string) {
@@ -296,6 +306,11 @@ function jobFormFromRecord(job: JobApiRecord): JobFormState {
     country: job.country || "Nigeria",
     systemSizeKw: job.system_size_kw ? String(job.system_size_kw) : "",
     notes: job.notes || "",
+    inverter_size: job.inverter_size || "",
+    panel_size: job.panel_size || "",
+    number_of_panels: String(job.number_of_panels ?? 0),
+    battery_type: job.battery_type || "Lithium",
+    battery_energy: job.battery_energy || "",
   };
 }
 
@@ -364,6 +379,11 @@ function buildJobPayload(form: JobFormState, selectedPackageRequest: BundleReque
     country: form.country.trim() || undefined,
     system_size_kw: Number(form.systemSizeKw) || 0,
     notes: form.notes.trim() || undefined,
+    inverter_size: form.inverter_size.trim() || undefined,
+    panel_size: form.panel_size.trim() || undefined,
+    number_of_panels: Number(form.number_of_panels) || 0,
+    battery_type: form.battery_type,
+    battery_energy: form.battery_energy.trim() || undefined,
   };
 }
 
@@ -555,6 +575,39 @@ function JobEditor({
             </FormField>
             <FormField label="Budget">
               <TextField value={form.budget} onChange={(event) => setForm((current) => ({ ...current, budget: event.target.value }))} placeholder="250000" />
+            </FormField>
+          </div>
+        </div>
+      </DetailPanel>
+
+      <DetailPanel title="System Specifications" description="Define the system specs for the installer job board.">
+        <div className="detail-panel__stack">
+          <div className="product-inline-row is-three">
+            <FormField label="Inverter Size">
+              <TextField value={form.inverter_size} onChange={(e) => setForm(current => ({ ...current, inverter_size: e.target.value }))} placeholder="e.g. 6kW" />
+            </FormField>
+            <FormField label="Panel Size">
+              <TextField value={form.panel_size} onChange={(e) => setForm(current => ({ ...current, panel_size: e.target.value }))} placeholder="e.g. 650W" />
+            </FormField>
+            <FormField label="Number of Panels">
+              <TextField value={form.number_of_panels} onChange={(e) => setForm(current => ({ ...current, number_of_panels: e.target.value }))} placeholder="e.g. 6" />
+            </FormField>
+          </div>
+          <div className="product-inline-row is-two">
+            <FormField label="Battery Type">
+              <select
+                value={form.battery_type}
+                onChange={(e) => setForm(current => ({ ...current, battery_type: e.target.value }))}
+                className="w-full rounded-[12px] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[#168416] focus:ring-1 focus:ring-[#168416]"
+              >
+                <option value="Lithium">Lithium</option>
+                <option value="Tubular">Tubular</option>
+                <option value="Gel">Gel</option>
+                <option value="Other">Other</option>
+              </select>
+            </FormField>
+            <FormField label="Battery Energy (Capacity)">
+              <TextField value={form.battery_energy} onChange={(e) => setForm(current => ({ ...current, battery_energy: e.target.value }))} placeholder="e.g. 5kWh" />
             </FormField>
           </div>
         </div>
@@ -852,7 +905,7 @@ export function JobsManagementScreen() {
                       <StatusPill label={formatEnumLabel(job.status)} tone={toneFromStatus(job.status)} solid={false} />
                       <TableActionsMenu
                         items={[
-                          { label: "View Job", href: `/jobs/${job.slug}`, icon: <EyeIcon className="menu-icon" /> },
+                          { label: "View Job", href: `/jobs/${job.slug || job.id}`, icon: <EyeIcon className="menu-icon" /> },
                           ...(canDeleteJobs
                             ? [
                                 {
@@ -878,7 +931,7 @@ export function JobsManagementScreen() {
                     <div className="job-card__footer">
                       <strong>{formatCurrencyLabel(job.budget)}</strong>
                       <span>{locationLabel(job)}</span>
-                      <Link href={`/jobs/${job.slug}`} className="action-button is-secondary is-sm">
+                      <Link href={`/jobs/${job.slug || job.id}`} className="action-button is-secondary is-sm">
                         View
                       </Link>
                     </div>

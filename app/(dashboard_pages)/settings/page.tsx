@@ -38,7 +38,6 @@ const settingsTabs = [
   "Notifications",
   "Activity Log",
   "Preferences",
-  "Financing Settings",
 ] as const;
 
 type SettingsTab = (typeof settingsTabs)[number];
@@ -168,7 +167,7 @@ function buildActivityItems({
 }
 
 export default function SettingsPage() {
-  const { session } = useAuth();
+  const { session, refreshSession } = useAuth();
   const {
     notifications,
     markRead,
@@ -194,73 +193,21 @@ export default function SettingsPage() {
     return window.localStorage.getItem("fortsolar:appearance") === "dark" ? "dark" : "light";
   });
 
-  const [minDownpayment, setMinDownpayment] = useState<number>(30);
-  const [shortTermRate, setShortTermRate] = useState<number>(25.20);
-  const [longTermRate, setLongTermRate] = useState<number>(36.00);
-  const [individualRate, setIndividualRate] = useState<number>(48.00);
-  const [salaryEarnerRate, setSalaryEarnerRate] = useState<number>(20.00);
-  const [businessRate, setBusinessRate] = useState<number>(18.00);
-  const [tenuresInput, setTenuresInput] = useState<string>("3, 6, 12, 24");
-  const [isSavingFinancing, setIsSavingFinancing] = useState(false);
-  const [financingSaveError, setFinancingSaveError] = useState<string | null>(null);
-  const [financingSaveSuccess, setFinancingSaveSuccess] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileAddress, setProfileAddress] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-
-    dashboardGet<{ success: boolean; data: { min_downpayment_pct: number; short_term_rate: number; long_term_rate: number; tenures: number[]; individual_rate: number; salary_earner_rate: number; business_rate: number } }>("/api/v1/admin/settings/financing")
-      .then((payload) => {
-        if (cancelled) return;
-        setMinDownpayment(payload.data.min_downpayment_pct);
-        setShortTermRate(payload.data.short_term_rate);
-        setLongTermRate(payload.data.long_term_rate);
-        setTenuresInput(payload.data.tenures.join(", "));
-        setIndividualRate(payload.data.individual_rate ?? 48.00);
-        setSalaryEarnerRate(payload.data.salary_earner_rate ?? 20.00);
-        setBusinessRate(payload.data.business_rate ?? 18.00);
-      })
-      .catch((err) => {
-        console.warn("Could not load financing settings:", err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleSaveFinancing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingFinancing(true);
-    setFinancingSaveError(null);
-    setFinancingSaveSuccess(false);
-
-    try {
-      const parsedTenures = tenuresInput
-        .split(",")
-        .map((t) => parseInt(t.trim(), 10))
-        .filter((t) => !isNaN(t) && t > 0);
-
-      if (parsedTenures.length === 0) {
-        throw new Error("Please enter at least one valid tenure in months.");
-      }
-
-      await submitDashboardForm("/api/v1/admin/settings/financing", {
-        min_downpayment_pct: Number(minDownpayment),
-        short_term_rate: Number(shortTermRate),
-        long_term_rate: Number(longTermRate),
-        tenures: parsedTenures,
-        individual_rate: Number(individualRate),
-        salary_earner_rate: Number(salaryEarnerRate),
-        business_rate: Number(businessRate),
-      }, { method: "POST" });
-
-      setFinancingSaveSuccess(true);
-    } catch (err: any) {
-      setFinancingSaveError(err.message || "Failed to update financing settings.");
-    } finally {
-      setIsSavingFinancing(false);
+    if (profile?.user) {
+      setProfileName(profile.user.name || "");
+      setProfilePhone(profile.user.phone || "");
+      setProfileAddress(profile.user.address || "");
     }
-  };
+  }, [profile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,7 +236,33 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [profileRefreshKey]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    setProfileSaveError(null);
+    setProfileSaveSuccess(false);
+
+    try {
+      await submitDashboardForm(
+        "/api/v1/auth/me",
+        {
+          name: profileName,
+          phone: profilePhone,
+          address: profileAddress,
+        },
+        { method: "PATCH" }
+      );
+      setProfileSaveSuccess(true);
+      await refreshSession();
+      setProfileRefreshKey((k) => k + 1);
+    } catch (err: any) {
+      setProfileSaveError(err.message || "Failed to update profile.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     function handleAppearanceChange(event: Event) {
@@ -466,6 +439,18 @@ export default function SettingsPage() {
               <InfoRow icon={<ShieldIcon className="mini-icon" />} label="Admin Role" value={adminRoleLabel} />
               <InfoRow icon={<UsersIcon className="mini-icon" />} label="Member Since" value={memberSince} />
             </div>
+
+            <div className="settings-divider" style={{ margin: "20px 0" }} />
+
+            <div style={{ width: "100%" }}>
+              <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "12px", display: "block" }}>Interface Theme</span>
+              <SettingsSwitch
+                checked={appearance === "dark"}
+                onChange={(next) => applyAppearance(next ? "dark" : "light")}
+                label="Dark Mode"
+                description="Use dark interface colors"
+              />
+            </div>
           </aside>
 
           <section className="settings-panel">
@@ -473,7 +458,7 @@ export default function SettingsPage() {
             <ErrorMessage title="Settings load failed" message={error} />
 
             {activeTab === "Personal Information" ? (
-              <div className="settings-section">
+              <form onSubmit={handleSaveProfile} className="settings-section">
                 <div className="settings-section-heading">
                   <h3>Profile Details</h3>
                   <p>
@@ -481,25 +466,49 @@ export default function SettingsPage() {
                       ? "The live profile request failed, so fallback session data is shown where possible."
                       : isLoading
                         ? "Refreshing your account details."
-                        : "Current account details from the active admin session."}
+                        : "Edit and save your account details."}
                   </p>
                 </div>
 
+                {profileSaveSuccess && (
+                  <div className="status-pill status-pill--success" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#10b981", background: "rgba(16, 185, 129, 0.1)", fontSize: "13px" }}>
+                    Profile details updated successfully!
+                  </div>
+                )}
+                {profileSaveError && (
+                  <div className="status-pill status-pill--danger" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#ef4444", background: "rgba(239, 68, 68, 0.1)", fontSize: "13px" }}>
+                    {profileSaveError}
+                  </div>
+                )}
+
                 <div className="settings-form-grid">
-                  <SettingsField label="Full Name" icon={<UsersIcon className="mini-icon" />}>
-                    <SettingsValue value={fullName} />
-                  </SettingsField>
-                  <SettingsField label="Display Name" icon={<UsersIcon className="mini-icon" />}>
-                    <SettingsValue value={displayName} />
+                  <SettingsField label="Full / Display Name" icon={<UsersIcon className="mini-icon" />}>
+                    <input
+                      type="text"
+                      className="dashboard-input"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      required
+                    />
                   </SettingsField>
                   <SettingsField label="Email Address" icon={<MailIcon className="mini-icon" />}>
                     <SettingsValue value={email} />
                   </SettingsField>
                   <SettingsField label="Phone Number" icon={<PhoneIcon className="mini-icon" />}>
-                    <SettingsValue value={phone} />
+                    <input
+                      type="text"
+                      className="dashboard-input"
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                    />
                   </SettingsField>
                   <SettingsField label="Address" icon={<GlobeIcon className="mini-icon" />}>
-                    <SettingsValue value={address} />
+                    <input
+                      type="text"
+                      className="dashboard-input"
+                      value={profileAddress}
+                      onChange={(e) => setProfileAddress(e.target.value)}
+                    />
                   </SettingsField>
                   <SettingsField label="Account Status" icon={<ShieldIcon className="mini-icon" />}>
                     <SettingsValue value={statusLabel} />
@@ -513,6 +522,19 @@ export default function SettingsPage() {
                   <SettingsField label="Member Since" icon={<UsersIcon className="mini-icon" />}>
                     <SettingsValue value={memberSince} />
                   </SettingsField>
+                </div>
+
+                <div className="settings-divider" />
+
+                <div className="inline-actions justify-end">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isSavingProfile}
+                  >
+                    {isSavingProfile ? "Saving Profile..." : "Save Profile Details"}
+                  </Button>
                 </div>
 
                 <div className="settings-divider" />
@@ -536,7 +558,7 @@ export default function SettingsPage() {
                 ) : (
                   <div className="settings-banner">No explicit permissions were returned for this account yet.</div>
                 )}
-              </div>
+              </form>
             ) : null}
 
             {activeTab === "Security" ? (
@@ -745,123 +767,6 @@ export default function SettingsPage() {
               </div>
             ) : null}
 
-            {activeTab === "Financing Settings" ? (
-              <form onSubmit={handleSaveFinancing} className="settings-section">
-                <div className="settings-section-heading">
-                  <h3>Financing Parameters</h3>
-                  <p>Configure dynamic calculations for customer financing option packages.</p>
-                </div>
-
-                {financingSaveSuccess && (
-                  <div className="status-pill status-pill--success" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#10b981", background: "rgba(16, 185, 129, 0.1)" }}>
-                    Financing settings saved successfully!
-                  </div>
-                )}
-                {financingSaveError && (
-                  <div className="status-pill status-pill--danger" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#ef4444", background: "rgba(239, 68, 68, 0.1)" }}>
-                    {financingSaveError}
-                  </div>
-                )}
-
-                <div className="settings-form-grid">
-                  <SettingsField label="Minimum Downpayment (%)">
-                    <input
-                      type="number"
-                      className="dashboard-input"
-                      value={minDownpayment}
-                      onChange={(e) => setMinDownpayment(Number(e.target.value))}
-                      min="0"
-                      max="100"
-                      required
-                    />
-                  </SettingsField>
-
-                  <SettingsField label="Short-Term Rate (<= 12 Months APR %)">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="dashboard-input"
-                      value={shortTermRate}
-                      onChange={(e) => setShortTermRate(Number(e.target.value))}
-                      min="0"
-                      required
-                    />
-                  </SettingsField>
-
-                  <SettingsField label="Long-Term Rate (> 12 Months APR %)">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="dashboard-input"
-                      value={longTermRate}
-                      onChange={(e) => setLongTermRate(Number(e.target.value))}
-                      min="0"
-                      required
-                    />
-                  </SettingsField>
-
-                  <SettingsField label="Individual Rate (Flat APR %)">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="dashboard-input"
-                      value={individualRate}
-                      onChange={(e) => setIndividualRate(Number(e.target.value))}
-                      min="0"
-                      required
-                    />
-                  </SettingsField>
-
-                  <SettingsField label="Salary Earner Rate (Reducing APR %)">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="dashboard-input"
-                      value={salaryEarnerRate}
-                      onChange={(e) => setSalaryEarnerRate(Number(e.target.value))}
-                      min="0"
-                      required
-                    />
-                  </SettingsField>
-
-                  <SettingsField label="Business Rate (Reducing APR %)">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="dashboard-input"
-                      value={businessRate}
-                      onChange={(e) => setBusinessRate(Number(e.target.value))}
-                      min="0"
-                      required
-                    />
-                  </SettingsField>
-
-                  <SettingsField label="Available Tenures (Months, comma-separated)">
-                    <input
-                      type="text"
-                      className="dashboard-input"
-                      value={tenuresInput}
-                      onChange={(e) => setTenuresInput(e.target.value)}
-                      placeholder="e.g. 3, 6, 12, 24"
-                      required
-                    />
-                  </SettingsField>
-                </div>
-
-                <div className="settings-divider" />
-
-                <div className="inline-actions justify-end">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    disabled={isSavingFinancing}
-                  >
-                    {isSavingFinancing ? "Saving Settings..." : "Save Financing Settings"}
-                  </Button>
-                </div>
-              </form>
-            ) : null}
           </section>
         </div>
       </Panel>

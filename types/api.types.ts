@@ -675,6 +675,11 @@ export type JobApiRecord = {
   country?: string | null;
   system_size_kw?: number | null;
   notes?: string | null;
+  inverter_size?: string | null;
+  panel_size?: string | null;
+  battery_type?: string | null;
+  battery_energy?: string | null;
+  number_of_panels?: number | null;
 };
 
 export type JobListApiResponse = ApiCollectionResponse<JobApiRecord>;
@@ -704,6 +709,11 @@ export type CreateJobRequest = {
   country?: string;
   system_size_kw?: number;
   notes?: string;
+  inverter_size?: string;
+  panel_size?: string;
+  number_of_panels?: number;
+  battery_type?: string;
+  battery_energy?: string;
 };
 export type UpdateJobRequest = Partial<CreateJobRequest>;
 

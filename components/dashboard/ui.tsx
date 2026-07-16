@@ -86,6 +86,8 @@ type PaginationProps = {
   page: number;
   totalPages: number;
   onChange: (page: number) => void;
+  limit?: number;
+  onLimitChange?: (limit: number) => void;
 };
 
 export type SelectOption = string | { label: string; value: string };
@@ -684,7 +686,7 @@ export function TableActionsMenu({
   );
 }
 
-export function Pagination({ page, totalPages, onChange }: PaginationProps) {
+export function Pagination({ page, totalPages, onChange, limit, onLimitChange }: PaginationProps) {
   const visible = useMemo(() => {
     const staticPages = [1, 2, 3, 4, 5];
     if (totalPages <= 5) {
@@ -697,41 +699,67 @@ export function Pagination({ page, totalPages, onChange }: PaginationProps) {
   const isNextDisabled = page >= totalPages;
 
   return (
-    <div className="pagination">
-      <button
-        type="button"
-        className="pagination__edge"
-        onClick={() => onChange(Math.max(1, page - 1))}
-        aria-label="Previous page"
-        disabled={isPreviousDisabled}
-      >
-        <ChevronDownIcon className="pagination__arrow rotate-90" />
-      </button>
-      {visible.map((entry, index) =>
-        entry === "ellipsis" ? (
-          <span key={`ellipsis-${index}`} className="pagination__ellipsis">
-            ....
-          </span>
-        ) : (
-          <button
-            key={entry}
-            type="button"
-            className={cx("pagination__page", page === entry && "is-active")}
-            onClick={() => onChange(entry)}
+    <div className="pagination" style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+      <div style={{ display: "flex", gap: "4px" }}>
+        <button
+          type="button"
+          className="pagination__edge"
+          onClick={() => onChange(Math.max(1, page - 1))}
+          aria-label="Previous page"
+          disabled={isPreviousDisabled}
+        >
+          <ChevronDownIcon className="pagination__arrow rotate-90" />
+        </button>
+        {visible.map((entry, index) =>
+          entry === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="pagination__ellipsis">
+              ....
+            </span>
+          ) : (
+            <button
+              key={entry}
+              type="button"
+              className={cx("pagination__page", page === entry && "is-active")}
+              onClick={() => onChange(entry)}
+            >
+              {entry}
+            </button>
+          ),
+        )}
+        <button
+          type="button"
+          className="pagination__edge"
+          onClick={() => onChange(Math.min(totalPages, page + 1))}
+          aria-label="Next page"
+          disabled={isNextDisabled}
+        >
+          <ChevronDownIcon className="pagination__arrow -rotate-90" />
+        </button>
+      </div>
+
+      {onLimitChange && limit && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
+          <span>Show:</span>
+          <select
+            value={limit}
+            onChange={(e) => onLimitChange(Number(e.target.value))}
+            style={{
+              padding: "6px 12px",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--bg-card)",
+              color: "var(--text)",
+              fontSize: "13px",
+              outline: "none",
+              cursor: "pointer",
+            }}
           >
-            {entry}
-          </button>
-        ),
+            <option value="20">20 per page</option>
+            <option value="50">50 per page</option>
+            <option value="100">100 per page</option>
+          </select>
+        </div>
       )}
-      <button
-        type="button"
-        className="pagination__edge"
-        onClick={() => onChange(Math.min(totalPages, page + 1))}
-        aria-label="Next page"
-        disabled={isNextDisabled}
-      >
-        <ChevronDownIcon className="pagination__arrow -rotate-90" />
-      </button>
     </div>
   );
 }

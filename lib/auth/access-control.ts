@@ -313,6 +313,13 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     createHref: "/jobs/new",
     createPermission: { resource: "jobs", action: "create" },
   },
+  {
+    label: "Financing Settings",
+    href: "/settings/financing",
+    icon: "transactions",
+    section: "operations",
+    permission: { resource: "settings", action: "read" },
+  },
   { label: "Activity History", href: "/activity-history", icon: "activity_history", section: "footer", permission: { resource: "settings", action: "read" } },
   { label: "Settings", href: "/settings", icon: "settings", section: "footer", permission: { resource: "settings", action: "read" } },
 ];

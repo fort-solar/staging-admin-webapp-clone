@@ -62,6 +62,8 @@ export default function BundleRequestPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailStatus, setDetailStatus] = useState("");
@@ -90,7 +92,7 @@ export default function BundleRequestPage() {
 
     getBundleRequests({
       page,
-      limit: DEFAULT_PAGE_SIZE,
+      limit,
       search: deferredQuery.trim() || undefined,
       q: deferredQuery.trim() || undefined,
     })
@@ -120,7 +122,7 @@ export default function BundleRequestPage() {
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, page, refreshKey]);
+  }, [deferredQuery, page, limit, refreshKey]);
 
   const filteredRows = useMemo(
     () =>
@@ -269,7 +271,10 @@ export default function BundleRequestPage() {
                   <thead>
                     <tr>
                       <th className="table-checkbox-cell">
-                        <Checkbox />
+                        <Checkbox
+                          checked={filteredRows.length > 0 && selectedIds.length === filteredRows.length}
+                          onChange={(checked) => setSelectedIds(checked ? filteredRows.map(r => r.id) : [])}
+                        />
                       </th>
                       <th>Package</th>
                       <th>Request ID</th>
@@ -286,7 +291,10 @@ export default function BundleRequestPage() {
                       filteredRows.map((row) => (
                         <tr key={row.id}>
                           <td className="table-checkbox-cell">
-                            <Checkbox />
+                            <Checkbox
+                              checked={selectedIds.includes(row.id)}
+                              onChange={(checked) => setSelectedIds(checked ? [...selectedIds, row.id] : selectedIds.filter(id => id !== row.id))}
+                            />
                           </td>
                           <td>{row.bundle_name}</td>
                           <td>{row.id}</td>
@@ -323,7 +331,16 @@ export default function BundleRequestPage() {
                   </tbody>
                 </table>
               </div>
-              <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
+              <Pagination
+                page={page}
+                totalPages={Math.max(pagination.totalPages, 1)}
+                onChange={setPage}
+                limit={limit}
+                onLimitChange={(n) => {
+                  setLimit(n);
+                  setPage(1);
+                }}
+              />
             </>
           )}
         </Panel>

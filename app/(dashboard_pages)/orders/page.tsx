@@ -97,6 +97,8 @@ export default function OrdersPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [openModal, setOpenModal] = useState(false);
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
@@ -130,7 +132,7 @@ export default function OrdersPage() {
       getDashboardOverview(),
       getOrders({
         page,
-        limit: DEFAULT_PAGE_SIZE,
+        limit,
         search: deferredQuery.trim() || undefined,
         q: deferredQuery.trim() || undefined,
       }),
@@ -162,7 +164,7 @@ export default function OrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, page, refreshKey]);
+  }, [deferredQuery, page, limit, refreshKey]);
 
   useEffect(() => {
     if (!openModal) {
@@ -619,14 +621,16 @@ export default function OrdersPage() {
                   <thead>
                     <tr>
                       <th className="table-checkbox-cell">
-                        <Checkbox />
+                        <Checkbox
+                          checked={filteredRows.length > 0 && selectedIds.length === filteredRows.length}
+                          onChange={(checked) => setSelectedIds(checked ? filteredRows.map(r => r.id) : [])}
+                        />
                       </th>
                       <th>Order ID</th>
                       <th>Customer</th>
                       <th>Created</th>
                       <th>Amount</th>
                       <th>Status</th>
-                      <th>Notes</th>
                       <th className="text-right">Action</th>
                     </tr>
                   </thead>
@@ -635,7 +639,10 @@ export default function OrdersPage() {
                       filteredRows.map((order) => (
                         <tr key={order.id}>
                           <td className="table-checkbox-cell">
-                            <Checkbox />
+                            <Checkbox
+                              checked={selectedIds.includes(order.id)}
+                              onChange={(checked) => setSelectedIds(checked ? [...selectedIds, order.id] : selectedIds.filter(id => id !== order.id))}
+                            />
                           </td>
                           <td>{order.id}</td>
                           <td>
@@ -649,7 +656,6 @@ export default function OrdersPage() {
                           <td>
                             <StatusPill label={formatEnumLabel(order.status)} tone={toneFromStatus(order.status)} />
                           </td>
-                          <td>{order.notes || "N/A"}</td>
                           <td className="text-right">
                             <Link href={`/orders/${order.id}`} className="inline-flex">
                               <IconButton label={`View ${order.id}`} icon={<EyeIcon className="menu-icon" />} />
@@ -667,7 +673,16 @@ export default function OrdersPage() {
                   </tbody>
                 </table>
               </div>
-              <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
+              <Pagination
+                page={page}
+                totalPages={Math.max(pagination.totalPages, 1)}
+                onChange={setPage}
+                limit={limit}
+                onLimitChange={(n) => {
+                  setLimit(n);
+                  setPage(1);
+                }}
+              />
             </>
           )}
         </Panel>
