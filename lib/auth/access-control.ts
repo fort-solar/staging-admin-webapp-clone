@@ -209,6 +209,7 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/users/installers", permission: { resource: "installers", action: "read" }, title: "Installer Management" },
   { prefix: "/users/admins", permission: { resource: "admins", action: "read" }, title: "Admin Management" },
   { prefix: "/orders/bundle-requests", permission: { resource: "orders", action: "read" }, title: "Package Request Management" },
+  { prefix: "/orders/finance-requests", permission: { resource: "orders", action: "read" }, title: "Finance Request Management" },
   { prefix: "/orders", permission: { resource: "orders", action: "read" }, title: "Order Management" },
   { prefix: "/notifications", permission: { resource: "notifications", action: "read" }, title: "Notification Management" },
   { prefix: "/products/new", permission: { resource: "products", action: "create" }, title: "Add Product" },
@@ -252,6 +253,7 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     children: [
       { label: "All Orders", href: "/orders", permission: { resource: "orders", action: "read" } },
       { label: "Package Requests", href: "/orders/bundle-requests", permission: { resource: "orders", action: "read" } },
+      { label: "Finance Requests", href: "/orders/finance-requests", permission: { resource: "orders", action: "read" } },
     ],
   },
   { label: "Notifications", href: "/notifications", icon: "notifications", section: "main", permission: { resource: "notifications", action: "read" } },

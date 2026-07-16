@@ -903,12 +903,18 @@ export type BundleRequestRecord = {
     downpayment_amount?: number;
     installment?: number;
     tenure?: number;
+    loan_amount?: number;
+    interest_type?: string;
+    interest_rate?: number;
+    expected_payment_day?: number;
+    finance_company_name?: string;
   } | null;
   financing_id_upload_id?: string | null;
   financing_statement_upload_id?: string | null;
   financing_cac_upload_id?: string | null;
   financing_utility_bill_upload_id?: string | null;
   financing_bvn?: string | null;
+  financing_nin?: string | null;
   financing_bvn_consent?: boolean;
   financing_profile_type?: string | null;
 };
@@ -923,6 +929,11 @@ export type UpdateBundleRequestRequest = {
     downpayment_amount?: number;
     installment?: number;
     tenure?: number;
+    loan_amount?: number;
+    interest_type?: string;
+    interest_rate?: number;
+    expected_payment_day?: number;
+    finance_company_name?: string;
   } | null;
 };
 

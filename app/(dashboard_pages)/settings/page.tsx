@@ -197,6 +197,9 @@ export default function SettingsPage() {
   const [minDownpayment, setMinDownpayment] = useState<number>(30);
   const [shortTermRate, setShortTermRate] = useState<number>(25.20);
   const [longTermRate, setLongTermRate] = useState<number>(36.00);
+  const [individualRate, setIndividualRate] = useState<number>(48.00);
+  const [salaryEarnerRate, setSalaryEarnerRate] = useState<number>(20.00);
+  const [businessRate, setBusinessRate] = useState<number>(18.00);
   const [tenuresInput, setTenuresInput] = useState<string>("3, 6, 12, 24");
   const [isSavingFinancing, setIsSavingFinancing] = useState(false);
   const [financingSaveError, setFinancingSaveError] = useState<string | null>(null);
@@ -205,13 +208,16 @@ export default function SettingsPage() {
   useEffect(() => {
     let cancelled = false;
 
-    dashboardGet<{ success: boolean; data: { min_downpayment_pct: number; short_term_rate: number; long_term_rate: number; tenures: number[] } }>("/api/v1/admin/settings/financing")
+    dashboardGet<{ success: boolean; data: { min_downpayment_pct: number; short_term_rate: number; long_term_rate: number; tenures: number[]; individual_rate: number; salary_earner_rate: number; business_rate: number } }>("/api/v1/admin/settings/financing")
       .then((payload) => {
         if (cancelled) return;
         setMinDownpayment(payload.data.min_downpayment_pct);
         setShortTermRate(payload.data.short_term_rate);
         setLongTermRate(payload.data.long_term_rate);
         setTenuresInput(payload.data.tenures.join(", "));
+        setIndividualRate(payload.data.individual_rate ?? 48.00);
+        setSalaryEarnerRate(payload.data.salary_earner_rate ?? 20.00);
+        setBusinessRate(payload.data.business_rate ?? 18.00);
       })
       .catch((err) => {
         console.warn("Could not load financing settings:", err);
@@ -243,6 +249,9 @@ export default function SettingsPage() {
         short_term_rate: Number(shortTermRate),
         long_term_rate: Number(longTermRate),
         tenures: parsedTenures,
+        individual_rate: Number(individualRate),
+        salary_earner_rate: Number(salaryEarnerRate),
+        business_rate: Number(businessRate),
       }, { method: "POST" });
 
       setFinancingSaveSuccess(true);
@@ -786,6 +795,42 @@ export default function SettingsPage() {
                       className="dashboard-input"
                       value={longTermRate}
                       onChange={(e) => setLongTermRate(Number(e.target.value))}
+                      min="0"
+                      required
+                    />
+                  </SettingsField>
+
+                  <SettingsField label="Individual Rate (Flat APR %)">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="dashboard-input"
+                      value={individualRate}
+                      onChange={(e) => setIndividualRate(Number(e.target.value))}
+                      min="0"
+                      required
+                    />
+                  </SettingsField>
+
+                  <SettingsField label="Salary Earner Rate (Reducing APR %)">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="dashboard-input"
+                      value={salaryEarnerRate}
+                      onChange={(e) => setSalaryEarnerRate(Number(e.target.value))}
+                      min="0"
+                      required
+                    />
+                  </SettingsField>
+
+                  <SettingsField label="Business Rate (Reducing APR %)">
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="dashboard-input"
+                      value={businessRate}
+                      onChange={(e) => setBusinessRate(Number(e.target.value))}
                       min="0"
                       required
                     />

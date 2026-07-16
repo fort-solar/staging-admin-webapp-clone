@@ -70,6 +70,11 @@ export default function BundleRequestPage() {
   const [downpaymentAmount, setDownpaymentAmount] = useState<number | "">("");
   const [installment, setInstallment] = useState<number | "">("");
   const [tenure, setTenure] = useState<number | "">("");
+  const [loanAmount, setLoanAmount] = useState<number | "">("");
+  const [interestType, setInterestType] = useState<"fixed" | "reducing">("fixed");
+  const [interestRate, setInterestRate] = useState<number | "">("");
+  const [expectedPaymentDay, setExpectedPaymentDay] = useState<number | "">("");
+  const [financeCompanyName, setFinanceCompanyName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +147,11 @@ export default function BundleRequestPage() {
       setDownpaymentAmount("");
       setInstallment("");
       setTenure("");
+      setLoanAmount("");
+      setInterestType("fixed");
+      setInterestRate("");
+      setExpectedPaymentDay("");
+      setFinanceCompanyName("");
       return;
     }
 
@@ -151,6 +161,11 @@ export default function BundleRequestPage() {
     setDownpaymentAmount(activeRequest.financing_terms?.downpayment_amount ?? "");
     setInstallment(activeRequest.financing_terms?.installment ?? "");
     setTenure(activeRequest.financing_terms?.tenure ?? "");
+    setLoanAmount(activeRequest.financing_terms?.loan_amount ?? "");
+    setInterestType((activeRequest.financing_terms?.interest_type as any) ?? "fixed");
+    setInterestRate(activeRequest.financing_terms?.interest_rate ?? "");
+    setExpectedPaymentDay(activeRequest.financing_terms?.expected_payment_day ?? "");
+    setFinanceCompanyName(activeRequest.financing_terms?.finance_company_name ?? "");
   }, [activeRequest]);
 
   const processingCount = rows.filter((row) => row.status.toLowerCase() === "processing").length;
@@ -176,6 +191,11 @@ export default function BundleRequestPage() {
               downpayment_amount: downpaymentAmount !== "" ? Number(downpaymentAmount) : undefined,
               installment: installment !== "" ? Number(installment) : undefined,
               tenure: tenure !== "" ? Number(tenure) : undefined,
+              loan_amount: loanAmount !== "" ? Number(loanAmount) : undefined,
+              interest_type: interestType,
+              interest_rate: interestRate !== "" ? Number(interestRate) : undefined,
+              expected_payment_day: expectedPaymentDay !== "" ? Number(expectedPaymentDay) : undefined,
+              finance_company_name: financeCompanyName || undefined,
             }
           : undefined,
       });
@@ -403,6 +423,10 @@ export default function BundleRequestPage() {
                     <p className="cell-subtle">BVN (Bank Verification Number)</p>
                     <strong>{activeRequest.financing_bvn || "N/A"}</strong>
                   </div>
+                  <div>
+                    <p className="cell-subtle">NIN (National Identification Number)</p>
+                    <strong>{activeRequest.financing_nin || "N/A"}</strong>
+                  </div>
                   <div className="md:col-span-2">
                     <p className="cell-subtle">BVN Consent Status</p>
                     <strong>
@@ -471,37 +495,89 @@ export default function BundleRequestPage() {
                             { label: "Partner Submitted", value: "partner_submitted" },
                             { label: "Approved", value: "approved" },
                             { label: "Rejected", value: "rejected" },
+                            { label: "Approved & Processed", value: "processed" },
                           ]}
                         />
                       </FormField>
-
-                      <FormField label="Tenure (Months)">
-                        <TextField
-                          value={String(tenure)}
-                          onChange={(e) => setTenure(e.target.value === "" ? "" : Number(e.target.value))}
-                          placeholder="e.g. 12"
-                          type="text"
-                        />
-                      </FormField>
-
-                      <FormField label="Downpayment Amount (₦)">
-                        <TextField
-                          value={String(downpaymentAmount)}
-                          onChange={(e) => setDownpaymentAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                          placeholder="e.g. 1500000"
-                          type="text"
-                        />
-                      </FormField>
-
-                      <FormField label="Monthly Installment (₦)">
-                        <TextField
-                          value={String(installment)}
-                          onChange={(e) => setInstallment(e.target.value === "" ? "" : Number(e.target.value))}
-                          placeholder="e.g. 350000"
-                          type="text"
-                        />
-                      </FormField>
                     </div>
+
+                    {(financingStatus === "approved" || financingStatus === "processed") && (
+                      <div className="grid gap-4 md:grid-cols-2 mt-4 border-t pt-4">
+                        <FormField label="Loan Amount (₦)">
+                          <TextField
+                            value={String(loanAmount)}
+                            onChange={(e) => setLoanAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 1600000"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Downpayment Amount (₦)">
+                          <TextField
+                            value={String(downpaymentAmount)}
+                            onChange={(e) => setDownpaymentAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 1000000"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Tenure (Months)">
+                          <TextField
+                            value={String(tenure)}
+                            onChange={(e) => setTenure(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 12"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Interest Type">
+                          <SelectField
+                            value={interestType}
+                            onChange={(val) => setInterestType(val as any)}
+                            options={[
+                              { label: "Flat Rate", value: "fixed" },
+                              { label: "Reducing Balance", value: "reducing" },
+                            ]}
+                          />
+                        </FormField>
+
+                        <FormField label="Interest Rate (APR %)">
+                          <TextField
+                            value={String(interestRate)}
+                            onChange={(e) => setInterestRate(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 20.0"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Monthly Installment (₦)">
+                          <TextField
+                            value={String(installment)}
+                            onChange={(e) => setInstallment(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 74000"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Expected Payment Day of Month">
+                          <TextField
+                            value={String(expectedPaymentDay)}
+                            onChange={(e) => setExpectedPaymentDay(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 25"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Financing Company Name">
+                          <TextField
+                            value={financeCompanyName}
+                            onChange={(e) => setFinanceCompanyName(e.target.value)}
+                            placeholder="e.g. Altpower / Sterling Bank"
+                            type="text"
+                          />
+                        </FormField>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -515,8 +591,12 @@ export default function BundleRequestPage() {
                     <p className="cell-subtle">Financing Status</p>
                     <strong className="capitalize">{activeRequest.financing_status.replace("_", " ")}</strong>
                   </div>
-                  {activeRequest.financing_status === "approved" && (
+                  {(activeRequest.financing_status === "approved" || activeRequest.financing_status === "processed") && (
                     <>
+                      <div>
+                        <p className="cell-subtle">Loan Amount</p>
+                        <strong>₦{activeRequest.financing_terms?.loan_amount?.toLocaleString() ?? "N/A"}</strong>
+                      </div>
                       <div>
                         <p className="cell-subtle">Downpayment</p>
                         <strong>₦{activeRequest.financing_terms?.downpayment_amount?.toLocaleString() ?? "N/A"}</strong>
@@ -528,6 +608,21 @@ export default function BundleRequestPage() {
                       <div>
                         <p className="cell-subtle">Tenure</p>
                         <strong>{activeRequest.financing_terms?.tenure ? `${activeRequest.financing_terms.tenure} Months` : "N/A"}</strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Interest Type & Rate</p>
+                        <strong>
+                          {activeRequest.financing_terms?.interest_type === "reducing" ? "Reducing Balance" : "Flat Rate"}
+                          {activeRequest.financing_terms?.interest_rate ? ` (${activeRequest.financing_terms.interest_rate}% APR)` : ""}
+                        </strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Expected Payment Day</p>
+                        <strong>{activeRequest.financing_terms?.expected_payment_day ? `Day ${activeRequest.financing_terms.expected_payment_day} of month` : "N/A"}</strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Financing Company</p>
+                        <strong>{activeRequest.financing_terms?.finance_company_name ?? "N/A"}</strong>
                       </div>
                     </>
                   )}
