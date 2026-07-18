@@ -60,9 +60,9 @@
 html[data-dashboard-appearance="dark"] {
   color-scheme: dark;
   --page-bg: #0b1118;
-  --surface: #111a23;
-  --surface-muted: #141f29;
-  --surface-soft: #16222d;
+  --surface: #101820;
+  --surface-muted: #121d27;
+  --surface-soft: #172430;
   --border: #22303d;
   --border-strong: #2b3a49;
   --text: #edf3f8;
