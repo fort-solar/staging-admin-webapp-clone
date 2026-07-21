@@ -231,6 +231,7 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/jobs/new", permission: { resource: "jobs", action: "create" }, title: "Add Job" },
   { prefix: "/jobs", permission: { resource: "jobs", action: "read" }, title: "Job Management" },
   { prefix: "/activity-history", permission: { resource: "settings", action: "read" }, title: "Activity History" },
+  { prefix: "/settings/delivery", permission: { resource: "settings", action: "read" }, title: "Delivery Settings" },
   { prefix: "/settings", permission: { resource: "settings", action: "read" }, title: "Account Settings" },
 ];
 
@@ -317,6 +318,13 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     label: "Financing Settings",
     href: "/settings/financing",
     icon: "transactions",
+    section: "operations",
+    permission: { resource: "settings", action: "read" },
+  },
+  {
+    label: "Delivery Settings",
+    href: "/settings/delivery",
+    icon: "orders",
     section: "operations",
     permission: { resource: "settings", action: "read" },
   },
