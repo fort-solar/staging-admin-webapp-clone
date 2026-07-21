@@ -854,6 +854,15 @@ export type OrderRecord = {
   total_amount: string;
   currency: string;
   notes: string | null;
+  installation_type?: string | null;
+  specifications?: {
+    inverter_size?: string | null;
+    inverter_label?: string | null;
+    pv_size?: string | null;
+    pv_label?: string | null;
+    battery_size?: string | null;
+    battery_label?: string | null;
+  } | null;
   created_at: string;
   updated_at: string;
   customer_email: string;
@@ -978,6 +987,8 @@ export type UpdateOrderRequest = {
   currency: string;
   total_amount: number;
   notes: string;
+  installation_type?: string | null;
+  specifications?: OrderRecord["specifications"];
 };
 
 export type TransactionRecord = {

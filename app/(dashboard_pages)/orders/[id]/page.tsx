@@ -273,6 +273,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         currency: form.currency,
         total_amount: Number(form.totalAmount) || 0,
         notes: form.notes,
+        installation_type: detail.order.installation_type,
+        specifications: detail.order.specifications,
       });
 
       const refreshed = await getOrder(detail.order.id);
