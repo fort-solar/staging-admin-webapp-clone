@@ -4949,7 +4949,7 @@ img {
 
 .job-editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(1fr, 1fr);
   gap: 18px;
 }
 

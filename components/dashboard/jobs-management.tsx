@@ -491,7 +491,7 @@ function JobEditor({
 }) {
   return (
     <div className="job-editor-grid">
-      <DetailPanel title="Job Information" description="Link the job to a packed package request, then confirm the installer and schedule.">
+      <DetailPanel className="job-editor-grid__full" title="Job Information" description="Link the job to a packed package request, then confirm the installer and schedule.">
         <div className="detail-panel__stack">
           <FormField label="Package Request" hint={isLoadingReferences ? "Loading package requests..." : referenceError || "Only packed package requests are selectable for new jobs."}>
             <SelectField
@@ -525,7 +525,7 @@ function JobEditor({
             />
           </FormField>
 
-          <div className="product-inline-row is-two">
+          <div className="flex flex-col gap-6">
             <FormField label="Status">
               <SelectField value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} options={buildStatusOptions(form.status)} />
             </FormField>
@@ -581,7 +581,7 @@ function JobEditor({
         </div>
       </DetailPanel>
 
-      <DetailPanel title="System Specifications" description="Define the system specs for the installer job board.">
+      <DetailPanel className="job-editor-grid__full" title="System Specifications" description="Define the system specs for the installer job board.">
         <div className="detail-panel__stack">
           <div className="product-inline-row is-three">
             <FormField label="Inverter Size">
@@ -594,7 +594,7 @@ function JobEditor({
               <TextField value={form.number_of_panels} onChange={(e) => setForm(current => ({ ...current, number_of_panels: e.target.value }))} placeholder="e.g. 6" />
             </FormField>
           </div>
-          <div className="product-inline-row is-two">
+          <div className="flex flex-col gap-6">
             <FormField label="Battery Type">
               <ComboboxField
                 value={form.battery_type}
@@ -610,7 +610,7 @@ function JobEditor({
         </div>
       </DetailPanel>
 
-      <DetailPanel title="Customer & Location" description="Package request selection prefills these values. If no package is linked, complete them manually.">
+      <DetailPanel className="job-editor-grid__full" title="Customer & Location" description="Package request selection prefills these values. If no package is linked, complete them manually.">
         <div className="detail-panel__stack">
           <FormField label="Customer Name" error={errors.customerName}>
             <TextField
