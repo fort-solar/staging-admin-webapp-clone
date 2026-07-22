@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { dashboardGet, submitDashboardForm } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ChevronLeftIcon } from "@/components/dashboard/icons";
+import { ComboboxField } from "@/components/ui/combobox-field";
 
 export default function FinancingSettingsPage() {
   const router = useRouter();
@@ -266,14 +267,12 @@ export default function FinancingSettingsPage() {
               <div className="product-inline-row is-two">
                 <label className="form-field">
                   <span className="form-field__label">Require Guarantor</span>
-                  <select
+                  <ComboboxField
                     className="dashboard-input"
                     value={requireGuarantor ? "true" : "false"}
-                    onChange={(e) => setRequireGuarantor(e.target.value === "true")}
-                  >
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
+                    onValueChange={(value) => setRequireGuarantor(value === "true")}
+                    options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]}
+                  />
                 </label>
                 <label className="form-field">
                   <span className="form-field__label">Guarantor Min Salary (NGN)</span>
