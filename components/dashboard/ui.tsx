@@ -36,7 +36,7 @@ import {
   WalletIcon,
   XCircleIcon,
 } from "@/components/dashboard/icons";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ComboboxField } from "@/components/ui/combobox-field";
 
 type ActionItem = {
   label: string;
@@ -92,7 +92,6 @@ type PaginationProps = {
 
 export type SelectOption = string | { label: string; value: string };
 
-const EMPTY_SELECT_VALUE = "__fortsolar_empty_option__";
 
 type AvatarProps = {
   src?: string;
@@ -365,58 +364,21 @@ export function SelectField({
   searchable?: boolean;
 }) {
   const normalizedOptions = options.map((option) => (typeof option === "string" ? { label: option, value: option } : option));
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const filteredOptions = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return normalizedOptions;
-    }
-
-    return normalizedOptions.filter((option) => option.label.toLowerCase().includes(normalizedSearch));
-  }, [normalizedOptions, search]);
-  const hasEmptyOption = filteredOptions.some((option) => option.value === "");
-  const resolvedValue = value === "" ? (hasEmptyOption ? EMPTY_SELECT_VALUE : undefined) : value;
   const triggerClassName = cx(className, variant === "inline" && "is-inline");
 
   return (
-    <Select
-      value={resolvedValue}
-      onValueChange={(nextValue) => onChange(nextValue === EMPTY_SELECT_VALUE ? "" : nextValue)}
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          setSearch("");
-        }
-      }}
+    <ComboboxField
+      value={value}
+      onValueChange={onChange}
+      options={normalizedOptions}
+      placeholder={placeholder}
+      className={triggerClassName}
       disabled={disabled}
       required={required}
-    >
-      <SelectTrigger className={triggerClassName} aria-label={ariaLabel} aria-invalid={invalid || undefined}>
-        <SelectValue className="select-field__value" placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {searchable ? (
-          <div className="dashboard-select__search" onPointerDown={(event) => event.stopPropagation()}>
-            <SearchIcon className="field-icon" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search options"
-              aria-label="Search options"
-            />
-          </div>
-        ) : null}
-        {filteredOptions.map((option) => (
-          <SelectItem key={`${option.value}-${option.label}`} value={option.value === "" ? EMPTY_SELECT_VALUE : option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-        {!filteredOptions.length ? <div className="dashboard-select__empty">No options match your search.</div> : null}
-      </SelectContent>
-    </Select>
+      aria-label={ariaLabel}
+      aria-invalid={invalid}
+      emptyMessage="No options match your search."
+    />
   );
 }
 
@@ -740,24 +702,13 @@ export function Pagination({ page, totalPages, onChange, limit, onLimitChange }:
       {onLimitChange && limit && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
           <span>Show:</span>
-          <select
-            value={limit}
-            onChange={(e) => onLimitChange(Number(e.target.value))}
-            style={{
-              padding: "6px 12px",
-              borderRadius: "8px",
-              border: "1px solid var(--border)",
-              backgroundColor: "var(--bg-card)",
-              color: "var(--text)",
-              fontSize: "13px",
-              outline: "none",
-              cursor: "pointer",
-            }}
-          >
-            <option value="20">20 per page</option>
-            <option value="50">50 per page</option>
-            <option value="100">100 per page</option>
-          </select>
+          <ComboboxField
+            value={String(limit)}
+            onValueChange={(value) => onLimitChange(Number(value))}
+            options={[{ value: "20", label: "20 per page" }, { value: "50", label: "50 per page" }, { value: "100", label: "100 per page" }]}
+            className="w-[130px]"
+            aria-label="Items per page"
+          />
         </div>
       )}
     </div>
