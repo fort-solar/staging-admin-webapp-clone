@@ -19,7 +19,7 @@ type DeliverySettings = {
 };
 
 const INITIAL_SETTINGS: DeliverySettings = {
-  universal_fee: 168224,
+  universal_fee: 16000,
   currency: "NGN",
   state_rules: {
     Lagos: { all_cities_free: true, free_cities: [] },
@@ -42,6 +42,23 @@ const FALLBACK_CITIES: Record<string, string[]> = {
 
 function money(value: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(value || 0);
+}
+
+function stateRuleKey(state: string, rules: Record<string, StateRule>) {
+  if (rules[state]) return state;
+
+  const withoutSuffix = state.replace(/\s+State$/i, "");
+  if (rules[withoutSuffix]) return withoutSuffix;
+
+  const withSuffix = `${state} State`;
+  if (rules[withSuffix]) return withSuffix;
+
+  return withoutSuffix;
+}
+
+function displayStateName(state: string) {
+  if (state === "Federal Capital Territory") return "Abuja (FCT)";
+  return state.replace(/\s+State$/i, "");
 }
 
 export default function DeliverySettingsPage() {
@@ -84,7 +101,8 @@ export default function DeliverySettingsPage() {
       .finally(() => setIsLoadingCities(false));
   }, [citiesByState, selectedState]);
 
-  const currentRule = settings.state_rules[selectedState] ?? { all_cities_free: false, free_cities: [] };
+  const selectedStateRuleKey = stateRuleKey(selectedState, settings.state_rules);
+  const currentRule = settings.state_rules[selectedStateRuleKey] ?? { all_cities_free: false, free_cities: [] };
   const cities = citiesByState[selectedState] ?? [];
   const visibleStates = states.filter((state) => state.toLowerCase().includes(stateSearch.toLowerCase().trim()));
   const visibleCities = cities.filter((city) => city.toLowerCase().includes(citySearch.toLowerCase().trim()));
@@ -96,7 +114,7 @@ export default function DeliverySettingsPage() {
   function updateRule(next: StateRule) {
     setSettings((current) => ({
       ...current,
-      state_rules: { ...current.state_rules, [selectedState]: next },
+      state_rules: { ...current.state_rules, [stateRuleKey(selectedState, current.state_rules)]: next },
     }));
   }
 
@@ -161,7 +179,7 @@ export default function DeliverySettingsPage() {
             <span className="form-field__label">Universal fee (NGN)</span>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#667085]">₦</span>
-              <input className="dashboard-input pl-8" type="number" min="0" step="100" value={settings.universal_fee} onChange={(event) => setSettings((current) => ({ ...current, universal_fee: Number(event.target.value) }))} />
+              <input className="dashboard-input" style={{ paddingLeft: 40 }} type="number" min="0" step="100" value={settings.universal_fee} onChange={(event) => setSettings((current) => ({ ...current, universal_fee: Number(event.target.value) }))} />
             </div>
           </label>
         </div>
@@ -174,15 +192,15 @@ export default function DeliverySettingsPage() {
             <p className="mb-4 mt-1 text-xs text-[#667085]">Select a state to manage its cities.</p>
             <div className="relative mb-4">
               <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]" />
-              <input className="dashboard-input pl-9" value={stateSearch} onChange={(event) => setStateSearch(event.target.value)} placeholder="Search states" />
+              <input className="dashboard-input" style={{ paddingLeft: 40 }} value={stateSearch} onChange={(event) => setStateSearch(event.target.value)} placeholder="Search states" />
             </div>
             <div className="max-h-[440px] space-y-1 overflow-y-auto pr-1">
               {visibleStates.map((state) => {
-                const rule = settings.state_rules[state];
+                const rule = settings.state_rules[stateRuleKey(state, settings.state_rules)];
                 const label = rule?.all_cities_free ? "All cities free" : rule?.free_cities.length ? `${rule.free_cities.length} cities free` : "Standard fee";
                 return (
-                  <button key={state} type="button" onClick={() => { setSelectedState(state); setCitySearch(""); }} className={cx("flex w-full items-center justify-between rounded-xl px-3 py-3 text-left transition", selectedState === state ? "bg-white shadow-sm ring-1 ring-[#d0d5dd]" : "hover:bg-white")}>
-                    <span className="text-sm font-semibold text-[#344054]">{state === "Federal Capital Territory" ? "Abuja (FCT)" : state}</span>
+                  <button key={state} type="button" onClick={() => { setSelectedState(state); setCitySearch(""); }} className={cx("flex w-full items-center justify-between rounded-xl px-3 py-3 text-left transition", selectedStateRuleKey === stateRuleKey(state, settings.state_rules) ? "bg-white shadow-sm ring-1 ring-[#d0d5dd]" : "hover:bg-white")}>
+                    <span className="text-sm font-semibold text-[#344054]">{displayStateName(state)}</span>
                     <span className={cx("text-[10px] font-bold", rule?.all_cities_free ? "text-[#168416]" : "text-[#98a2b3]")}>{label}</span>
                   </button>
                 );
@@ -193,7 +211,7 @@ export default function DeliverySettingsPage() {
           <section className="p-5 sm:p-7">
             <div className="flex flex-col gap-4 border-b border-[#e4e7ec] pb-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="m-0 text-lg font-extrabold text-[#101828]">{selectedState === "Federal Capital Territory" ? "Abuja (FCT)" : selectedState}</h3>
+                <h3 className="m-0 text-lg font-extrabold text-[#101828]">{displayStateName(selectedState)}</h3>
                 <p className="mb-0 mt-1 text-sm text-[#667085]">Choose all cities or create a custom free-delivery list.</p>
               </div>
               <button type="button" role="switch" aria-checked={currentRule.all_cities_free} onClick={() => updateRule({ all_cities_free: !currentRule.all_cities_free, free_cities: currentRule.free_cities })} className="flex items-center gap-3 rounded-xl border border-[#d0d5dd] bg-white px-4 py-3 text-left">
@@ -205,14 +223,14 @@ export default function DeliverySettingsPage() {
             {currentRule.all_cities_free ? (
               <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#b7e3b7] bg-[#f0faf0] p-5">
                 <CheckCircleIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#168416]" />
-                <div><strong className="text-sm text-[#14532d]">Free delivery across {selectedState}</strong><p className="mb-0 mt-1 text-sm text-[#477047]">Every current and newly added city in this state will receive free delivery.</p></div>
+                <div><strong className="text-sm text-[#14532d]">Free delivery across {displayStateName(selectedState)}</strong><p className="mb-0 mt-1 text-sm text-[#477047]">Every current and newly added city in this state will receive free delivery.</p></div>
               </div>
             ) : (
               <>
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="relative w-full max-w-md">
                     <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]" />
-                    <input className="dashboard-input pl-9" value={citySearch} onChange={(event) => setCitySearch(event.target.value)} placeholder={`Search cities in ${selectedState}`} />
+                    <input className="dashboard-input" style={{ paddingLeft: 40 }} value={citySearch} onChange={(event) => setCitySearch(event.target.value)} placeholder={`Search cities in ${displayStateName(selectedState)}`} />
                   </div>
                   <span className="text-xs font-semibold text-[#667085]">{currentRule.free_cities.length} of {cities.length} cities free</span>
                 </div>
