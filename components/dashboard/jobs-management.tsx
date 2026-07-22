@@ -47,7 +47,7 @@ const jobStatusTabs = ["All", "Open", "Assigned", "In Progress", "Completed", "V
 const jobStatusOptions = [
   { label: "Open", value: "open" },
   { label: "Assigned", value: "assigned" },
-  { label: "In Progress", value: "in_progress" },
+  { label: "In Progress", value: "in-progress" },
   { label: "Completed", value: "completed" },
   { label: "Verified", value: "verified" },
   { label: "Closed", value: "closed" },
@@ -155,7 +155,7 @@ function matchesJobStatus(status: string, filter: JobStatusFilter) {
     case "Assigned":
       return normalized === "assigned";
     case "In Progress":
-      return normalized === "in_progress" || normalized === "in progress";
+      return normalized === "in-progress";
     case "Completed":
       return normalized === "completed";
     case "Verified":
@@ -268,8 +268,7 @@ function mapJobStatusToPackageStatus(status: string, currentStatus?: string | nu
   switch (normalized) {
     case "assigned":
       return "installer_assigned";
-    case "in_progress":
-    case "in progress":
+    case "in-progress":
       return "installer_in_transit";
     case "completed":
       return "system_installed";
