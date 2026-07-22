@@ -142,7 +142,7 @@ export default function FinancingSettingsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Panel>
             <PanelHeader title="Interest Rates & Tenures" description="Configure APR rates and repayment durations." />
-            <div className="detail-panel__stack">
+            <div className="detail-panel__stack px-[22px] pb-[22px]">
               <label className="form-field">
                 <span className="form-field__label">Minimum Downpayment (%)</span>
                 <input
@@ -238,7 +238,7 @@ export default function FinancingSettingsPage() {
 
           <Panel>
             <PanelHeader title="Advanced Operation Settings" description="Set credit policies, fees, and guarantor requirements." />
-            <div className="detail-panel__stack">
+            <div className="detail-panel__stack px-[22px] pb-[22px]">
               <div className="product-inline-row is-two">
                 <label className="form-field">
                   <span className="form-field__label">Max Finance Amount (NGN)</span>
