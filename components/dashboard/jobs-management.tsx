@@ -11,6 +11,7 @@ import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextArea } from
 import { FormSubmitter } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
+import { ComboboxField } from "@/components/ui/combobox-field";
 import {
   createJob,
   DEFAULT_PAGE_SIZE,
@@ -595,16 +596,12 @@ function JobEditor({
           </div>
           <div className="product-inline-row is-two">
             <FormField label="Battery Type">
-              <select
+              <ComboboxField
                 value={form.battery_type}
-                onChange={(e) => setForm(current => ({ ...current, battery_type: e.target.value }))}
+                onValueChange={(value) => setForm(current => ({ ...current, battery_type: value }))}
+                options={["Lithium", "Tubular", "Gel", "Other"].map((value) => ({ value, label: value }))}
                 className="w-full rounded-[12px] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[#168416] focus:ring-1 focus:ring-[#168416]"
-              >
-                <option value="Lithium">Lithium</option>
-                <option value="Tubular">Tubular</option>
-                <option value="Gel">Gel</option>
-                <option value="Other">Other</option>
-              </select>
+              />
             </FormField>
             <FormField label="Battery Energy (Capacity)">
               <TextField value={form.battery_energy} onChange={(e) => setForm(current => ({ ...current, battery_energy: e.target.value }))} placeholder="e.g. 5kWh" />
