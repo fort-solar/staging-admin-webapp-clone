@@ -156,19 +156,19 @@ export default function DeliverySettingsPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Panel className="p-5">
-          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[#667085]">Universal fee</p>
-          <p className="mb-0 mt-2 text-2xl font-extrabold text-[#101828]">{money(settings.universal_fee)}</p>
-          <p className="mb-0 mt-1 text-xs text-[#667085]">Applied to every non-free city</p>
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-soft)]">Universal fee</p>
+          <p className="mb-0 mt-2 text-2xl font-extrabold text-[var(--text)]">{money(settings.universal_fee)}</p>
+          <p className="mb-0 mt-1 text-xs text-[var(--text-soft)]">Applied to every non-free city</p>
         </Panel>
         <Panel className="p-5">
-          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[#667085]">States fully covered</p>
-          <p className="mb-0 mt-2 text-2xl font-extrabold text-[#101828]">{freeStateCount}</p>
-          <p className="mb-0 mt-1 text-xs text-[#667085]">All cities receive free delivery</p>
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-soft)]">States fully covered</p>
+          <p className="mb-0 mt-2 text-2xl font-extrabold text-[var(--text)]">{freeStateCount}</p>
+          <p className="mb-0 mt-1 text-xs text-[var(--text-soft)]">All cities receive free delivery</p>
         </Panel>
         <Panel className="p-5">
-          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[#667085]">Coverage rule</p>
-          <p className="mb-0 mt-2 text-lg font-extrabold text-[#101828]">City-level control</p>
-          <p className="mb-0 mt-1 text-xs text-[#667085]">Changes apply at checkout</p>
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-soft)]">Coverage rule</p>
+          <p className="mb-0 mt-2 text-lg font-extrabold text-[var(--text)]">City-level control</p>
+          <p className="mb-0 mt-1 text-xs text-[var(--text-soft)]">Changes apply at checkout</p>
         </Panel>
       </div>
 
@@ -178,7 +178,7 @@ export default function DeliverySettingsPage() {
           <label className="form-field">
             <span className="form-field__label">Universal fee (NGN)</span>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#667085]">₦</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[var(--text-soft)]">₦</span>
               <input className="dashboard-input" style={{ paddingLeft: 40 }} type="number" min="0" step="100" value={settings.universal_fee} onChange={(event) => setSettings((current) => ({ ...current, universal_fee: Number(event.target.value) }))} />
             </div>
           </label>
@@ -187,11 +187,11 @@ export default function DeliverySettingsPage() {
 
       <Panel className="overflow-hidden">
         <div className="grid min-h-[570px] lg:grid-cols-[320px_1fr]">
-          <aside className="border-b border-[#e4e7ec] bg-[#f9fafb] p-5 lg:border-b-0 lg:border-r">
-            <h3 className="m-0 text-base font-bold text-[#101828]">States</h3>
-            <p className="mb-4 mt-1 text-xs text-[#667085]">Select a state to manage its cities.</p>
+          <aside className="border-b border-[var(--border)] bg-[var(--surface-muted)] p-5 lg:border-b-0 lg:border-r">
+            <h3 className="m-0 text-base font-bold text-[var(--text)]">States</h3>
+            <p className="mb-4 mt-1 text-xs text-[var(--text-soft)]">Select a state to manage its cities.</p>
             <div className="relative mb-4">
-              <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]" />
+              <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-faint)]" />
               <input className="dashboard-input" style={{ paddingLeft: 40 }} value={stateSearch} onChange={(event) => setStateSearch(event.target.value)} placeholder="Search states" />
             </div>
             <div className="max-h-[440px] space-y-1 overflow-y-auto pr-1">
@@ -199,9 +199,9 @@ export default function DeliverySettingsPage() {
                 const rule = settings.state_rules[stateRuleKey(state, settings.state_rules)];
                 const label = rule?.all_cities_free ? "All cities free" : rule?.free_cities.length ? `${rule.free_cities.length} cities free` : "Standard fee";
                 return (
-                  <button key={state} type="button" onClick={() => { setSelectedState(state); setCitySearch(""); }} className={cx("flex w-full items-center justify-between rounded-xl px-3 py-3 text-left transition", selectedStateRuleKey === stateRuleKey(state, settings.state_rules) ? "bg-white shadow-sm ring-1 ring-[#d0d5dd]" : "hover:bg-white")}>
-                    <span className="text-sm font-semibold text-[#344054]">{displayStateName(state)}</span>
-                    <span className={cx("text-[10px] font-bold", rule?.all_cities_free ? "text-[#168416]" : "text-[#98a2b3]")}>{label}</span>
+                  <button key={state} type="button" onClick={() => { setSelectedState(state); setCitySearch(""); }} className={cx("flex w-full items-center justify-between rounded-xl px-3 py-3 text-left transition", selectedStateRuleKey === stateRuleKey(state, settings.state_rules) ? "bg-[var(--surface)] shadow-sm ring-1 ring-[var(--field-border)]" : "hover:bg-[var(--surface)]")}>
+                    <span className="text-sm font-semibold text-[var(--text)]">{displayStateName(state)}</span>
+                    <span className={cx("text-[10px] font-bold", rule?.all_cities_free ? "text-[var(--brand)]" : "text-[var(--text-faint)]")}>{label}</span>
                   </button>
                 );
               })}
@@ -209,38 +209,38 @@ export default function DeliverySettingsPage() {
           </aside>
 
           <section className="p-5 sm:p-7">
-            <div className="flex flex-col gap-4 border-b border-[#e4e7ec] pb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 border-b border-[var(--border)] pb-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="m-0 text-lg font-extrabold text-[#101828]">{displayStateName(selectedState)}</h3>
-                <p className="mb-0 mt-1 text-sm text-[#667085]">Choose all cities or create a custom free-delivery list.</p>
+                <h3 className="m-0 text-lg font-extrabold text-[var(--text)]">{displayStateName(selectedState)}</h3>
+                <p className="mb-0 mt-1 text-sm text-[var(--text-soft)]">Choose all cities or create a custom free-delivery list.</p>
               </div>
-              <button type="button" role="switch" aria-checked={currentRule.all_cities_free} onClick={() => updateRule({ all_cities_free: !currentRule.all_cities_free, free_cities: currentRule.free_cities })} className="flex items-center gap-3 rounded-xl border border-[#d0d5dd] bg-white px-4 py-3 text-left">
+              <button type="button" role="switch" aria-checked={currentRule.all_cities_free} onClick={() => updateRule({ all_cities_free: !currentRule.all_cities_free, free_cities: currentRule.free_cities })} className="flex items-center gap-3 rounded-xl border border-[var(--field-border)] bg-[var(--surface)] px-4 py-3 text-left">
                 <span className={cx("relative h-6 w-11 rounded-full transition", currentRule.all_cities_free ? "bg-[#168416]" : "bg-[#d0d5dd]")}><span className={cx("absolute top-1 h-4 w-4 rounded-full bg-white shadow transition", currentRule.all_cities_free ? "left-6" : "left-1")} /></span>
-                <span><strong className="block text-sm text-[#344054]">All cities are free</strong><small className="text-[#667085]">One switch for the entire state</small></span>
+                <span><strong className="block text-sm text-[var(--text)]">All cities are free</strong><small className="text-[var(--text-soft)]">One switch for the entire state</small></span>
               </button>
             </div>
 
             {currentRule.all_cities_free ? (
-              <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#b7e3b7] bg-[#f0faf0] p-5">
-                <CheckCircleIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#168416]" />
-                <div><strong className="text-sm text-[#14532d]">Free delivery across {displayStateName(selectedState)}</strong><p className="mb-0 mt-1 text-sm text-[#477047]">Every current and newly added city in this state will receive free delivery.</p></div>
+              <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[color:rgba(4,138,5,0.28)] bg-[var(--brand-soft)] p-5">
+                <CheckCircleIcon className="mt-0.5 h-5 w-5 shrink-0 text-[var(--brand)]" />
+                <div><strong className="text-sm text-[var(--brand)]">Free delivery across {displayStateName(selectedState)}</strong><p className="mb-0 mt-1 text-sm text-[var(--text-soft)]">Every current and newly added city in this state will receive free delivery.</p></div>
               </div>
             ) : (
               <>
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="relative w-full max-w-md">
-                    <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]" />
+                    <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-faint)]" />
                     <input className="dashboard-input" style={{ paddingLeft: 40 }} value={citySearch} onChange={(event) => setCitySearch(event.target.value)} placeholder={`Search cities in ${displayStateName(selectedState)}`} />
                   </div>
-                  <span className="text-xs font-semibold text-[#667085]">{currentRule.free_cities.length} of {cities.length} cities free</span>
+                  <span className="text-xs font-semibold text-[var(--text-soft)]">{currentRule.free_cities.length} of {cities.length} cities free</span>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {isLoadingCities ? <p className="text-sm text-[#667085]">Loading cities...</p> : visibleCities.map((city) => {
+                  {isLoadingCities ? <p className="text-sm text-[var(--text-soft)]">Loading cities...</p> : visibleCities.map((city) => {
                     const checked = currentRule.free_cities.includes(city);
-                    return <label key={city} className={cx("flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition", checked ? "border-[#80c780] bg-[#f4fbf4]" : "border-[#e4e7ec] hover:border-[#b7bdc8]")}><input type="checkbox" className="h-4 w-4 accent-[#168416]" checked={checked} onChange={() => toggleCity(city)} /><span className="text-sm font-semibold text-[#344054]">{city}</span></label>;
+                    return <label key={city} className={cx("flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition", checked ? "border-[color:rgba(4,138,5,0.38)] bg-[var(--brand-soft)]" : "border-[var(--border)] hover:border-[var(--field-border-hover)]")}><input type="checkbox" className="h-4 w-4 accent-[#168416]" checked={checked} onChange={() => toggleCity(city)} /><span className="text-sm font-semibold text-[var(--text)]">{city}</span></label>;
                   })}
                 </div>
-                {!isLoadingCities && !visibleCities.length && <div className="mt-8 rounded-xl border border-dashed border-[#d0d5dd] p-8 text-center text-sm text-[#667085]">No matching cities found.</div>}
+                {!isLoadingCities && !visibleCities.length && <div className="mt-8 rounded-xl border border-dashed border-[var(--field-border)] p-8 text-center text-sm text-[var(--text-soft)]">No matching cities found.</div>}
               </>
             )}
           </section>
