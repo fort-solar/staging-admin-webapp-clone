@@ -7,6 +7,7 @@ import { ChevronLeftIcon } from "@/components/dashboard/icons";
 import { Button, InfoRow, Panel, SelectField, StatusPill, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { Modal, FormField, ModalTextInput, ModalTextArea } from "@/components/dashboard/modals";
 import { useToast } from "@/components/ui/toast";
+import { ComboboxField } from "@/components/ui/combobox-field";
 import { useAccessControl } from "@/components/auth/use-access-control";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { formatCurrencyLabel, formatDateTimeLabel, formatEnumLabel, getOrder, updateOrder, createCustomerInstallation, createJob } from "@/lib/admin-api";
@@ -581,16 +582,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Battery Type">
-              <select
+              <ComboboxField
                 value={spawnForm.batteryType}
-                onChange={(e) => setSpawnForm(prev => ({ ...prev, batteryType: e.target.value }))}
+                onValueChange={(value) => setSpawnForm(prev => ({ ...prev, batteryType: value }))}
+                options={["Lithium", "Tubular", "Gel", "Other"].map((value) => ({ value, label: value }))}
                 className="w-full rounded-[12px] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[#168416] focus:ring-1 focus:ring-[#168416]"
-              >
-                <option value="Lithium">Lithium</option>
-                <option value="Tubular">Tubular</option>
-                <option value="Gel">Gel</option>
-                <option value="Other">Other</option>
-              </select>
+              />
             </FormField>
 
             <FormField label="Battery Energy (Capacity)">
