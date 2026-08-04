@@ -80,7 +80,7 @@ export default function DeliverySettingsPage() {
       })
       .catch(() => undefined);
 
-    dashboardGet<{ data?: DeliverySettings }>("/admin/settings/delivery")
+    dashboardGet<{ data?: DeliverySettings }>("/api/v1/admin/settings/delivery")
       .then((payload) => {
         if (payload.data) setSettings(payload.data);
       })
@@ -132,7 +132,7 @@ export default function DeliverySettingsPage() {
     event.preventDefault();
     setIsSaving(true);
     try {
-      await submitDashboardForm("/admin/settings/delivery", settings);
+      await submitDashboardForm("/api/v1/admin/settings/delivery", settings);
       toast({ title: "Delivery settings saved", description: "Free-delivery coverage and the universal fee were updated.", variant: "success" });
     } catch (error) {
       toast({ title: "Could not save delivery settings", description: getErrorMessage(error), variant: "error" });

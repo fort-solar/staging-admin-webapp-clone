@@ -38,7 +38,7 @@ export default function FinancingSettingsPage() {
     let cancelled = false;
     setIsLoading(true);
 
-    dashboardGet("/admin/settings/financing")
+    dashboardGet("/api/v1/admin/settings/financing")
       .then((res: any) => {
         if (cancelled) return;
         const data = res.data || {};
@@ -100,7 +100,7 @@ export default function FinancingSettingsPage() {
     };
 
     try {
-      await submitDashboardForm("/admin/settings/financing", payload);
+      await submitDashboardForm("/api/v1/admin/settings/financing", payload);
       toast({
         title: "Financing settings updated",
         description: "Operations parameters saved successfully.",
