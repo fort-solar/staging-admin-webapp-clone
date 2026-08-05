@@ -345,7 +345,7 @@ export function NotificationsProvider({ children, oneSignalConfig }: { children:
         try {
           const initConfig: Record<string, unknown> = {
             appId: oneSignalAppId,
-            allowLocalhostAsSecureOrigin: true,
+            allowLocalhostAsSecureOrigin: process.env.NODE_ENV === "development",
             serviceWorkerPath: ONE_SIGNAL_WORKER_PATH,
             serviceWorkerUpdaterPath: ONE_SIGNAL_UPDATER_WORKER_PATH,
             notifyButton: { enable: oneSignalNotifyButtonEnabled },
