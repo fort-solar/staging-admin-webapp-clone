@@ -1040,7 +1040,7 @@ export type ApplianceCatalogRecord = {
   category: string;
   power_rating_watts: number;
   daily_hours_usage: number;
-  monthly_kwh: number;
+  monthly_kwh: number | null;
   description: string | null;
   icon: string | null;
   is_active: boolean;

@@ -7,8 +7,10 @@ import {
 } from "@/components/dashboard/products-management";
 import {
   buildQuotePackageRequestPayload,
+  calculateMonthlyKwh,
   getQuoteUpdateViewState,
 } from "@/components/dashboard/energy-audit-management";
+import { buildVerificationDocumentUrl } from "@/components/dashboard/verification-dialogs";
 import { dashboardGet } from "@/lib/api/client";
 import {
   buildMultipartFormData,
@@ -175,6 +177,59 @@ describe("product form helpers", () => {
         currentDatasheetUrl: null,
       }),
     ).toThrow("Enter a valid stock quantity.");
+  });
+
+  it("requires product images when the selected category enforces them", () => {
+    expect(() =>
+      validateProductFormInput({
+        name: "Panel",
+        categoryId: "cat-1",
+        price: "250000",
+        discountedPrice: "",
+        stockQuantity: "12",
+        selectedCategory: {
+          requires_product_image: true,
+          requires_datasheet: false,
+        },
+        imageFiles: [],
+        currentImageUrls: [],
+        datasheetFile: null,
+        currentDatasheetUrl: null,
+      }),
+    ).toThrow("Upload at least one product image for this category.");
+  });
+});
+
+describe("verification document urls", () => {
+  it("uses the authenticated upload download route for opaque storage paths", () => {
+    expect(
+      buildVerificationDocumentUrl({
+        id: "doc-1",
+        verification_id: "verification-1",
+        upload_id: "upload-123",
+        label: "Installer ID",
+        category: "Identity Verification",
+        pages: 1,
+        created_at: "2026-06-11T00:00:00.000Z",
+        upload: {
+          id: "upload-123",
+          original_filename: "installer-id.pdf",
+          mime_type: "application/pdf",
+          file_size: "1000",
+          file_path: "r2://verification/installer-id.pdf",
+          stored_filename: "installer-id.pdf",
+          is_public: false,
+          created_at: "2026-06-11T00:00:00.000Z",
+        },
+      }),
+    ).toBe("/api/proxy/api/v1/uploads/upload-123/download");
+  });
+});
+
+describe("appliance monthly usage helpers", () => {
+  it("calculates monthly kWh when the API does not provide it", () => {
+    expect(calculateMonthlyKwh(120, 5)).toBe(18);
+    expect(calculateMonthlyKwh(null, 5)).toBe(0);
   });
 });
 

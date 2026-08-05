@@ -66,6 +66,18 @@ function readStringArray(record: Record<string, unknown>, keys: string[]) {
   return [];
 }
 
+function readStringValue(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
 function slugify(value: string) {
   return value
     .trim()
@@ -581,6 +593,7 @@ export function InstallationFormScreen() {
   const [isLoadingReferences, setIsLoadingReferences] = useState(true);
   const [isLoadingProject, setIsLoadingProject] = useState(Boolean(projectId));
   const [packageId, setPackageId] = useState("none");
+  const [projectSlug, setProjectSlug] = useState("");
   const [existingTitle, setExistingTitle] = useState("");
   const [existingSummary, setExistingSummary] = useState("");
   const [clientName, setClientName] = useState("");
@@ -653,8 +666,10 @@ export function InstallationFormScreen() {
         }
 
         const detail = payload.data;
+        const detailRecord = detail as unknown as Record<string, unknown>;
         const systemDetails = detail.system_details;
         setPackageId(detail.package_id || "none");
+        setProjectSlug(readStringValue(detailRecord, ["slug"]));
         setExistingTitle(detail.title || "");
         setExistingSummary(detail.summary || "");
         setClientName(detail.client_name || "");
@@ -717,6 +732,22 @@ export function InstallationFormScreen() {
   const selectedPackage = useMemo(
     () => packages.find((pkg) => pkg.id === packageId) ?? null,
     [packageId, packages],
+  );
+  const projectTitlePreview = useMemo(
+    () =>
+      buildProjectTitle({
+        packageName: selectedPackage?.name,
+        address,
+        city,
+        state,
+        country,
+        fallbackTitle: existingTitle,
+      }),
+    [address, city, country, existingTitle, selectedPackage?.name, state],
+  );
+  const projectSlugPreview = useMemo(
+    () => (isEditing ? projectSlug || slugify(projectTitlePreview) : slugify(projectTitlePreview)),
+    [isEditing, projectSlug, projectTitlePreview],
   );
   const combinedMediaPreview = useMemo(
     () => [
@@ -856,14 +887,7 @@ export function InstallationFormScreen() {
 
     try {
       const normalizedPackageId = packageId === "none" ? null : packageId.trim() || null;
-      const derivedTitle = buildProjectTitle({
-        packageName: selectedPackage?.name,
-        address,
-        city,
-        state,
-        country,
-        fallbackTitle: existingTitle,
-      });
+      const derivedTitle = projectTitlePreview;
       const derivedSummary = buildProjectSummary(overview, existingSummary);
       const normalizedAddress = address.trim() || [city.trim(), state.trim()].filter(Boolean).join(", ") || country.trim() || "Nigeria";
       const normalizedCity = city.trim();
@@ -880,7 +904,7 @@ export function InstallationFormScreen() {
       const payload = buildMultipartFormData({
         package_id: normalizedPackageId,
         title: derivedTitle,
-        slug: slugify(derivedTitle),
+        ...(!isEditing ? { slug: projectSlugPreview } : {}),
         summary: derivedSummary,
         overview: overview.trim(),
         client_name: clientName.trim() || undefined,
@@ -979,6 +1003,12 @@ export function InstallationFormScreen() {
                     rows={6}
                     invalid={Boolean(errors.overview)}
                   />
+                </FormField>
+
+                <FormField label="Public Slug" hint={isEditing ? "Existing public route is preserved on edit." : "Generated automatically from the public project title."}>
+                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-medium text-[var(--text)]">
+                    /{projectSlugPreview || "pending"}
+                  </div>
                 </FormField>
 
                 <FormField label="Business / Client Name" hint="Use this when the project was delivered for a named business, organization, or client.">

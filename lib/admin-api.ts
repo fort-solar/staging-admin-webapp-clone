@@ -14,10 +14,7 @@ import type {
   CreateApplianceRequest,
   CreateAdminProductRequest,
   CreatePackageRequest,
-  CreateProductBatteryRequest,
   CreateProductCategoryRequest,
-  CreateProductInverterRequest,
-  CreateProductPanelRequest,
   CreateAdminRequest,
   CreateBlogPostRequest,
   CreateCustomerRequest,
@@ -33,14 +30,8 @@ import type {
   PackageListApiResponse,
   PackageRecord,
   PaginationMeta,
-  ProductBatteryDetailApiResponse,
-  ProductBatteryListApiResponse,
   ProductCategoryDetailApiResponse,
   ProductCategoryListApiResponse,
-  ProductInverterDetailApiResponse,
-  ProductInverterListApiResponse,
-  ProductPanelListApiResponse,
-  ProductPanelDetailApiResponse,
   OrderDetailApiResponse,
   OrderListApiResponse,
   InstallationDetailApiResponse,
@@ -67,7 +58,6 @@ import type {
   UpdateJobApplicantRequest,
   UpdateJobRequest,
   UpdateAdminProductRequest,
-  UpdateProductBatteryRequest,
   UpdateCustomerRequest,
   UpdateInstallerRequest,
   UpdateOrderRequest,
@@ -75,8 +65,6 @@ import type {
   UpdateSitePageRequest,
   UpdateTransactionRequest,
   UpdateProductCategoryRequest,
-  UpdateProductInverterRequest,
-  UpdateProductPanelRequest,
   VerificationDocumentRecord,
   VerificationDetailApiResponse,
   VerificationListApiResponse,
@@ -681,101 +669,6 @@ export function getAdmins(params: ListParams = {}) {
       fields: params.fields,
     }),
   );
-}
-
-export function getProductPanels(params: ListParams = {}) {
-  return dashboardGet<ProductPanelListApiResponse>(
-    withQuery("/api/v1/admin/products/panels", {
-      page: params.page ?? 1,
-      limit: params.limit ?? DEFAULT_PAGE_SIZE,
-      category: params.category,
-      search: params.search,
-      q: params.q,
-      fields: params.fields,
-    }),
-  );
-}
-
-export function getProductPanel(id: string) {
-  return dashboardGet<ProductPanelDetailApiResponse>(`/api/v1/admin/products/panels/${id}`);
-}
-
-export function createProductPanel(body: MultipartCapable<CreateProductPanelRequest>) {
-  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/panels", body, { method: "POST" });
-}
-
-export function updateProductPanel(id: string, body: UpdateProductPanelRequest) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/panels/${id}`, body, { method: "PATCH" });
-}
-
-export function deleteProductPanel(id: string) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/panels/${id}`, null, { method: "DELETE" });
-}
-
-export function getProductInverters(params: ListParams = {}) {
-  return dashboardGet<ProductInverterListApiResponse>(
-    withQuery("/api/v1/admin/products/inverters", {
-      page: params.page ?? 1,
-      limit: params.limit ?? DEFAULT_PAGE_SIZE,
-      category: params.category,
-      search: params.search,
-      q: params.q,
-      fields: params.fields,
-    }),
-  );
-}
-
-export function getProductInverter(id: string) {
-  return dashboardGet<ProductInverterDetailApiResponse>(`/api/v1/admin/products/inverters/${id}`);
-}
-
-export function getProductInverterBySlug(slug: string) {
-  return dashboardGet<ProductInverterDetailApiResponse>(`/api/v1/admin/products/inverters/slug/${slug}`);
-}
-
-export function createProductInverter(body: MultipartCapable<CreateProductInverterRequest>) {
-  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/inverters", body, { method: "POST" });
-}
-
-export function updateProductInverter(id: string, body: UpdateProductInverterRequest) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/inverters/${id}`, body, { method: "PATCH" });
-}
-
-export function deleteProductInverter(id: string) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/inverters/${id}`, null, { method: "DELETE" });
-}
-
-export function getProductBatteries(params: ListParams = {}) {
-  return dashboardGet<ProductBatteryListApiResponse>(
-    withQuery("/api/v1/admin/products/batteries", {
-      page: params.page ?? 1,
-      limit: params.limit ?? DEFAULT_PAGE_SIZE,
-      category: params.category,
-      search: params.search,
-      q: params.q,
-      fields: params.fields,
-    }),
-  );
-}
-
-export function getProductBattery(id: string) {
-  return dashboardGet<ProductBatteryDetailApiResponse>(`/api/v1/admin/products/batteries/${id}`);
-}
-
-export function getProductBatteryBySlug(slug: string) {
-  return dashboardGet<ProductBatteryDetailApiResponse>(`/api/v1/admin/products/batteries/slug/${slug}`);
-}
-
-export function createProductBattery(body: MultipartCapable<CreateProductBatteryRequest>) {
-  return submitDashboardForm<ApiSuccessResponse>("/api/v1/admin/products/batteries", body, { method: "POST" });
-}
-
-export function updateProductBattery(id: string, body: UpdateProductBatteryRequest) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/batteries/${id}`, body, { method: "PATCH" });
-}
-
-export function deleteProductBattery(id: string) {
-  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/products/batteries/${id}`, null, { method: "DELETE" });
 }
 
 export function getProductCategories(params: ListParams = {}) {
