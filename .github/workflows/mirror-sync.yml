@@ -26,6 +26,15 @@ jobs:
           # 2. Re-sign the top commit as you to satisfy Vercel
           git commit --amend --no-edit --author="fort-solar <fortsolarx@gmail.com>"
           
-          # 3. Safely push the branch code to your personal clone
-          TARGET_URL="https://${{ secrets.PERSONAL_REPO_TOKEN }}@github.com/fort-solar/fortsolar-admin-webapp-frontend-clone.git"
-          git push --force "$TARGET_URL" HEAD:refs/heads/${{ github.ref_name }}
+          # 3. Always mirror all branches to your main clone repo
+          MAIN_CLONE_URL="https://${{ secrets.PERSONAL_REPO_TOKEN }}@github.com/fort-solar/fortsolar-admin-webapp-frontend-clone.git"
+          git push --force "$MAIN_CLONE_URL" HEAD:refs/heads/${{ github.ref_name }}
+          
+          # 4. Additionally mirror the staging branch to your dedicated staging clone repo
+          if [ "${{ github.ref_name }}" = "staging" ]; then
+            STAGING_CLONE_URL="https://${{ secrets.PERSONAL_REPO_TOKEN }}@github.com/fort-solar/staging-admin-webapp-clone.git"
+            git push --force "$STAGING_CLONE_URL" HEAD:refs/heads/main HEAD:refs/heads/staging
+          fi
+
+
+
