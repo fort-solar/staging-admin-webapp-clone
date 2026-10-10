@@ -1223,3 +1223,32 @@ export type SessionSnapshot = {
   permissions: string[];
   expiresAt: string | null;
 };
+
+export type NewsletterSubscriberRecord = {
+  id: string;
+  email: string;
+  name: string | null;
+  is_active: boolean;
+  subscribed_at: string;
+  unsubscribed_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type NewsletterSubscribersListApiResponse = ApiCollectionResponse<NewsletterSubscriberRecord>;
+
+export type ContactInquiryRecord = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  subject: string | null;
+  message: string;
+  status: "new" | "read" | "replied" | "resolved" | string;
+  notes?: string | null;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type ContactInquiriesListApiResponse = ApiCollectionResponse<ContactInquiryRecord>;
+

@@ -76,6 +76,8 @@ import type {
   InstallerListApiResponse,
   NotificationDetailApiResponse,
   NotificationListApiResponse,
+  NewsletterSubscribersListApiResponse,
+  ContactInquiriesListApiResponse,
 } from "@/types/api.types";
 
 export const DEFAULT_PAGE_SIZE = 20;
@@ -90,6 +92,8 @@ type ListParams = {
   scope?: string;
   fields?: string | string[];
   is_active?: boolean | "true" | "false";
+  status?: string;
+  activeOnly?: boolean;
 };
 
 type MultipartCapable<TBody> = TBody | FormData;
@@ -1206,3 +1210,29 @@ export function getQuoteRequest(id: string) {
 export function updateQuoteRequest(id: string, body: MultipartCapable<UpdateQuoteRequestRequest>) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/quote-requests/${id}`, body, { method: "PATCH" });
 }
+
+export function getNewsletterSubscribers(params: ListParams = {}) {
+  return dashboardGet<NewsletterSubscribersListApiResponse>(
+    withQuery("/api/v1/newsletter/subscribers", {
+      page: params.page ?? 1,
+      limit: params.limit ?? DEFAULT_PAGE_SIZE,
+      activeOnly: params.activeOnly,
+    }),
+  );
+}
+
+export function getContactInquiries(params: ListParams = {}) {
+  return dashboardGet<ContactInquiriesListApiResponse>(
+    withQuery("/api/v1/contacts", {
+      page: params.page ?? 1,
+      limit: params.limit ?? DEFAULT_PAGE_SIZE,
+      search: params.search ?? params.q,
+      status: params.status,
+    }),
+  );
+}
+
+export function updateContactInquiryStatus(id: string, body: { status: string; adminNotes?: string }) {
+  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/contacts/${id}/status`, body, { method: "PATCH" });
+}
+

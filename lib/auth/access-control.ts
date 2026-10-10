@@ -208,6 +208,8 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/users/customers", permission: { resource: "customers", action: "read" }, title: "Buyer Management" },
   { prefix: "/users/installers", permission: { resource: "installers", action: "read" }, title: "Installer Management" },
   { prefix: "/users/admins", permission: { resource: "admins", action: "read" }, title: "Admin Management" },
+  { prefix: "/users/subscribers", permission: { resource: "customers", action: "read" }, title: "Newsletter Subscribers" },
+  { prefix: "/inquiries", permission: { resource: "customers", action: "read" }, title: "Customer Inquiries" },
   { prefix: "/orders/bundle-requests", permission: { resource: "orders", action: "read" }, title: "Package Request Management" },
   { prefix: "/orders/finance-requests", permission: { resource: "orders", action: "read" }, title: "Finance Request Management" },
   { prefix: "/orders", permission: { resource: "orders", action: "read" }, title: "Order Management" },
@@ -245,6 +247,7 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
       { label: "Customers", href: "/users/customers", permission: { resource: "customers", action: "read" } },
       { label: "Installers", href: "/users/installers", permission: { resource: "installers", action: "read" } },
       { label: "Admins", href: "/users/admins", permission: { resource: "admins", action: "read" } },
+      { label: "Subscribers", href: "/users/subscribers", permission: { resource: "customers", action: "read" } },
     ],
   },
   {
@@ -305,6 +308,7 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     createPermission: { resource: "installations", action: "create" },
   },
   { label: "Energy Audit", href: "/energy-audit", icon: "energy_audit", section: "operations", permission: { resource: "energy_audits", action: "read" } },
+  { label: "Customer Inquiries", href: "/inquiries", icon: "notifications", section: "operations", permission: { resource: "customers", action: "read" } },
   {
     label: "Job Board",
     href: "/jobs",
@@ -583,7 +587,7 @@ export function getDefaultDashboardPath(role: AdminRole | null | undefined, perm
 }
 
 export function getUsersLandingPath(role: AdminRole | null | undefined, permissions: string[] = []) {
-  const userRoutes = ["/users/customers", "/users/installers", "/users/admins"];
+  const userRoutes = ["/users/customers", "/users/installers", "/users/admins", "/users/subscribers"];
   return userRoutes.find((href) => isPathAllowed(href, role, permissions)) ?? null;
 }
 
