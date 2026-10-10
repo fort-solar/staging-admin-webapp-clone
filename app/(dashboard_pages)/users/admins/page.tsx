@@ -33,6 +33,8 @@ export default function AdminsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [openModal, setOpenModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,7 +61,7 @@ export default function AdminsPage() {
 
     getAdmins({
       page,
-      limit: DEFAULT_PAGE_SIZE,
+      limit,
       search: deferredQuery.trim() || undefined,
     })
       .then((payload) => {
@@ -88,7 +90,7 @@ export default function AdminsPage() {
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, page, refreshKey]);
+  }, [deferredQuery, page, limit, refreshKey]);
 
   function handleSearchChange(nextQuery: string) {
     setIsLoading(true);
@@ -264,7 +266,10 @@ export default function AdminsPage() {
                   <thead>
                     <tr>
                       <th className="table-checkbox-cell">
-                        <Checkbox />
+                        <Checkbox
+                          checked={filteredRows.length > 0 && selectedIds.length === filteredRows.length}
+                          onChange={(checked) => setSelectedIds(checked ? filteredRows.map(r => r.id) : [])}
+                        />
                       </th>
                       <th>Admin</th>
                       <th>Role</th>
@@ -283,7 +288,10 @@ export default function AdminsPage() {
                         return (
                           <tr key={admin.id}>
                             <td className="table-checkbox-cell">
-                              <Checkbox />
+                              <Checkbox
+                                checked={selectedIds.includes(admin.id)}
+                                onChange={(checked) => setSelectedIds(checked ? [...selectedIds, admin.id] : selectedIds.filter(id => id !== admin.id))}
+                              />
                             </td>
                             <td>
                               <div className="person-cell">
@@ -350,7 +358,16 @@ export default function AdminsPage() {
                   </tbody>
                 </table>
               </div>
-              <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
+              <Pagination
+                page={page}
+                totalPages={Math.max(pagination.totalPages, 1)}
+                onChange={setPage}
+                limit={limit}
+                onLimitChange={(n) => {
+                  setLimit(n);
+                  setPage(1);
+                }}
+              />
             </>
           )}
         </Panel>

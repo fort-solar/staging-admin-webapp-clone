@@ -68,7 +68,30 @@ function ItemIcon({ icon, className }: { icon: NavIconKey; className: string }) 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { session, logout } = useAuth();
-  const { headerItems, unreadCount, markRead } = useNotifications();
+  const { notifications, headerItems, unreadCount, markRead } = useNotifications();
+  
+  const getUnreadCountForHref = (href: string) => {
+    if (!notifications || !notifications.length) return 0;
+    return notifications.filter((notif) => {
+      if (notif.is_read) return false;
+      if (!notif.link) return false;
+      
+      const cleanNotifLink = notif.link.split('?')[0].split('#')[0];
+      const cleanHref = href.split('?')[0].split('#')[0];
+      
+      if (cleanHref === "/orders") {
+        return cleanNotifLink === "/orders" || (cleanNotifLink.startsWith("/orders/") && !cleanNotifLink.startsWith("/orders/bundle-requests") && !cleanNotifLink.startsWith("/orders/finance-requests"));
+      }
+      
+      return cleanNotifLink === cleanHref || cleanNotifLink.startsWith(cleanHref + "/");
+    }).length;
+  };
+
+  const getUnreadCountForGroup = (item: any) => {
+    if (!item.children) return 0;
+    return item.children.reduce((sum: number, child: any) => sum + getUnreadCountForHref(child.href), 0);
+  };
+
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") {
@@ -222,11 +245,22 @@ export function AppShell({ children }: { children: ReactNode }) {
                 const groupOpen = item.label === "Users" ? usersMenuOpen : ordersMenuOpen;
 
                 if (!isGroup) {
+                  const itemUnread = getUnreadCountForHref(href);
                   return item.createHref ? (
                     <div key={item.label} className="sidebar-link-row">
                       <Link href={href} className={cx("sidebar-link", active && "is-active")} title={item.label} onClick={closeTransientUi}>
-                        <ItemIcon icon={item.icon} className="sidebar-link__icon" />
+                        <div className="relative flex items-center justify-center">
+                          <ItemIcon icon={item.icon} className="sidebar-link__icon" />
+                          {collapsed && itemUnread > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-red-500 border border-white" />
+                          )}
+                        </div>
                         <span>{item.label}</span>
+                        {!collapsed && itemUnread > 0 && (
+                          <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                            {itemUnread}
+                          </span>
+                        )}
                       </Link>
                       {!collapsed ? (
                         <Link href={item.createHref} className="sidebar-create-link" aria-label={`Create ${item.label}`} onClick={closeTransientUi}>
@@ -236,12 +270,23 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </div>
                   ) : (
                     <Link key={item.label} href={href} className={cx("sidebar-link", active && "is-active")} title={item.label} onClick={closeTransientUi}>
-                      <ItemIcon icon={item.icon} className="sidebar-link__icon" />
+                      <div className="relative flex items-center justify-center">
+                        <ItemIcon icon={item.icon} className="sidebar-link__icon" />
+                        {collapsed && itemUnread > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-red-500 border border-white" />
+                        )}
+                      </div>
                       <span>{item.label}</span>
+                      {!collapsed && itemUnread > 0 && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                          {itemUnread}
+                        </span>
+                      )}
                     </Link>
                   );
                 }
 
+                const groupUnread = getUnreadCountForGroup(item);
                 return (
                   <div key={item.label} className="sidebar-group">
                     <button
@@ -261,18 +306,36 @@ export function AppShell({ children }: { children: ReactNode }) {
                       }}
                       title={item.label}
                     >
-                      <ItemIcon icon={item.icon} className="sidebar-link__icon" />
+                      <div className="relative flex items-center justify-center">
+                        <ItemIcon icon={item.icon} className="sidebar-link__icon" />
+                        {collapsed && groupUnread > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-red-500 border border-white" />
+                        )}
+                      </div>
                       <span>{item.label}</span>
+                      {!collapsed && groupUnread > 0 && (
+                        <span className="ml-auto mr-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                          {groupUnread}
+                        </span>
+                      )}
                       <ChevronDownIcon className={cx("sidebar-link__chevron", groupOpen && "is-open")} />
                     </button>
                     {groupOpen && !collapsed ? (
                       <div className="sidebar-subnav">
-                        {item.children?.map((child) => (
-                          <Link key={child.href} href={child.href} className={cx("sidebar-sublink", matches(pathname, child.href) && "is-active")} onClick={closeTransientUi}>
-                            <span className="sidebar-sublink__rail" />
-                            <span>{child.label}</span>
-                          </Link>
-                        ))}
+                        {item.children?.map((child) => {
+                          const childUnread = getUnreadCountForHref(child.href);
+                          return (
+                            <Link key={child.href} href={child.href} className={cx("sidebar-sublink", matches(pathname, child.href) && "is-active")} onClick={closeTransientUi}>
+                              <span className="sidebar-sublink__rail" />
+                              <span>{child.label}</span>
+                              {childUnread > 0 && (
+                                <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[9px] font-bold text-white">
+                                  {childUnread}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>

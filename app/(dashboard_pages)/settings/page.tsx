@@ -25,7 +25,7 @@ import {
 } from "@/components/dashboard/icons";
 import { normalizeAdminActivity } from "@/lib/admin-activity";
 import { formatDateLabel, formatDateTimeLabel, formatEnumLabel, formatManagedUserStatusLabel, getAdminActivity } from "@/lib/admin-api";
-import { dashboardGet, isDashboardSessionExpiredError } from "@/lib/api/client";
+import { dashboardGet, isDashboardSessionExpiredError, submitDashboardForm } from "@/lib/api/client";
 import { formatAdminRole } from "@/lib/auth/access-control";
 import { getErrorMessage } from "@/lib/api/errors";
 import { toneFromStatus, type Tone } from "@/lib/dashboard-data";
@@ -167,7 +167,7 @@ function buildActivityItems({
 }
 
 export default function SettingsPage() {
-  const { session } = useAuth();
+  const { session, refreshSession } = useAuth();
   const {
     notifications,
     markRead,
@@ -192,6 +192,22 @@ export default function SettingsPage() {
 
     return window.localStorage.getItem("fortsolar:appearance") === "dark" ? "dark" : "light";
   });
+
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileAddress, setProfileAddress] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (profile?.user) {
+      setProfileName(profile.user.name || "");
+      setProfilePhone(profile.user.phone || "");
+      setProfileAddress(profile.user.address || "");
+    }
+  }, [profile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,7 +236,33 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [profileRefreshKey]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    setProfileSaveError(null);
+    setProfileSaveSuccess(false);
+
+    try {
+      await submitDashboardForm(
+        "/api/v1/auth/me",
+        {
+          name: profileName,
+          phone: profilePhone,
+          address: profileAddress,
+        },
+        { method: "PATCH" }
+      );
+      setProfileSaveSuccess(true);
+      await refreshSession();
+      setProfileRefreshKey((k) => k + 1);
+    } catch (err: any) {
+      setProfileSaveError(err.message || "Failed to update profile.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     function handleAppearanceChange(event: Event) {
@@ -397,6 +439,18 @@ export default function SettingsPage() {
               <InfoRow icon={<ShieldIcon className="mini-icon" />} label="Admin Role" value={adminRoleLabel} />
               <InfoRow icon={<UsersIcon className="mini-icon" />} label="Member Since" value={memberSince} />
             </div>
+
+            <div className="settings-divider" style={{ margin: "20px 0" }} />
+
+            <div style={{ width: "100%" }}>
+              <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "12px", display: "block" }}>Interface Theme</span>
+              <SettingsSwitch
+                checked={appearance === "dark"}
+                onChange={(next) => applyAppearance(next ? "dark" : "light")}
+                label="Dark Mode"
+                description="Use dark interface colors"
+              />
+            </div>
           </aside>
 
           <section className="settings-panel">
@@ -404,7 +458,7 @@ export default function SettingsPage() {
             <ErrorMessage title="Settings load failed" message={error} />
 
             {activeTab === "Personal Information" ? (
-              <div className="settings-section">
+              <form onSubmit={handleSaveProfile} className="settings-section">
                 <div className="settings-section-heading">
                   <h3>Profile Details</h3>
                   <p>
@@ -412,25 +466,49 @@ export default function SettingsPage() {
                       ? "The live profile request failed, so fallback session data is shown where possible."
                       : isLoading
                         ? "Refreshing your account details."
-                        : "Current account details from the active admin session."}
+                        : "Edit and save your account details."}
                   </p>
                 </div>
 
+                {profileSaveSuccess && (
+                  <div className="status-pill status-pill--success" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#10b981", background: "rgba(16, 185, 129, 0.1)", fontSize: "13px" }}>
+                    Profile details updated successfully!
+                  </div>
+                )}
+                {profileSaveError && (
+                  <div className="status-pill status-pill--danger" style={{ padding: "10px", borderRadius: "6px", marginBottom: "15px", display: "block", textAlign: "center", color: "#ef4444", background: "rgba(239, 68, 68, 0.1)", fontSize: "13px" }}>
+                    {profileSaveError}
+                  </div>
+                )}
+
                 <div className="settings-form-grid">
-                  <SettingsField label="Full Name" icon={<UsersIcon className="mini-icon" />}>
-                    <SettingsValue value={fullName} />
-                  </SettingsField>
-                  <SettingsField label="Display Name" icon={<UsersIcon className="mini-icon" />}>
-                    <SettingsValue value={displayName} />
+                  <SettingsField label="Full / Display Name" icon={<UsersIcon className="mini-icon" />}>
+                    <input
+                      type="text"
+                      className="dashboard-input"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      required
+                    />
                   </SettingsField>
                   <SettingsField label="Email Address" icon={<MailIcon className="mini-icon" />}>
                     <SettingsValue value={email} />
                   </SettingsField>
                   <SettingsField label="Phone Number" icon={<PhoneIcon className="mini-icon" />}>
-                    <SettingsValue value={phone} />
+                    <input
+                      type="text"
+                      className="dashboard-input"
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                    />
                   </SettingsField>
                   <SettingsField label="Address" icon={<GlobeIcon className="mini-icon" />}>
-                    <SettingsValue value={address} />
+                    <input
+                      type="text"
+                      className="dashboard-input"
+                      value={profileAddress}
+                      onChange={(e) => setProfileAddress(e.target.value)}
+                    />
                   </SettingsField>
                   <SettingsField label="Account Status" icon={<ShieldIcon className="mini-icon" />}>
                     <SettingsValue value={statusLabel} />
@@ -444,6 +522,19 @@ export default function SettingsPage() {
                   <SettingsField label="Member Since" icon={<UsersIcon className="mini-icon" />}>
                     <SettingsValue value={memberSince} />
                   </SettingsField>
+                </div>
+
+                <div className="settings-divider" />
+
+                <div className="inline-actions justify-end">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isSavingProfile}
+                  >
+                    {isSavingProfile ? "Saving Profile..." : "Save Profile Details"}
+                  </Button>
                 </div>
 
                 <div className="settings-divider" />
@@ -467,7 +558,7 @@ export default function SettingsPage() {
                 ) : (
                   <div className="settings-banner">No explicit permissions were returned for this account yet.</div>
                 )}
-              </div>
+              </form>
             ) : null}
 
             {activeTab === "Security" ? (
@@ -675,6 +766,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : null}
+
           </section>
         </div>
       </Panel>

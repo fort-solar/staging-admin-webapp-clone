@@ -780,6 +780,10 @@ export function createInstallation(body: MultipartCapable<CreateInstallationRequ
   );
 }
 
+export function createCustomerInstallation(body: any) {
+  return submitDashboardForm<any>("/api/v1/admin/installations/", body, { method: "POST" });
+}
+
 export function updateInstallation(id: string, body: MultipartCapable<UpdateInstallationRequest>) {
   return requestWithEndpointFallback(
     `/api/v1/admin/projects/${id}`,
@@ -1123,7 +1127,7 @@ export function deleteSitePage(id: string) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/site-pages/${id}`, null, { method: "DELETE" });
 }
 
-export function getBundleRequests(params: ListParams = {}) {
+export function getBundleRequests(params: ListParams & { financing_requested?: boolean } = {}) {
   return dashboardGet<BundleRequestListApiResponse>(
     withQuery("/api/v1/admin/orders/bundle-requests", {
       page: params.page ?? 1,
@@ -1132,6 +1136,7 @@ export function getBundleRequests(params: ListParams = {}) {
       search: params.search,
       q: params.q,
       fields: params.fields,
+      financing_requested: params.financing_requested,
     }),
   );
 }

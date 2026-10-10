@@ -5,7 +5,7 @@ import { useAccessControl } from "@/components/auth/use-access-control";
 import { ErrorMessage } from "@/components/dashboard/error-message";
 import { EyeIcon } from "@/components/dashboard/icons";
 import { FormField, Modal } from "@/components/dashboard/modals";
-import { Button, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, TextAreaField } from "@/components/dashboard/ui";
+import { Button, Checkbox, EmptyScaffold, MetricCardSecondary, Pagination, Panel, PanelHeader, SearchField, SelectField, StatusPill, TableActionsMenu, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
 import { isDashboardActionCancelledError, isDashboardSessionExpiredError } from "@/lib/api/client";
 import { DEFAULT_PAGE_SIZE, formatDateTimeLabel, formatEnumLabel, getBundleRequests, updateBundleRequest, updateJob } from "@/lib/admin-api";
@@ -62,10 +62,21 @@ export default function BundleRequestPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailStatus, setDetailStatus] = useState("");
   const [detailAdminNote, setDetailAdminNote] = useState("");
+  const [financingStatus, setFinancingStatus] = useState("");
+  const [downpaymentAmount, setDownpaymentAmount] = useState<number | "">("");
+  const [installment, setInstallment] = useState<number | "">("");
+  const [tenure, setTenure] = useState<number | "">("");
+  const [loanAmount, setLoanAmount] = useState<number | "">("");
+  const [interestType, setInterestType] = useState<"fixed" | "reducing">("fixed");
+  const [interestRate, setInterestRate] = useState<number | "">("");
+  const [expectedPaymentDay, setExpectedPaymentDay] = useState<number | "">("");
+  const [financeCompanyName, setFinanceCompanyName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +92,7 @@ export default function BundleRequestPage() {
 
     getBundleRequests({
       page,
-      limit: DEFAULT_PAGE_SIZE,
+      limit,
       search: deferredQuery.trim() || undefined,
       q: deferredQuery.trim() || undefined,
     })
@@ -111,7 +122,7 @@ export default function BundleRequestPage() {
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, page, refreshKey]);
+  }, [deferredQuery, page, limit, refreshKey]);
 
   const filteredRows = useMemo(
     () =>
@@ -134,11 +145,29 @@ export default function BundleRequestPage() {
     if (!activeRequest) {
       setDetailStatus("");
       setDetailAdminNote("");
+      setFinancingStatus("");
+      setDownpaymentAmount("");
+      setInstallment("");
+      setTenure("");
+      setLoanAmount("");
+      setInterestType("fixed");
+      setInterestRate("");
+      setExpectedPaymentDay("");
+      setFinanceCompanyName("");
       return;
     }
 
     setDetailStatus(activeRequest.status);
     setDetailAdminNote(activeRequest.admin_note ?? "");
+    setFinancingStatus(activeRequest.financing_status ?? "pending_review");
+    setDownpaymentAmount(activeRequest.financing_terms?.downpayment_amount ?? "");
+    setInstallment(activeRequest.financing_terms?.installment ?? "");
+    setTenure(activeRequest.financing_terms?.tenure ?? "");
+    setLoanAmount(activeRequest.financing_terms?.loan_amount ?? "");
+    setInterestType((activeRequest.financing_terms?.interest_type as any) ?? "fixed");
+    setInterestRate(activeRequest.financing_terms?.interest_rate ?? "");
+    setExpectedPaymentDay(activeRequest.financing_terms?.expected_payment_day ?? "");
+    setFinanceCompanyName(activeRequest.financing_terms?.finance_company_name ?? "");
   }, [activeRequest]);
 
   const processingCount = rows.filter((row) => row.status.toLowerCase() === "processing").length;
@@ -158,6 +187,19 @@ export default function BundleRequestPage() {
       await updateBundleRequest(activeRequest.id, {
         status: detailStatus,
         admin_note: detailAdminNote,
+        financing_status: activeRequest.financing_requested ? financingStatus : undefined,
+        financing_terms: activeRequest.financing_requested
+          ? {
+              downpayment_amount: downpaymentAmount !== "" ? Number(downpaymentAmount) : undefined,
+              installment: installment !== "" ? Number(installment) : undefined,
+              tenure: tenure !== "" ? Number(tenure) : undefined,
+              loan_amount: loanAmount !== "" ? Number(loanAmount) : undefined,
+              interest_type: interestType,
+              interest_rate: interestRate !== "" ? Number(interestRate) : undefined,
+              expected_payment_day: expectedPaymentDay !== "" ? Number(expectedPaymentDay) : undefined,
+              finance_company_name: financeCompanyName || undefined,
+            }
+          : undefined,
       });
 
       const nextJobStatus = mapPackageStatusToJobStatus(detailStatus);
@@ -229,7 +271,10 @@ export default function BundleRequestPage() {
                   <thead>
                     <tr>
                       <th className="table-checkbox-cell">
-                        <Checkbox />
+                        <Checkbox
+                          checked={filteredRows.length > 0 && selectedIds.length === filteredRows.length}
+                          onChange={(checked) => setSelectedIds(checked ? filteredRows.map(r => r.id) : [])}
+                        />
                       </th>
                       <th>Package</th>
                       <th>Request ID</th>
@@ -246,7 +291,10 @@ export default function BundleRequestPage() {
                       filteredRows.map((row) => (
                         <tr key={row.id}>
                           <td className="table-checkbox-cell">
-                            <Checkbox />
+                            <Checkbox
+                              checked={selectedIds.includes(row.id)}
+                              onChange={(checked) => setSelectedIds(checked ? [...selectedIds, row.id] : selectedIds.filter(id => id !== row.id))}
+                            />
                           </td>
                           <td>{row.bundle_name}</td>
                           <td>{row.id}</td>
@@ -283,7 +331,16 @@ export default function BundleRequestPage() {
                   </tbody>
                 </table>
               </div>
-              <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={setPage} />
+              <Pagination
+                page={page}
+                totalPages={Math.max(pagination.totalPages, 1)}
+                onChange={setPage}
+                limit={limit}
+                onLimitChange={(n) => {
+                  setLimit(n);
+                  setPage(1);
+                }}
+              />
             </>
           )}
         </Panel>
@@ -360,6 +417,235 @@ export default function BundleRequestPage() {
                 <strong>{activeRequest.job_status ? formatEnumLabel(activeRequest.job_status) : "N/A"}</strong>
               </div>
             </div>
+
+            {activeRequest.financing_requested && (
+              <div className="border-t pt-6">
+                <h4 className="text-lg font-bold text-(--brand) mb-4">Financing Application Details</h4>
+                <div className="grid gap-4 md:grid-cols-2 mb-6">
+                  <div>
+                    <p className="cell-subtle">Verification Profile</p>
+                    <strong className="capitalize">
+                      {activeRequest.financing_profile_type
+                        ? (activeRequest.financing_profile_type === "individual"
+                            ? "Individual"
+                            : activeRequest.financing_profile_type === "salary_earner"
+                              ? "Salary Earner"
+                              : "Registered Business / Corporate")
+                        : activeRequest.financing_id_upload_id
+                          ? (activeRequest.financing_cac_upload_id ? "Registered Business / Corporate" : "Individual")
+                          : "Not specified"}
+                    </strong>
+                  </div>
+                  <div>
+                    <p className="cell-subtle">BVN (Bank Verification Number)</p>
+                    <strong>{activeRequest.financing_bvn || "N/A"}</strong>
+                  </div>
+                  <div>
+                    <p className="cell-subtle">NIN (National Identification Number)</p>
+                    <strong>{activeRequest.financing_nin || "N/A"}</strong>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="cell-subtle">BVN Consent Status</p>
+                    <strong>
+                      {activeRequest.financing_bvn_consent ? (
+                        <span className="text-green-600 font-semibold">✓ Authorized & Consented</span>
+                      ) : (
+                        <span className="text-red-500 font-semibold">✗ No Consent Provided</span>
+                      )}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 mb-6">
+                  {activeRequest.financing_id_upload_id && (
+                    <a
+                      href={`/api/proxy/api/v1/uploads/${activeRequest.financing_id_upload_id}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-3 rounded-lg border bg-(--surface-soft) hover:bg-neutral-100 transition-colors text-sm"
+                    >
+                      <span className="font-semibold text-(--brand)">⬇ Download Government ID</span>
+                    </a>
+                  )}
+                  {activeRequest.financing_utility_bill_upload_id && (
+                    <a
+                      href={`/api/proxy/api/v1/uploads/${activeRequest.financing_utility_bill_upload_id}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-3 rounded-lg border bg-(--surface-soft) hover:bg-neutral-100 transition-colors text-sm"
+                    >
+                      <span className="font-semibold text-(--brand)">⬇ Download Utility Bill</span>
+                    </a>
+                  )}
+                  {activeRequest.financing_statement_upload_id && (
+                    <a
+                      href={`/api/proxy/api/v1/uploads/${activeRequest.financing_statement_upload_id}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-3 rounded-lg border bg-(--surface-soft) hover:bg-neutral-100 transition-colors text-sm"
+                    >
+                      <span className="font-semibold text-(--brand)">⬇ Download 6-Month Bank Statement</span>
+                    </a>
+                  )}
+                  {activeRequest.financing_cac_upload_id && (
+                    <a
+                      href={`/api/proxy/api/v1/uploads/${activeRequest.financing_cac_upload_id}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-3 rounded-lg border bg-(--surface-soft) hover:bg-neutral-100 transition-colors text-sm"
+                    >
+                      <span className="font-semibold text-(--brand)">⬇ Download CAC Document</span>
+                    </a>
+                  )}
+                </div>
+
+                {canUpdateOrders && (
+                  <div className="border-t pt-6 mb-6">
+                    <h4 className="text-lg font-bold text-(--brand) mb-4">Financing Assessment Form</h4>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <FormField label="Financing Status">
+                        <SelectField
+                          value={financingStatus}
+                          onChange={setFinancingStatus}
+                          options={[
+                            { label: "Pending Review", value: "pending_review" },
+                            { label: "Partner Submitted", value: "partner_submitted" },
+                            { label: "Approved", value: "approved" },
+                            { label: "Rejected", value: "rejected" },
+                            { label: "Approved & Processed", value: "processed" },
+                          ]}
+                        />
+                      </FormField>
+                    </div>
+
+                    {(financingStatus === "approved" || financingStatus === "processed") && (
+                      <div className="grid gap-4 md:grid-cols-2 mt-4 border-t pt-4">
+                        <FormField label="Loan Amount (₦)">
+                          <TextField
+                            value={String(loanAmount)}
+                            onChange={(e) => setLoanAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 1600000"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Downpayment Amount (₦)">
+                          <TextField
+                            value={String(downpaymentAmount)}
+                            onChange={(e) => setDownpaymentAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 1000000"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Tenure (Months)">
+                          <TextField
+                            value={String(tenure)}
+                            onChange={(e) => setTenure(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 12"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Interest Type">
+                          <SelectField
+                            value={interestType}
+                            onChange={(val) => setInterestType(val as any)}
+                            options={[
+                              { label: "Flat Rate", value: "fixed" },
+                              { label: "Reducing Balance", value: "reducing" },
+                            ]}
+                          />
+                        </FormField>
+
+                        <FormField label="Interest Rate (APR %)">
+                          <TextField
+                            value={String(interestRate)}
+                            onChange={(e) => setInterestRate(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 20.0"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Monthly Installment (₦)">
+                          <TextField
+                            value={String(installment)}
+                            onChange={(e) => setInstallment(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 74000"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Expected Payment Day of Month">
+                          <TextField
+                            value={String(expectedPaymentDay)}
+                            onChange={(e) => setExpectedPaymentDay(e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="e.g. 25"
+                            type="text"
+                          />
+                        </FormField>
+
+                        <FormField label="Financing Company Name">
+                          <TextField
+                            value={financeCompanyName}
+                            onChange={(e) => setFinanceCompanyName(e.target.value)}
+                            placeholder="e.g. Altpower / Sterling Bank"
+                            type="text"
+                          />
+                        </FormField>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!canUpdateOrders && activeRequest.financing_requested && activeRequest.financing_status && (
+              <div className="border-t pt-4 mb-4">
+                <h4 className="text-md font-bold mb-2">Financing Status & Approved Terms</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="cell-subtle">Financing Status</p>
+                    <strong className="capitalize">{activeRequest.financing_status.replace("_", " ")}</strong>
+                  </div>
+                  {(activeRequest.financing_status === "approved" || activeRequest.financing_status === "processed") && (
+                    <>
+                      <div>
+                        <p className="cell-subtle">Loan Amount</p>
+                        <strong>₦{activeRequest.financing_terms?.loan_amount?.toLocaleString() ?? "N/A"}</strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Downpayment</p>
+                        <strong>₦{activeRequest.financing_terms?.downpayment_amount?.toLocaleString() ?? "N/A"}</strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Monthly Installment</p>
+                        <strong>₦{activeRequest.financing_terms?.installment?.toLocaleString() ?? "N/A"}</strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Tenure</p>
+                        <strong>{activeRequest.financing_terms?.tenure ? `${activeRequest.financing_terms.tenure} Months` : "N/A"}</strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Interest Type & Rate</p>
+                        <strong>
+                          {activeRequest.financing_terms?.interest_type === "reducing" ? "Reducing Balance" : "Flat Rate"}
+                          {activeRequest.financing_terms?.interest_rate ? ` (${activeRequest.financing_terms.interest_rate}% APR)` : ""}
+                        </strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Expected Payment Day</p>
+                        <strong>{activeRequest.financing_terms?.expected_payment_day ? `Day ${activeRequest.financing_terms.expected_payment_day} of month` : "N/A"}</strong>
+                      </div>
+                      <div>
+                        <p className="cell-subtle">Financing Company</p>
+                        <strong>{activeRequest.financing_terms?.finance_company_name ?? "N/A"}</strong>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {canUpdateOrders ? (
               <>

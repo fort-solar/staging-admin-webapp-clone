@@ -27,6 +27,8 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [openModal, setOpenModal] = useState(false);
+  const [limit, setLimit] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -39,7 +41,7 @@ export default function CustomersPage() {
 
     getCustomers({
       page,
-      limit: DEFAULT_PAGE_SIZE,
+      limit,
       search: deferredQuery.trim() || undefined,
     })
       .then((payload) => {
@@ -68,7 +70,7 @@ export default function CustomersPage() {
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, page, refreshKey]);
+  }, [deferredQuery, page, limit, refreshKey]);
 
   function handlePageChange(nextPage: number) {
     setIsLoading(true);
@@ -143,7 +145,10 @@ export default function CustomersPage() {
                   <thead>
                     <tr>
                       <th className="table-checkbox-cell">
-                        <Checkbox />
+                        <Checkbox
+                          checked={filteredRows.length > 0 && selectedIds.length === filteredRows.length}
+                          onChange={(checked) => setSelectedIds(checked ? filteredRows.map(r => r.id) : [])}
+                        />
                       </th>
                       <th>Customer</th>
                       <th>Phone</th>
@@ -161,7 +166,10 @@ export default function CustomersPage() {
                         return (
                           <tr key={customer.id}>
                             <td className="table-checkbox-cell">
-                              <Checkbox />
+                              <Checkbox
+                                checked={selectedIds.includes(customer.id)}
+                                onChange={(checked) => setSelectedIds(checked ? [...selectedIds, customer.id] : selectedIds.filter(id => id !== customer.id))}
+                              />
                             </td>
                             <td>
                               <div className="person-cell">
@@ -214,7 +222,16 @@ export default function CustomersPage() {
                   </tbody>
                 </table>
               </div>
-              <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={handlePageChange} />
+              <Pagination
+                page={page}
+                totalPages={Math.max(pagination.totalPages, 1)}
+                onChange={handlePageChange}
+                limit={limit}
+                onLimitChange={(n) => {
+                  setLimit(n);
+                  setPage(1);
+                }}
+              />
             </>
           )}
         </Panel>

@@ -13,7 +13,12 @@ function buildApiUrl(path: string) {
     throw new Error("FORTSOLAR_API_BASE_URL is not configured.");
   }
 
-  return new URL(path, FORTSOLAR_API_BASE_URL).toString();
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedPath = cleanPath.startsWith("/admin/")
+    ? `/api/v1${cleanPath}`
+    : cleanPath;
+
+  return new URL(normalizedPath, FORTSOLAR_API_BASE_URL).toString();
 }
 
 export function buildErrorResponse(message: string, status = 400, error?: string) {

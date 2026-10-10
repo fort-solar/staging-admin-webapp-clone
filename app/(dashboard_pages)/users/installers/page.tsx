@@ -37,6 +37,8 @@ export default function InstallersPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>(emptyPagination);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +51,12 @@ export default function InstallersPage() {
   useEffect(() => {
     let cancelled = false;
 
+    setIsLoading(true);
+    setError(null);
+
     getInstallers({
       page,
-      limit: DEFAULT_PAGE_SIZE,
+      limit,
       search: deferredQuery.trim() || undefined,
     })
       .then((payload) => {
@@ -80,7 +85,7 @@ export default function InstallersPage() {
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, page, refreshKey]);
+  }, [deferredQuery, page, limit, refreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,7 +242,10 @@ export default function InstallersPage() {
                 <thead>
                   <tr>
                     <th className="table-checkbox-cell">
-                      <Checkbox />
+                      <Checkbox
+                        checked={filteredRows.length > 0 && selectedIds.length === filteredRows.length}
+                        onChange={(checked) => setSelectedIds(checked ? filteredRows.map(r => r.user.id) : [])}
+                      />
                     </th>
                     <th>Installer</th>
                     <th>Company</th>
@@ -253,7 +261,10 @@ export default function InstallersPage() {
                     filteredRows.map((installer) => (
                       <tr key={installer.user.id}>
                         <td className="table-checkbox-cell">
-                          <Checkbox />
+                          <Checkbox
+                            checked={selectedIds.includes(installer.user.id)}
+                            onChange={(checked) => setSelectedIds(checked ? [...selectedIds, installer.user.id] : selectedIds.filter(id => id !== installer.user.id))}
+                          />
                         </td>
                         <td>
                           <div className="person-cell">
@@ -317,7 +328,16 @@ export default function InstallersPage() {
                 </tbody>
               </table>
             </div>
-            <Pagination page={page} totalPages={Math.max(pagination.totalPages, 1)} onChange={handlePageChange} />
+            <Pagination
+              page={page}
+              totalPages={Math.max(pagination.totalPages, 1)}
+              onChange={handlePageChange}
+              limit={limit}
+              onLimitChange={(n) => {
+                setLimit(n);
+                setPage(1);
+              }}
+            />
           </>
         )}
       </Panel>

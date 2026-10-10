@@ -413,6 +413,7 @@ export type PackageRecord = {
   name: string;
   description: string | null;
   category_id: string | null;
+  target_audience?: string | null;
   system_size_kw: number;
   price: number;
   number_of_panels: number;
@@ -446,6 +447,7 @@ export type CreatePackageRequest = {
   description?: string;
   overview?: string;
   category_id?: string | null;
+  target_audience?: string | null;
   system_size_kw?: number;
   price: number;
   number_of_panels?: number;
@@ -673,6 +675,11 @@ export type JobApiRecord = {
   country?: string | null;
   system_size_kw?: number | null;
   notes?: string | null;
+  inverter_size?: string | null;
+  panel_size?: string | null;
+  battery_type?: string | null;
+  battery_energy?: string | null;
+  number_of_panels?: number | null;
 };
 
 export type JobListApiResponse = ApiCollectionResponse<JobApiRecord>;
@@ -702,6 +709,11 @@ export type CreateJobRequest = {
   country?: string;
   system_size_kw?: number;
   notes?: string;
+  inverter_size?: string;
+  panel_size?: string;
+  number_of_panels?: number;
+  battery_type?: string;
+  battery_energy?: string;
 };
 export type UpdateJobRequest = Partial<CreateJobRequest>;
 
@@ -842,6 +854,15 @@ export type OrderRecord = {
   total_amount: string;
   currency: string;
   notes: string | null;
+  installation_type?: string | null;
+  specifications?: {
+    inverter_size?: string | null;
+    inverter_label?: string | null;
+    pv_size?: string | null;
+    pv_label?: string | null;
+    battery_size?: string | null;
+    battery_label?: string | null;
+  } | null;
   created_at: string;
   updated_at: string;
   customer_email: string;
@@ -895,6 +916,26 @@ export type BundleRequestRecord = {
   job_id?: string | null;
   job_slug?: string | null;
   job_status?: string | null;
+  financing_requested?: boolean;
+  financing_status?: string | null;
+  financing_terms?: {
+    downpayment_amount?: number;
+    installment?: number;
+    tenure?: number;
+    loan_amount?: number;
+    interest_type?: string;
+    interest_rate?: number;
+    expected_payment_day?: number;
+    finance_company_name?: string;
+  } | null;
+  financing_id_upload_id?: string | null;
+  financing_statement_upload_id?: string | null;
+  financing_cac_upload_id?: string | null;
+  financing_utility_bill_upload_id?: string | null;
+  financing_bvn?: string | null;
+  financing_nin?: string | null;
+  financing_bvn_consent?: boolean;
+  financing_profile_type?: string | null;
 };
 
 export type BundleRequestListApiResponse = ApiCollectionResponse<BundleRequestRecord>;
@@ -902,6 +943,17 @@ export type UpdateBundleRequestRequest = {
   status: string;
   admin_note: string;
   job_status?: string;
+  financing_status?: string | null;
+  financing_terms?: {
+    downpayment_amount?: number;
+    installment?: number;
+    tenure?: number;
+    loan_amount?: number;
+    interest_type?: string;
+    interest_rate?: number;
+    expected_payment_day?: number;
+    finance_company_name?: string;
+  } | null;
 };
 
 export type OrderDetail = {
@@ -909,6 +961,7 @@ export type OrderDetail = {
   items: OrderItemRecord[];
   events: OrderEventRecord[];
   bundleRequests: BundleRequestRecord[];
+  installations?: any[];
 };
 
 export type OrderListApiResponse = ApiCollectionResponse<OrderRecord>;
@@ -934,6 +987,8 @@ export type UpdateOrderRequest = {
   currency: string;
   total_amount: number;
   notes: string;
+  installation_type?: string | null;
+  specifications?: OrderRecord["specifications"];
 };
 
 export type TransactionRecord = {

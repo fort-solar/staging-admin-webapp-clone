@@ -36,7 +36,7 @@ import {
   WalletIcon,
   XCircleIcon,
 } from "@/components/dashboard/icons";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ComboboxField } from "@/components/ui/combobox-field";
 
 type ActionItem = {
   label: string;
@@ -86,11 +86,12 @@ type PaginationProps = {
   page: number;
   totalPages: number;
   onChange: (page: number) => void;
+  limit?: number;
+  onLimitChange?: (limit: number) => void;
 };
 
 export type SelectOption = string | { label: string; value: string };
 
-const EMPTY_SELECT_VALUE = "__fortsolar_empty_option__";
 
 type AvatarProps = {
   src?: string;
@@ -363,58 +364,21 @@ export function SelectField({
   searchable?: boolean;
 }) {
   const normalizedOptions = options.map((option) => (typeof option === "string" ? { label: option, value: option } : option));
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const filteredOptions = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return normalizedOptions;
-    }
-
-    return normalizedOptions.filter((option) => option.label.toLowerCase().includes(normalizedSearch));
-  }, [normalizedOptions, search]);
-  const hasEmptyOption = filteredOptions.some((option) => option.value === "");
-  const resolvedValue = value === "" ? (hasEmptyOption ? EMPTY_SELECT_VALUE : undefined) : value;
   const triggerClassName = cx(className, variant === "inline" && "is-inline");
 
   return (
-    <Select
-      value={resolvedValue}
-      onValueChange={(nextValue) => onChange(nextValue === EMPTY_SELECT_VALUE ? "" : nextValue)}
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          setSearch("");
-        }
-      }}
+    <ComboboxField
+      value={value}
+      onValueChange={onChange}
+      options={normalizedOptions}
+      placeholder={placeholder}
+      className={triggerClassName}
       disabled={disabled}
       required={required}
-    >
-      <SelectTrigger className={triggerClassName} aria-label={ariaLabel} aria-invalid={invalid || undefined}>
-        <SelectValue className="select-field__value" placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {searchable ? (
-          <div className="dashboard-select__search" onPointerDown={(event) => event.stopPropagation()}>
-            <SearchIcon className="field-icon" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search options"
-              aria-label="Search options"
-            />
-          </div>
-        ) : null}
-        {filteredOptions.map((option) => (
-          <SelectItem key={`${option.value}-${option.label}`} value={option.value === "" ? EMPTY_SELECT_VALUE : option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-        {!filteredOptions.length ? <div className="dashboard-select__empty">No options match your search.</div> : null}
-      </SelectContent>
-    </Select>
+      aria-label={ariaLabel}
+      aria-invalid={invalid}
+      emptyMessage="No options match your search."
+    />
   );
 }
 
@@ -684,7 +648,7 @@ export function TableActionsMenu({
   );
 }
 
-export function Pagination({ page, totalPages, onChange }: PaginationProps) {
+export function Pagination({ page, totalPages, onChange, limit, onLimitChange }: PaginationProps) {
   const visible = useMemo(() => {
     const staticPages = [1, 2, 3, 4, 5];
     if (totalPages <= 5) {
@@ -697,41 +661,56 @@ export function Pagination({ page, totalPages, onChange }: PaginationProps) {
   const isNextDisabled = page >= totalPages;
 
   return (
-    <div className="pagination">
-      <button
-        type="button"
-        className="pagination__edge"
-        onClick={() => onChange(Math.max(1, page - 1))}
-        aria-label="Previous page"
-        disabled={isPreviousDisabled}
-      >
-        <ChevronDownIcon className="pagination__arrow rotate-90" />
-      </button>
-      {visible.map((entry, index) =>
-        entry === "ellipsis" ? (
-          <span key={`ellipsis-${index}`} className="pagination__ellipsis">
-            ....
-          </span>
-        ) : (
-          <button
-            key={entry}
-            type="button"
-            className={cx("pagination__page", page === entry && "is-active")}
-            onClick={() => onChange(entry)}
-          >
-            {entry}
-          </button>
-        ),
+    <div className="pagination" style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+      <div style={{ display: "flex", gap: "4px" }}>
+        <button
+          type="button"
+          className="pagination__edge"
+          onClick={() => onChange(Math.max(1, page - 1))}
+          aria-label="Previous page"
+          disabled={isPreviousDisabled}
+        >
+          <ChevronDownIcon className="pagination__arrow rotate-90" />
+        </button>
+        {visible.map((entry, index) =>
+          entry === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="pagination__ellipsis">
+              ....
+            </span>
+          ) : (
+            <button
+              key={entry}
+              type="button"
+              className={cx("pagination__page", page === entry && "is-active")}
+              onClick={() => onChange(entry)}
+            >
+              {entry}
+            </button>
+          ),
+        )}
+        <button
+          type="button"
+          className="pagination__edge"
+          onClick={() => onChange(Math.min(totalPages, page + 1))}
+          aria-label="Next page"
+          disabled={isNextDisabled}
+        >
+          <ChevronDownIcon className="pagination__arrow -rotate-90" />
+        </button>
+      </div>
+
+      {onLimitChange && limit && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-secondary)" }}>
+          <span>Show:</span>
+          <ComboboxField
+            value={String(limit)}
+            onValueChange={(value) => onLimitChange(Number(value))}
+            options={[{ value: "20", label: "20 per page" }, { value: "50", label: "50 per page" }, { value: "100", label: "100 per page" }]}
+            className="w-[130px]"
+            aria-label="Items per page"
+          />
+        </div>
       )}
-      <button
-        type="button"
-        className="pagination__edge"
-        onClick={() => onChange(Math.min(totalPages, page + 1))}
-        aria-label="Next page"
-        disabled={isNextDisabled}
-      >
-        <ChevronDownIcon className="pagination__arrow -rotate-90" />
-      </button>
     </div>
   );
 }

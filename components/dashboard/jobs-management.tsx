@@ -11,6 +11,7 @@ import { FormField, Modal, ModalFooterActions, ModalSelect, ModalTextArea } from
 import { FormSubmitter } from "@/components/dashboard/form-submitter";
 import { Button, EmptyScaffold, MetricCardSecondary, Pagination, Panel, SelectField, StatusPill, TableActionsMenu, Tabs, TextAreaField, TextField } from "@/components/dashboard/ui";
 import { useToast } from "@/components/ui/toast";
+import { ComboboxField } from "@/components/ui/combobox-field";
 import {
   createJob,
   DEFAULT_PAGE_SIZE,
@@ -46,7 +47,7 @@ const jobStatusTabs = ["All", "Open", "Assigned", "In Progress", "Completed", "V
 const jobStatusOptions = [
   { label: "Open", value: "open" },
   { label: "Assigned", value: "assigned" },
-  { label: "In Progress", value: "in_progress" },
+  { label: "In Progress", value: "in-progress" },
   { label: "Completed", value: "completed" },
   { label: "Verified", value: "verified" },
   { label: "Closed", value: "closed" },
@@ -82,6 +83,11 @@ type JobFormState = {
   country: string;
   systemSizeKw: string;
   notes: string;
+  inverter_size: string;
+  panel_size: string;
+  number_of_panels: string;
+  battery_type: string;
+  battery_energy: string;
 };
 type JobValidationErrors = Partial<Record<
   | "title"
@@ -121,6 +127,11 @@ const emptyJobForm: JobFormState = {
   country: "Nigeria",
   systemSizeKw: "",
   notes: "",
+  inverter_size: "",
+  panel_size: "",
+  number_of_panels: "0",
+  battery_type: "Lithium",
+  battery_energy: "",
 };
 
 function slugify(value: string) {
@@ -144,7 +155,7 @@ function matchesJobStatus(status: string, filter: JobStatusFilter) {
     case "Assigned":
       return normalized === "assigned";
     case "In Progress":
-      return normalized === "in_progress" || normalized === "in progress";
+      return normalized === "in-progress";
     case "Completed":
       return normalized === "completed";
     case "Verified":
@@ -257,8 +268,7 @@ function mapJobStatusToPackageStatus(status: string, currentStatus?: string | nu
   switch (normalized) {
     case "assigned":
       return "installer_assigned";
-    case "in_progress":
-    case "in progress":
+    case "in-progress":
       return "installer_in_transit";
     case "completed":
       return "system_installed";
@@ -296,6 +306,11 @@ function jobFormFromRecord(job: JobApiRecord): JobFormState {
     country: job.country || "Nigeria",
     systemSizeKw: job.system_size_kw ? String(job.system_size_kw) : "",
     notes: job.notes || "",
+    inverter_size: job.inverter_size || "",
+    panel_size: job.panel_size || "",
+    number_of_panels: String(job.number_of_panels ?? 0),
+    battery_type: job.battery_type || "Lithium",
+    battery_energy: job.battery_energy || "",
   };
 }
 
@@ -364,6 +379,11 @@ function buildJobPayload(form: JobFormState, selectedPackageRequest: BundleReque
     country: form.country.trim() || undefined,
     system_size_kw: Number(form.systemSizeKw) || 0,
     notes: form.notes.trim() || undefined,
+    inverter_size: form.inverter_size.trim() || undefined,
+    panel_size: form.panel_size.trim() || undefined,
+    number_of_panels: Number(form.number_of_panels) || 0,
+    battery_type: form.battery_type,
+    battery_energy: form.battery_energy.trim() || undefined,
   };
 }
 
@@ -470,7 +490,7 @@ function JobEditor({
 }) {
   return (
     <div className="job-editor-grid">
-      <DetailPanel title="Job Information" description="Link the job to a packed package request, then confirm the installer and schedule.">
+      <DetailPanel className="job-editor-grid__full" title="Job Information" description="Link the job to a packed package request, then confirm the installer and schedule.">
         <div className="detail-panel__stack">
           <FormField label="Package Request" hint={isLoadingReferences ? "Loading package requests..." : referenceError || "Only packed package requests are selectable for new jobs."}>
             <SelectField
@@ -504,7 +524,7 @@ function JobEditor({
             />
           </FormField>
 
-          <div className="product-inline-row is-two">
+          <div className="flex flex-col gap-6">
             <FormField label="Status">
               <SelectField value={form.status} onChange={(value) => setForm((current) => ({ ...current, status: value }))} options={buildStatusOptions(form.status)} />
             </FormField>
@@ -560,7 +580,36 @@ function JobEditor({
         </div>
       </DetailPanel>
 
-      <DetailPanel title="Customer & Location" description="Package request selection prefills these values. If no package is linked, complete them manually.">
+      <DetailPanel className="job-editor-grid__full" title="System Specifications" description="Define the system specs for the installer job board.">
+        <div className="detail-panel__stack">
+          <div className="product-inline-row is-three">
+            <FormField label="Inverter Size">
+              <TextField value={form.inverter_size} onChange={(e) => setForm(current => ({ ...current, inverter_size: e.target.value }))} placeholder="e.g. 6kW" />
+            </FormField>
+            <FormField label="Panel Size">
+              <TextField value={form.panel_size} onChange={(e) => setForm(current => ({ ...current, panel_size: e.target.value }))} placeholder="e.g. 650W" />
+            </FormField>
+            <FormField label="Number of Panels">
+              <TextField value={form.number_of_panels} onChange={(e) => setForm(current => ({ ...current, number_of_panels: e.target.value }))} placeholder="e.g. 6" />
+            </FormField>
+          </div>
+          <div className="flex flex-col gap-6">
+            <FormField label="Battery Type">
+              <ComboboxField
+                value={form.battery_type}
+                onValueChange={(value) => setForm(current => ({ ...current, battery_type: value }))}
+                options={["Lithium", "Tubular", "Gel", "Other"].map((value) => ({ value, label: value }))}
+                className="w-full rounded-[12px] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[#168416] focus:ring-1 focus:ring-[#168416]"
+              />
+            </FormField>
+            <FormField label="Battery Energy (Capacity)">
+              <TextField value={form.battery_energy} onChange={(e) => setForm(current => ({ ...current, battery_energy: e.target.value }))} placeholder="e.g. 5kWh" />
+            </FormField>
+          </div>
+        </div>
+      </DetailPanel>
+
+      <DetailPanel className="job-editor-grid__full" title="Customer & Location" description="Package request selection prefills these values. If no package is linked, complete them manually.">
         <div className="detail-panel__stack">
           <FormField label="Customer Name" error={errors.customerName}>
             <TextField
@@ -852,7 +901,7 @@ export function JobsManagementScreen() {
                       <StatusPill label={formatEnumLabel(job.status)} tone={toneFromStatus(job.status)} solid={false} />
                       <TableActionsMenu
                         items={[
-                          { label: "View Job", href: `/jobs/${job.slug}`, icon: <EyeIcon className="menu-icon" /> },
+                          { label: "View Job", href: `/jobs/${job.slug || job.id}`, icon: <EyeIcon className="menu-icon" /> },
                           ...(canDeleteJobs
                             ? [
                                 {
@@ -878,7 +927,7 @@ export function JobsManagementScreen() {
                     <div className="job-card__footer">
                       <strong>{formatCurrencyLabel(job.budget)}</strong>
                       <span>{locationLabel(job)}</span>
-                      <Link href={`/jobs/${job.slug}`} className="action-button is-secondary is-sm">
+                      <Link href={`/jobs/${job.slug || job.id}`} className="action-button is-secondary is-sm">
                         View
                       </Link>
                     </div>

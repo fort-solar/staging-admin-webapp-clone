@@ -673,6 +673,61 @@ export function EnergyAuditManagementScreen() {
   );
 }
 
+
+export function ReviewedPayloadVisualPreview({ payload }: { payload: any }) {
+  if (!payload || typeof payload !== "object") return null;
+
+  return (
+    <div className="space-y-4 text-left">
+      {/* Customer Info */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+        <strong className="block text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider mb-2">Customer Information</strong>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div><span className="text-[var(--text-soft)]">Name:</span> <strong className="text-[var(--text)] ml-1">{payload.customer_name || "N/A"}</strong></div>
+          <div><span className="text-[var(--text-soft)]">Email:</span> <strong className="text-[var(--text)] ml-1">{payload.customer_email || "N/A"}</strong></div>
+          <div><span className="text-[var(--text-soft)]">Phone:</span> <strong className="text-[var(--text)] ml-1">{payload.customer_phone || "N/A"}</strong></div>
+          <div><span className="text-[var(--text-soft)]">Address:</span> <strong className="text-[var(--text)] ml-1">{payload.address || "N/A"}</strong></div>
+        </div>
+      </div>
+
+      {/* Financials & Size */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-center shadow-sm">
+          <span className="block text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider">System Size</span>
+          <strong className="block mt-1 text-sm text-[var(--brand)]">{payload.recommended_system_size ? `${payload.recommended_system_size} kW` : "N/A"}</strong>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-center shadow-sm">
+          <span className="block text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider">Est. Cost</span>
+          <strong className="block mt-1 text-sm text-[var(--brand)]">{payload.estimated_cost ? formatCurrencyLabel(payload.estimated_cost) : "N/A"}</strong>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-center shadow-sm">
+          <span className="block text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider">Est. Savings</span>
+          <strong className="block mt-1 text-sm text-[var(--brand)]">{payload.estimated_savings ? formatCurrencyLabel(payload.estimated_savings) : "N/A"}</strong>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-center shadow-sm">
+          <span className="block text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider">Payback Period</span>
+          <strong className="block mt-1 text-sm text-[var(--brand)]">{payload.payback_period_years ? `${payload.payback_period_years} years` : "N/A"}</strong>
+        </div>
+      </div>
+
+      {/* Appliances */}
+      {payload.appliances && Array.isArray(payload.appliances) && payload.appliances.length > 0 && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+          <strong className="block text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider mb-2">Appliances ({payload.appliances.length})</strong>
+          <div className="divide-y divide-[var(--border)]">
+            {payload.appliances.map((app: any, idx: number) => (
+              <div key={idx} className="flex justify-between py-2 text-sm first:pt-0 last:pb-0">
+                <span className="text-[var(--text)] font-medium">{app.name} <span className="text-[var(--text-soft)] ml-1 font-normal">x{app.quantity}</span></span>
+                <span className="text-[var(--text-soft)]">{app.wattage}W • {app.hoursPerDay}h/day</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EnergyAuditDetailScreen({ id }: { id: string }) {
   const { can } = useAccessControl();
   const { toast } = useToast();
@@ -680,6 +735,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
   const [status, setStatus] = useState("new");
   const [adminNotes, setAdminNotes] = useState("");
   const [quoteAssetFile, setQuoteAssetFile] = useState<File | null>(null);
+  const [recommendedSystemSize, setRecommendedSystemSize] = useState("");
+  const [estimatedCost, setEstimatedCost] = useState("");
+  const [estimatedSavings, setEstimatedSavings] = useState("");
+  const [paybackPeriodYears, setPaybackPeriodYears] = useState("");
+  const [validityDays, setValidityDays] = useState("7");
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
   const [isReviewedPayloadOpen, setIsReviewedPayloadOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -703,6 +763,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
         setStatus(payload.data.status?.trim().toLowerCase() || "new");
         setAdminNotes(payload.data.admin_notes ?? "");
         setQuoteAssetFile(null);
+        setRecommendedSystemSize(payload.data.recommended_system_size?.toString() ?? "");
+        setEstimatedCost(payload.data.estimated_cost?.toString() ?? "");
+        setEstimatedSavings(payload.data.estimated_savings?.toString() ?? "");
+        setPaybackPeriodYears(payload.data.payback_period_years?.toString() ?? "");
+        setValidityDays((payload.data.form_extras?.validity_days ?? "7").toString());
       })
       .catch((loadError) => {
         if (cancelled) {
@@ -771,6 +836,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
       const payload = {
         status,
         adminNotes: adminNotes.trim(),
+        recommendedSystemSize: recommendedSystemSize ? parseFloat(recommendedSystemSize) : undefined,
+        estimatedCost: estimatedCost ? parseFloat(estimatedCost) : undefined,
+        estimatedSavings: estimatedSavings ? parseFloat(estimatedSavings) : undefined,
+        paybackPeriodYears: paybackPeriodYears ? parseFloat(paybackPeriodYears) : undefined,
+        validityDays: validityDays ? parseInt(validityDays) : undefined,
         ...(status === "reviewed" ? { package_request_payload: buildQuotePackageRequestPayload(detail) } : {}),
         ...(status === "closed" ? { close_confirmed: closeConfirmed } : {}),
       };
@@ -791,6 +861,11 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
       setStatus(refreshed.data.status?.trim().toLowerCase() || "new");
       setAdminNotes(refreshed.data.admin_notes ?? "");
       setQuoteAssetFile(null);
+      setRecommendedSystemSize(refreshed.data.recommended_system_size?.toString() ?? "");
+      setEstimatedCost(refreshed.data.estimated_cost?.toString() ?? "");
+      setEstimatedSavings(refreshed.data.estimated_savings?.toString() ?? "");
+      setPaybackPeriodYears(refreshed.data.payback_period_years?.toString() ?? "");
+      setValidityDays((refreshed.data.form_extras?.validity_days ?? "7").toString());
       setIsCloseConfirmOpen(false);
 
       toast({
@@ -888,7 +963,28 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
             />
             <div className="detail-panel__stack">
               <AttachmentItem label={detail?.admin_notes || "No admin notes yet"} helper="Current Admin Notes" actionLabel="Inspect" />
-              <pre className="overflow-x-auto rounded-[16px] border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-xs leading-6 text-[var(--text-soft)]">{formExtras}</pre>
+              {(() => {
+                if (!detail?.form_extras || typeof detail.form_extras !== "object") {
+                  return <pre className="overflow-x-auto rounded-[16px] border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-xs leading-6 text-[var(--text-soft)]">{"{}"}</pre>;
+                }
+                const entries = Object.entries(detail.form_extras).filter(([k]) => !["roof_size", "roof_orientation", "shading"].includes(k));
+                if (entries.length === 0) {
+                  return <pre className="overflow-x-auto rounded-[16px] border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-xs leading-6 text-[var(--text-soft)]">{"{}"}</pre>;
+                }
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                    {entries.map(([key, val]) => {
+                      const displayVal = typeof val === "object" && val !== null ? JSON.stringify(val) : String(val);
+                      return (
+                        <div key={key} className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 shadow-sm">
+                          <span className="block text-xs font-semibold text-[var(--text-soft)] uppercase tracking-wider">{key.replace(/_/g, " ")}</span>
+                          <strong className="block mt-1 text-sm font-medium text-[var(--text)]">{displayVal}</strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </DetailPanel>
 
@@ -911,28 +1007,87 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
                 />
               </FormField>
               {status === "quoted" ? (
-                <FormField label="Quote File" hint={detail?.quote_asset_url ? "A quote file already exists. Uploading a new file will replace it." : "Upload either an image or a PDF of the quote."}>
-                  <label className="upload-field">
-                    <input
-                      type="file"
-                      accept="application/pdf,image/*"
-                      disabled={quoteUpdateView.isReadOnly}
-                      onChange={(event) => setQuoteAssetFile(event.target.files?.[0] ?? null)}
-                    />
-                    <span className="upload-field__button">
-                      <span>{quoteAssetFile || detail?.quote_asset_url ? "Replace file" : "Choose file"}</span>
-                    </span>
-                    <span className="upload-field__value">{quoteAssetFile?.name || detail?.quote_asset_url?.split("/").pop() || "Upload quote image or PDF"}</span>
-                  </label>
-                </FormField>
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <FormField label="Recommended System Size (kW)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 5.5"
+                        value={recommendedSystemSize}
+                        onChange={(e) => setRecommendedSystemSize(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Estimated Cost (NGN)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 5000000"
+                        value={estimatedCost}
+                        onChange={(e) => setEstimatedCost(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Estimated Savings (NGN/yr)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 1200000"
+                        value={estimatedSavings}
+                        onChange={(e) => setEstimatedSavings(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Payback Period (Years)">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 4.5"
+                        value={paybackPeriodYears}
+                        onChange={(e) => setPaybackPeriodYears(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                    <FormField label="Quote Validity (Days)">
+                      <input
+                        type="number"
+                        placeholder="e.g. 7"
+                        value={validityDays}
+                        onChange={(e) => setValidityDays(e.target.value)}
+                        disabled={quoteUpdateView.isReadOnly}
+                        className="dashboard-input"
+                      />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Quote File" hint={detail?.quote_asset_url ? "A quote file already exists. Uploading a new file will replace it." : "Upload either an image or a PDF of the quote."}>
+                    <label className="upload-field">
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        disabled={quoteUpdateView.isReadOnly}
+                        onChange={(event) => setQuoteAssetFile(event.target.files?.[0] ?? null)}
+                      />
+                      <span className="upload-field__button">
+                        <span>{quoteAssetFile || detail?.quote_asset_url ? "Replace file" : "Choose file"}</span>
+                      </span>
+                      <span className="upload-field__value">{quoteAssetFile?.name || detail?.quote_asset_url?.split("/").pop() || "Upload quote image or PDF"}</span>
+                    </label>
+                  </FormField>
+                </>
               ) : null}
               {quoteUpdateView.showReviewedPayloadPreview ? (
-                <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-left">
                   <strong className="block text-sm">Package Request Payload Preview</strong>
-                  <p className="mt-2 text-sm text-[var(--text-soft)]">
+                  <p className="mt-2 text-sm text-[var(--text-soft)] mb-3">
                     Updating with reviewed will create a package request from this quote.
                   </p>
-                  <pre className="mt-3 overflow-x-auto rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-4 text-xs leading-6 text-[var(--text-soft)]">{reviewedPayload}</pre>
+                  <ReviewedPayloadVisualPreview payload={detail ? buildQuotePackageRequestPayload(detail) : null} />
                 </div>
               ) : null}
               <FormField label="Admin Notes">
@@ -1000,12 +1155,10 @@ export function EnergyAuditDetailScreen({ id }: { id: string }) {
           </Button>
         }
       >
-        <p className="text-sm text-[var(--text-soft)]">
+        <p className="text-sm text-[var(--text-soft)] mb-4">
           Reviewing this quote will generate the following package request payload.
         </p>
-        <pre className="mt-4 overflow-x-auto rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-4 text-xs leading-6 text-[var(--text-soft)]">
-          {reviewedPayload}
-        </pre>
+        <ReviewedPayloadVisualPreview payload={detail ? buildQuotePackageRequestPayload(detail) : null} />
       </Modal>
     </div>
   );

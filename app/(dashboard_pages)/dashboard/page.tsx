@@ -267,10 +267,10 @@ export default function DashboardPage() {
               spark: [54, 52, 48, 40, 30, 24],
             },
             {
-              title: "Transactions",
-              value: (overview?.transactions.total ?? 0).toLocaleString(),
-              period: "monthly" as const,
-              icon: "wallet" as const,
+              title: "Pending Quotes",
+              value: (overview?.quoteRequests.new ?? 0).toLocaleString(),
+              subtitle: "awaiting review",
+              icon: "sales" as const,
               spark: [10, 18, 26, 34, 26, 18],
             },
             {

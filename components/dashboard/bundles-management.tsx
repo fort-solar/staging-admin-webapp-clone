@@ -239,13 +239,14 @@ function normalizePackageRecord(record: PackageRecord | Record<string, unknown>)
     thumbnailUrl: readString(raw, ["thumbnail_url", "image_url", "image"]) || null,
     packageImageUrl: readString(raw, ["package_image_url", "image_url", "image"]) || null,
     overviewText,
+    target_audience: readString(raw, ["target_audience", "targetAudience"]),
     selectedProducts: items,
     discountPercentage,
     solarFinanceEnabled: readBoolean(raw, ["solar_finance_enabled", "solar_finance"]),
     whatItPowers: readArray(raw, ["what_it_powers", "powers"]).filter((value): value is string => typeof value === "string" && value.trim().length > 0),
     systemDetails: {
       inverter_size: readString(systemDetailsRecord, ["inverter_size"], readString(raw, ["system_size_kw"])),
-      inverter_label: readString(systemDetailsRecord, ["inverter_label"]) || formatSystemLabel(readString(systemDetailsRecord, ["inverter_size"], readString(raw, ["system_size_kw"])), "kVA"),
+      inverter_label: readString(systemDetailsRecord, ["inverter_label"]) || formatSystemLabel(readString(systemDetailsRecord, ["inverter_size"], readString(raw, ["system_size_kw"])), "kW"),
       pv_size: readString(systemDetailsRecord, ["pv_size"], readString(raw, ["system_size_kw"])),
       pv_label: readString(systemDetailsRecord, ["pv_label"]) || formatSystemLabel(readString(systemDetailsRecord, ["pv_size"], readString(raw, ["system_size_kw"])), "kWp"),
       battery_size: readString(systemDetailsRecord, ["battery_size"], readBoolean(raw, ["battery_included"]) ? "Included" : ""),
@@ -726,6 +727,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
   const [currentPackage, setCurrentPackage] = useState<ManagedPackageRow | null>(null);
   const [name, setName] = useState("");
   const [overview, setOverview] = useState("");
+  const [targetAudience, setTargetAudience] = useState("");
   const [price, setPrice] = useState("");
   const [discount, setDiscount] = useState("");
   const [solarFinanceEnabled, setSolarFinanceEnabled] = useState(false);
@@ -866,6 +868,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
         setCurrentPackage(normalized);
         setName(normalized.name);
         setOverview(normalized.overviewText);
+        setTargetAudience(normalized.target_audience || "");
         setPrice(normalized.price ? String(normalized.price) : "");
         setDiscount(normalized.discountPercentage ? String(normalized.discountPercentage) : "");
         setSolarFinanceEnabled(normalized.solarFinanceEnabled);
@@ -972,10 +975,11 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
       const batteryProducts = selectedBundleProducts.filter((product) => /battery/i.test(product.categoryLabel));
 
       const payload = {
-        name: name.trim(),
-        overview: overview.trim(),
+        name,
+        overview,
+        target_audience: targetAudience || undefined,
+        price: Number(price || 0),
         description: overview.trim(),
-        price: Number(price),
         discount_percentage: Number(discount || 0),
         solar_finance_enabled: solarFinanceEnabled,
         category_id: null,
@@ -983,7 +987,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
         what_it_powers: whatItPowers,
         system_details: {
           inverter_size: inverterSize.trim(),
-          inverter_label: formatSystemLabel(inverterSize, "kVA"),
+          inverter_label: formatSystemLabel(inverterSize, "kW"),
           pv_size: pvSize.trim(),
           pv_label: formatSystemLabel(pvSize, "kWp"),
           battery_size: batterySize.trim(),
@@ -1051,6 +1055,19 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                 <FormField label="Package Name">
                   <TextField value={name} onChange={(event) => setName(event.target.value)} placeholder="Starter Solar Package" />
                 </FormField>
+                <FormField label="Target Audience">
+                  <SelectField
+                    value={targetAudience}
+                    onChange={setTargetAudience}
+                    options={[
+                      { value: "", label: "General (Default)" },
+                      { value: "residential", label: "Residential (Home)" },
+                      { value: "commercial", label: "Commercial (Office/Business)" },
+                      { value: "industrial", label: "Industrial (Factory)" },
+                      { value: "campus", label: "Campus (Student/School)" },
+                    ]}
+                  />
+                </FormField>
                 <FormField label="Package Overview">
                   <TextAreaField value={overview} onChange={setOverview} placeholder="Package overview" rows={6} />
                 </FormField>
@@ -1087,7 +1104,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
 
                   return (
                     <div key={item.key} className="grid gap-3 rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] p-4">
-                      <div className="grid gap-3">
+                      <div className="grid gap-3 md:grid-cols-[1fr_1fr_80px_48px] items-end">
                         <FormField label="Category">
                           <SelectField
                             value={item.category_id}
@@ -1175,7 +1192,7 @@ export function BundleFormScreen({ packageId }: { packageId?: string }) {
                         <TextField value={inverterSize} onChange={(event) => setInverterSize(event.target.value)} placeholder="12" />
                       </FormField>
                       <div className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--text-soft)] self-end">
-                        {formatSystemLabel(inverterSize, "kVA")}
+                        {formatSystemLabel(inverterSize, "kW")}
                       </div>
                     </div>
                     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_120px]">

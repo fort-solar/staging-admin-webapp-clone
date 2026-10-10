@@ -209,6 +209,7 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/users/installers", permission: { resource: "installers", action: "read" }, title: "Installer Management" },
   { prefix: "/users/admins", permission: { resource: "admins", action: "read" }, title: "Admin Management" },
   { prefix: "/orders/bundle-requests", permission: { resource: "orders", action: "read" }, title: "Package Request Management" },
+  { prefix: "/orders/finance-requests", permission: { resource: "orders", action: "read" }, title: "Finance Request Management" },
   { prefix: "/orders", permission: { resource: "orders", action: "read" }, title: "Order Management" },
   { prefix: "/notifications", permission: { resource: "notifications", action: "read" }, title: "Notification Management" },
   { prefix: "/products/new", permission: { resource: "products", action: "create" }, title: "Add Product" },
@@ -230,6 +231,7 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/jobs/new", permission: { resource: "jobs", action: "create" }, title: "Add Job" },
   { prefix: "/jobs", permission: { resource: "jobs", action: "read" }, title: "Job Management" },
   { prefix: "/activity-history", permission: { resource: "settings", action: "read" }, title: "Activity History" },
+  { prefix: "/settings/delivery", permission: { resource: "settings", action: "read" }, title: "Delivery Settings" },
   { prefix: "/settings", permission: { resource: "settings", action: "read" }, title: "Account Settings" },
 ];
 
@@ -252,6 +254,7 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     children: [
       { label: "All Orders", href: "/orders", permission: { resource: "orders", action: "read" } },
       { label: "Package Requests", href: "/orders/bundle-requests", permission: { resource: "orders", action: "read" } },
+      { label: "Finance Requests", href: "/orders/finance-requests", permission: { resource: "orders", action: "read" } },
     ],
   },
   { label: "Notifications", href: "/notifications", icon: "notifications", section: "main", permission: { resource: "notifications", action: "read" } },
@@ -310,6 +313,20 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     permission: { resource: "jobs", action: "read" },
     createHref: "/jobs/new",
     createPermission: { resource: "jobs", action: "create" },
+  },
+  {
+    label: "Financing Settings",
+    href: "/settings/financing",
+    icon: "transactions",
+    section: "operations",
+    permission: { resource: "settings", action: "read" },
+  },
+  {
+    label: "Delivery Settings",
+    href: "/settings/delivery",
+    icon: "orders",
+    section: "operations",
+    permission: { resource: "settings", action: "read" },
   },
   { label: "Activity History", href: "/activity-history", icon: "activity_history", section: "footer", permission: { resource: "settings", action: "read" } },
   { label: "Settings", href: "/settings", icon: "settings", section: "footer", permission: { resource: "settings", action: "read" } },
