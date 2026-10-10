@@ -4,21 +4,28 @@ import { readNonEmptyEnv } from "@/lib/env";
 import { createSessionSnapshotFromProfile, setAuthCookies, setSessionSnapshotCookie } from "@/lib/auth/session";
 import type { AdminMeApiResponse, ApiErrorResponse, LoginApiResponse, RefreshTokenApiResponse, SessionSnapshot } from "@/types/api.types";
 
-export const FORTSOLAR_API_BASE_URL = readNonEmptyEnv(process.env.FORTSOLAR_API_BASE_URL, process.env.NEXT_PUBLIC_FORTSOLAR_API_BASE_URL);
+const DEFAULT_API_BASE_URL = "https://api.fortsolar.ng";
+export const FORTSOLAR_API_BASE_URL = readNonEmptyEnv(
+  process.env.FORTSOLAR_API_BASE_URL,
+  process.env.NEXT_PUBLIC_FORTSOLAR_API_BASE_URL,
+  DEFAULT_API_BASE_URL,
+);
 
 type ServerPayload = LoginApiResponse | RefreshTokenApiResponse | AdminMeApiResponse | ApiErrorResponse | null;
 
 function buildApiUrl(path: string) {
-  if (!FORTSOLAR_API_BASE_URL) {
-    throw new Error("FORTSOLAR_API_BASE_URL is not configured.");
-  }
-
+  const base = (FORTSOLAR_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  const normalizedPath = cleanPath.startsWith("/admin/")
+  let normalizedPath = cleanPath.startsWith("/admin/")
     ? `/api/v1${cleanPath}`
     : cleanPath;
 
-  return new URL(normalizedPath, FORTSOLAR_API_BASE_URL).toString();
+  if (base.endsWith("/api/v1") && normalizedPath.startsWith("/api/v1")) {
+    normalizedPath = normalizedPath.slice("/api/v1".length);
+    if (!normalizedPath.startsWith("/")) normalizedPath = `/${normalizedPath}`;
+  }
+
+  return `${base}${normalizedPath}`;
 }
 
 export function buildErrorResponse(message: string, status = 400, error?: string) {
