@@ -217,6 +217,7 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/notifications", permission: { resource: "notifications", action: "read" }, title: "Notification Management" },
   { prefix: "/products/new", permission: { resource: "products", action: "create" }, title: "Add Product" },
   { prefix: "/products", permission: { resource: "products", action: "read" }, title: "Product Management" },
+  { prefix: "/discounts", permission: { resource: "products", action: "read" }, title: "Discount Coupons" },
   { prefix: "/packages/new", permission: { resource: "bundles", action: "create" }, title: "Add Package" },
   { prefix: "/packages", permission: { resource: "bundles", action: "read" }, title: "Package Management" },
   { prefix: "/bundles/new", permission: { resource: "bundles", action: "create" }, title: "Add Package" },
@@ -279,6 +280,13 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     permission: { resource: "bundles", action: "read" },
     createHref: "/packages/new",
     createPermission: { resource: "bundles", action: "create" },
+  },
+  {
+    label: "Discount Coupons",
+    href: "/discounts",
+    icon: "orders",
+    section: "product",
+    permission: { resource: "products", action: "read" },
   },
   { label: "Transactions", href: "/transactions", icon: "transactions", section: "finance", permission: { resource: "transactions", action: "read" } },
   {

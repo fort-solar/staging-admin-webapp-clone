@@ -79,6 +79,10 @@ import type {
   NewsletterSubscribersListApiResponse,
   ContactEnquiriesListApiResponse,
   ContactInquiriesListApiResponse,
+  CouponsListApiResponse,
+  CouponDetailApiResponse,
+  CouponRecord,
+  CreateCouponRequest,
 } from "@/types/api.types";
 
 export const DEFAULT_PAGE_SIZE = 20;
@@ -1240,4 +1244,33 @@ export function updateContactEnquiryStatus(id: string, body: { status: string; a
 // Backward-compatibility aliases
 export const getContactInquiries = getContactEnquiries;
 export const updateContactInquiryStatus = updateContactEnquiryStatus;
+
+// Coupon / Discount API
+export function getCoupons(params: ListParams & { is_active?: string } = {}) {
+  return dashboardGet<CouponsListApiResponse>(
+    withQuery("/api/v1/admin/coupons", {
+      page: params.page ?? 1,
+      limit: params.limit ?? DEFAULT_PAGE_SIZE,
+      search: params.search ?? params.q,
+      is_active: params.is_active,
+    }),
+  );
+}
+
+export function getCoupon(id: string) {
+  return dashboardGet<CouponDetailApiResponse>(`/api/v1/admin/coupons/${id}`);
+}
+
+export function createCoupon(body: CreateCouponRequest) {
+  return submitDashboardForm<CouponDetailApiResponse>("/api/v1/admin/coupons", body, { method: "POST" });
+}
+
+export function updateCoupon(id: string, body: Partial<CreateCouponRequest>) {
+  return submitDashboardForm<CouponDetailApiResponse>(`/api/v1/admin/coupons/${id}`, body, { method: "PATCH" });
+}
+
+export function deleteCoupon(id: string) {
+  return submitDashboardForm<ApiSuccessResponse>(`/api/v1/admin/coupons/${id}`, {}, { method: "DELETE" });
+}
+
 

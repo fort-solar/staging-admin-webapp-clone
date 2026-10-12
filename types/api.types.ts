@@ -507,6 +507,9 @@ export type AdminProductRecord = {
   overview?: string | null;
   free_delivery?: boolean | null;
   delivery_warranty_info?: string | null;
+  eligible_for_waybill?: boolean | null;
+  weight_tier?: string | null;
+  external_marketplace_links?: { jumia?: string; konga?: string; others?: string } | null;
   section_values: ProductSectionValueRecord[];
   product_image_url?: string | null;
   product_image_urls?: string[];
@@ -1255,5 +1258,41 @@ export type ContactEnquiriesListApiResponse = ApiCollectionResponse<ContactEnqui
 // Backward compatibility aliases
 export type ContactInquiryRecord = ContactEnquiryRecord;
 export type ContactInquiriesListApiResponse = ContactEnquiriesListApiResponse;
+
+export type CouponRecord = {
+  id: string;
+  code: string;
+  description: string | null;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  min_order_amount: number;
+  max_discount_amount: number | null;
+  applicable_product_ids: string[];
+  start_date: string;
+  expiry_date: string;
+  usage_limit: number | null;
+  times_used: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateCouponRequest = {
+  code: string;
+  description?: string | null;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  min_order_amount?: number;
+  max_discount_amount?: number | null;
+  applicable_product_ids?: string[];
+  start_date?: string;
+  expiry_date: string;
+  usage_limit?: number | null;
+  is_active?: boolean;
+};
+
+export type CouponsListApiResponse = ApiCollectionResponse<CouponRecord>;
+export type CouponDetailApiResponse = ApiDataResponse<CouponRecord>;
+
 
 

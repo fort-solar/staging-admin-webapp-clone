@@ -486,6 +486,9 @@ export function normalizeManagedProductRecord(record: AdminProductRecord | Recor
     overview: readString(raw, ["overview", "description", "summary"]) || null,
     free_delivery: readBoolean(raw, ["free_delivery", "is_free_delivery"]),
     delivery_warranty_info: readString(raw, ["delivery_warranty_info", "delivery_and_warranty_info"], "") || null,
+    eligible_for_waybill: readBoolean(raw, ["eligible_for_waybill", "is_eligible_for_waybill"], true),
+    weight_tier: readString(raw, ["weight_tier"], "under_5kg"),
+    external_marketplace_links: isRecord(raw.external_marketplace_links) ? (raw.external_marketplace_links as { jumia?: string; konga?: string; others?: string }) : null,
     section_values: sectionValues,
     product_image_url: imageUrl,
     product_image_urls: imageUrls,
@@ -1593,6 +1596,11 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
   const [discountedPrice, setDiscountedPrice] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
   const [freeDelivery, setFreeDelivery] = useState(false);
+  const [eligibleForWaybill, setEligibleForWaybill] = useState(true);
+  const [weightTier, setWeightTier] = useState("under_5kg");
+  const [jumiaUrl, setJumiaUrl] = useState("");
+  const [kongaUrl, setKongaUrl] = useState("");
+  const [otherMarketplaceUrl, setOtherMarketplaceUrl] = useState("");
   const [deliveryWarrantyInfo, setDeliveryWarrantyInfo] = useState("");
   const [sectionValues, setSectionValues] = useState<SectionDraft[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -1674,6 +1682,11 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         );
         setStockQuantity(product.stock_quantity ? String(product.stock_quantity) : "");
         setFreeDelivery(Boolean(product.free_delivery));
+        setEligibleForWaybill(product.eligible_for_waybill !== undefined ? Boolean(product.eligible_for_waybill) : true);
+        setWeightTier(product.weight_tier || "under_5kg");
+        setJumiaUrl(product.external_marketplace_links?.jumia || "");
+        setKongaUrl(product.external_marketplace_links?.konga || "");
+        setOtherMarketplaceUrl(product.external_marketplace_links?.others || "");
         setDeliveryWarrantyInfo(product.delivery_warranty_info || "");
         setSectionValues(product.section_values.map((item, index) => ({ ...item, key: item.key || `${slugify(item.section_name)}-${index}` })));
         setCurrentImageUrls(product.product_image_urls?.length ? product.product_image_urls : product.product_image_url ? [product.product_image_url] : []);
@@ -1801,6 +1814,11 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
         stock_quantity: normalized.stockQuantity,
         free_delivery: freeDelivery,
         delivery_warranty_info: deliveryWarrantyInfo.trim(),
+        eligible_for_waybill: eligibleForWaybill,
+        weight_tier: weightTier,
+        jumia_url: jumiaUrl.trim() || undefined,
+        konga_url: kongaUrl.trim() || undefined,
+        other_marketplace_url: otherMarketplaceUrl.trim() || undefined,
         section_values: sectionValues
           .filter((item) => item.section_name.trim())
           .map((item) => ({
@@ -1902,25 +1920,142 @@ export function ProductFormScreen({ productId }: { productId?: string }) {
                     />
                   </FormField>
                 </div>
+                <FormField label="Stock Quantity">
+                  <TextField value={stockQuantity} onChange={(event) => setStockQuantity(event.target.value)} placeholder="22" />
+                </FormField>
+                {loadingProduct ? <p className="section-description">Loading product data...</p> : null}
+              </div>
+            </DetailPanel>
+
+            <DetailPanel
+              title="Logistics & Park-to-Park Waybill"
+              description="Configure inter-state commercial transport waybill eligibility and parcel weight tier."
+            >
+              <div className="detail-panel__stack">
                 <div className="product-inline-row is-two">
-                  <FormField label="Stock Quantity">
-                    <TextField value={stockQuantity} onChange={(event) => setStockQuantity(event.target.value)} placeholder="22" />
-                  </FormField>
                   <BooleanChoiceField
-                    label="Free Delivery"
+                    label="Eligible for Park-to-Park Waybill"
+                    value={eligibleForWaybill}
+                    onChange={setEligibleForWaybill}
+                  />
+                  <BooleanChoiceField
+                    label="Free Delivery Promotion"
                     value={freeDelivery}
                     onChange={setFreeDelivery}
                   />
                 </div>
+                <FormField label="Weight Band Tier">
+                  <SelectField
+                    value={weightTier}
+                    onChange={setWeightTier}
+                    options={[
+                      { label: "Tier 1: Small Item (< 5kg) — Accessories, meters, cables", value: "under_5kg" },
+                      { label: "Tier 2: Medium Parcel (5kg – 15kg) — Charge controllers, small inverters", value: "5_15kg" },
+                      { label: "Tier 3: Heavy Parcel (15kg – 30kg) — Solar panels, 3–5kVA inverters", value: "15_30kg" },
+                      { label: "Tier 4: Freight / Oversized (> 30kg) — Batteries, heavy inverter stacks", value: "over_30kg" },
+                    ]}
+                  />
+                </FormField>
                 <FormField label="Delivery & Warranty Info">
                   <TextAreaField
                     value={deliveryWarrantyInfo}
                     onChange={setDeliveryWarrantyInfo}
-                    placeholder="Describe the delivery terms and warranty coverage for this product."
-                    rows={5}
+                    placeholder="Describe delivery terms, pickup stations, and warranty coverage for this product."
+                    rows={4}
                   />
                 </FormField>
-                {loadingProduct ? <p className="section-description">Loading product data...</p> : null}
+              </div>
+            </DetailPanel>
+
+            <DetailPanel
+              title="External Marketplaces"
+              description="Optionally link this product to your listings on external e-commerce marketplaces."
+            >
+              <div className="detail-panel__stack">
+                <FormField label="Jumia Listing URL">
+                  <TextField
+                    value={jumiaUrl}
+                    onChange={(event) => setJumiaUrl(event.target.value)}
+                    placeholder="https://www.jumia.com.ng/..."
+                  />
+                </FormField>
+                <FormField label="Konga Listing URL">
+                  <TextField
+                    value={kongaUrl}
+                    onChange={(event) => setKongaUrl(event.target.value)}
+                    placeholder="https://www.konga.com/..."
+                  />
+                </FormField>
+                <FormField label="Other Marketplace URL">
+                  <TextField
+                    value={otherMarketplaceUrl}
+                    onChange={(event) => setOtherMarketplaceUrl(event.target.value)}
+                    placeholder="https://..."
+                  />
+                </FormField>
+              </div>
+            </DetailPanel>
+
+            <DetailPanel
+              title="Live Pricing & Fulfilment Breakdown"
+              description="Real-time commercial and shipping summary before taking the product live."
+            >
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                <div>
+                  <span className="text-[11px] font-semibold uppercase text-[var(--text-soft)]">Selling Price</span>
+                  <p className="mt-1 text-base font-extrabold text-[var(--text)]">
+                    {price ? formatCurrencyLabel(Number(price)) : "₦0"}
+                  </p>
+                  {discountedPrice && Number(discountedPrice) > 0 ? (
+                    <span className="text-xs text-[var(--brand)] font-semibold">
+                      Discounted: {formatCurrencyLabel(Number(discountedPrice))}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[var(--text-soft)]">Standard pricing</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[11px] font-semibold uppercase text-[var(--text-soft)]">Waybill Dispatch</span>
+                  <p className="mt-1 text-sm font-bold text-[var(--text)]">
+                    {eligibleForWaybill ? "Eligible (Nationwide Park)" : "Terminal Waybill Disabled"}
+                  </p>
+                  <span className="text-xs text-[var(--text-soft)]">
+                    {eligibleForWaybill ? "Customer collects at terminal" : "Local pickup only"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[11px] font-semibold uppercase text-[var(--text-soft)]">Weight Band</span>
+                  <p className="mt-1 text-sm font-bold text-[var(--text)]">
+                    {weightTier === "under_5kg"
+                      ? "Tier 1 (< 5kg)"
+                      : weightTier === "5_15kg"
+                        ? "Tier 2 (5–15kg)"
+                        : weightTier === "15_30kg"
+                          ? "Tier 3 (15–30kg)"
+                          : "Tier 4 (> 30kg Freight)"}
+                  </p>
+                  <span className="text-xs text-[var(--text-soft)]">
+                    {freeDelivery ? "Free Shipping Promotion Active" : "Standard cargo rates apply"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[11px] font-semibold uppercase text-[var(--text-soft)]">Active Channels</span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <span className="inline-flex rounded bg-[#edf8ed] px-2 py-0.5 text-[10px] font-bold text-[#168416]">
+                      Fortsolar Store
+                    </span>
+                    {jumiaUrl.trim() ? (
+                      <span className="inline-flex rounded bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-800">
+                        Jumia
+                      </span>
+                    ) : null}
+                    {kongaUrl.trim() ? (
+                      <span className="inline-flex rounded bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-800">
+                        Konga
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </DetailPanel>
 
