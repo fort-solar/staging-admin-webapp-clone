@@ -1237,7 +1237,7 @@ export type NewsletterSubscriberRecord = {
 
 export type NewsletterSubscribersListApiResponse = ApiCollectionResponse<NewsletterSubscriberRecord>;
 
-export type ContactInquiryRecord = {
+export type ContactEnquiryRecord = {
   id: string;
   name: string;
   email: string;
@@ -1250,5 +1250,10 @@ export type ContactInquiryRecord = {
   updated_at?: string;
 };
 
-export type ContactInquiriesListApiResponse = ApiCollectionResponse<ContactInquiryRecord>;
+export type ContactEnquiriesListApiResponse = ApiCollectionResponse<ContactEnquiryRecord>;
+
+// Backward compatibility aliases
+export type ContactInquiryRecord = ContactEnquiryRecord;
+export type ContactInquiriesListApiResponse = ContactEnquiriesListApiResponse;
+
 

@@ -209,7 +209,8 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/users/installers", permission: { resource: "installers", action: "read" }, title: "Installer Management" },
   { prefix: "/users/admins", permission: { resource: "admins", action: "read" }, title: "Admin Management" },
   { prefix: "/users/subscribers", permission: { resource: "customers", action: "read" }, title: "Newsletter Subscribers" },
-  { prefix: "/inquiries", permission: { resource: "customers", action: "read" }, title: "Customer Inquiries" },
+  { prefix: "/enquiries", permission: { resource: "customers", action: "read" }, title: "Customer Enquiries" },
+  { prefix: "/inquiries", permission: { resource: "customers", action: "read" }, title: "Customer Enquiries" },
   { prefix: "/orders/bundle-requests", permission: { resource: "orders", action: "read" }, title: "Package Request Management" },
   { prefix: "/orders/finance-requests", permission: { resource: "orders", action: "read" }, title: "Finance Request Management" },
   { prefix: "/orders", permission: { resource: "orders", action: "read" }, title: "Order Management" },
@@ -308,7 +309,7 @@ const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     createPermission: { resource: "installations", action: "create" },
   },
   { label: "Energy Audit", href: "/energy-audit", icon: "energy_audit", section: "operations", permission: { resource: "energy_audits", action: "read" } },
-  { label: "Customer Inquiries", href: "/inquiries", icon: "notifications", section: "operations", permission: { resource: "customers", action: "read" } },
+  { label: "Customer Enquiries", href: "/enquiries", icon: "notifications", section: "operations", permission: { resource: "customers", action: "read" } },
   {
     label: "Job Board",
     href: "/jobs",

@@ -77,6 +77,7 @@ import type {
   NotificationDetailApiResponse,
   NotificationListApiResponse,
   NewsletterSubscribersListApiResponse,
+  ContactEnquiriesListApiResponse,
   ContactInquiriesListApiResponse,
 } from "@/types/api.types";
 
@@ -1221,8 +1222,8 @@ export function getNewsletterSubscribers(params: ListParams = {}) {
   );
 }
 
-export function getContactInquiries(params: ListParams = {}) {
-  return dashboardGet<ContactInquiriesListApiResponse>(
+export function getContactEnquiries(params: ListParams = {}) {
+  return dashboardGet<ContactEnquiriesListApiResponse>(
     withQuery("/api/v1/contacts", {
       page: params.page ?? 1,
       limit: params.limit ?? DEFAULT_PAGE_SIZE,
@@ -1232,7 +1233,11 @@ export function getContactInquiries(params: ListParams = {}) {
   );
 }
 
-export function updateContactInquiryStatus(id: string, body: { status: string; adminNotes?: string }) {
+export function updateContactEnquiryStatus(id: string, body: { status: string; adminNotes?: string }) {
   return submitDashboardForm<ApiSuccessResponse>(`/api/v1/contacts/${id}/status`, body, { method: "PATCH" });
 }
+
+// Backward-compatibility aliases
+export const getContactInquiries = getContactEnquiries;
+export const updateContactInquiryStatus = updateContactEnquiryStatus;
 
